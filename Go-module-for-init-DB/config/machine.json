@@ -1,0 +1,10 @@
+{
+    "mariadb": {
+        "in_use": true,
+        "user": "myUser",
+        "password": "myPass",
+        "host": "localhost",
+        "port": "3306",
+        "name": "shop"
+    }
+}

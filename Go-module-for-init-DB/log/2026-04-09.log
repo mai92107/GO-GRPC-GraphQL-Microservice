@@ -1,0 +1,2 @@
+[2026-04-09 21:51:50] [DEBUG] [/Users/rafa/Desktop/test/Go-module-for-init-DB/core/init/initMachine.go:48] [36m✅ 資料庫連接成功[0m
+[2026-04-09 21:51:50] [INFO] [/Users/rafa/Desktop/test/Go-module-for-init-DB/core/init/initHttp.go:14] [32mhttp server 已啟動, 使用 PORT: 8000[0m

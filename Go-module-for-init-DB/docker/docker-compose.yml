@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: my-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: shop
+      MYSQL_USER: myUser
+      MYSQL_PASSWORD: myPass
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+
+  # redis:
+  #   image: redis:latest
+  #   container_name: my-redis
+  #   restart: always
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - ./redis_data:/data
+
+  # mosquitto:
+  #   image: eclipse-mosquitto:2.0
+  #   container_name: my-mosquitto
+  #   restart: always
+  #   ports:
+  #     - "1883:1883"   # MQTT 主要連線 port
+  #     - "9001:9001"   # WebSocket (如果你要用網頁測試可保留)
+  #   volumes:
+  #     - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+  #     - ./mosquitto/data:/mosquitto/data
+  #     - ./mosquitto/log:/mosquitto/log
+
+  # mongo:
+  #   image: mongo:6.0
+  #   container_name: my-mongo
+  #   restart: always
+  #   environment:
+  #     MONGO_INITDB_ROOT_USERNAME: bunbun	
+  #     MONGO_INITDB_ROOT_PASSWORD: bunbun
+  #     MONGO_INITDB_DATABASE: pettrack
+  #   command: ["mongod", "--auth"]
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - ./mongo_data:/data/db
+  #     - ./mongo_init:/docker-entrypoint-initdb.d
