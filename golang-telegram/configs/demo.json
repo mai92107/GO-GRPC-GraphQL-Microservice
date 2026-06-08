@@ -8,8 +8,8 @@
   },
   "telegram": {
     "enabled": true,
-    "bot_token": "8845895869:AAFa3Bdth0oFccNSdgBbEQeKr6bYV2_-upE",
-    "chat_id": "6135640146"
+    "bot_token": "",
+    "chat_id": ""
   },
   "services": [
     {
