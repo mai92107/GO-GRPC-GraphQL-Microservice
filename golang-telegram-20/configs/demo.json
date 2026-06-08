@@ -1,0 +1,160 @@
+{
+  "app": {
+    "name": "springboot-monitor-demo",
+    "default_check_interval_seconds": 30,
+    "http_timeout_seconds": 5,
+    "metrics_enabled": true,
+    "response_time_warning_ms": 2000
+  },
+  "telegram": {
+    "enabled": true,
+    "bot_token": "8845895869:AAFa3Bdth0oFccNSdgBbEQeKr6bYV2_-upE",
+    "chat_id": "6135640146"
+  },
+  "services": [
+    {
+      "name": "order-service",
+      "environment": "uat",
+      "base_url": "http://localhost:8081",
+      "health_path": "/actuator/health",
+      "metrics_path": "/actuator/prometheus",
+      "check_interval_seconds": 10,
+      "enabled": true
+    },
+    {
+      "name": "payment-service",
+      "environment": "uat",
+      "base_url": "http://localhost:8082",
+      "health_path": "/actuator/health",
+      "metrics_path": "/actuator/prometheus",
+      "check_interval_seconds": 10,
+      "enabled": true
+    }
+  ],
+  "alert_rules": [
+    {
+      "key": "high-http-request-count",
+      "service_name": "*",
+      "metric_name": "http_server_requests_seconds_count",
+      "labels": {},
+      "operator": ">",
+      "threshold": 10000,
+      "severity": "warning",
+      "enabled": false
+    },
+    {
+      "key": "high-http-request-duration-sum",
+      "service_name": "*",
+      "metric_name": "http_server_requests_seconds_sum",
+      "labels": {},
+      "operator": ">",
+      "threshold": 60,
+      "severity": "warning",
+      "enabled": false
+    },
+    {
+      "key": "high-http-request-duration-max",
+      "service_name": "*",
+      "metric_name": "http_server_requests_seconds_max",
+      "labels": {},
+      "operator": ">",
+      "threshold": 2,
+      "severity": "warning",
+      "enabled": false
+    },
+    {
+      "key": "high-jvm-memory-used",
+      "service_name": "*",
+      "metric_name": "jvm_memory_used_bytes",
+      "labels": {
+        "area": "heap"
+      },
+      "operator": ">",
+      "threshold": 1073741824,
+      "severity": "warning",
+      "enabled": false
+    },
+    {
+      "key": "high-jvm-memory-max",
+      "service_name": "*",
+      "metric_name": "jvm_memory_max_bytes",
+      "labels": {
+        "area": "heap"
+      },
+      "operator": ">",
+      "threshold": 2147483648,
+      "severity": "warning",
+      "enabled": false
+    },
+    {
+      "key": "high-gc-pause-count",
+      "service_name": "*",
+      "metric_name": "jvm_gc_pause_seconds_count",
+      "labels": {},
+      "operator": ">",
+      "threshold": 1000,
+      "severity": "warning",
+      "enabled": false
+    },
+    {
+      "key": "high-gc-pause-duration",
+      "service_name": "*",
+      "metric_name": "jvm_gc_pause_seconds_sum",
+      "labels": {},
+      "operator": ">",
+      "threshold": 60,
+      "severity": "warning",
+      "enabled": false
+    },
+    {
+      "key": "high-live-threads",
+      "service_name": "*",
+      "metric_name": "jvm_threads_live_threads",
+      "labels": {},
+      "operator": ">",
+      "threshold": 100,
+      "severity": "warning",
+      "enabled": false
+    },
+    {
+      "key": "high-db-active-connections",
+      "service_name": "*",
+      "metric_name": "hikaricp_connections_active",
+      "labels": {},
+      "operator": ">",
+      "threshold": 50,
+      "severity": "warning",
+      "enabled": false
+    },
+    {
+      "key": "db-pending-connections",
+      "service_name": "*",
+      "metric_name": "hikaricp_connections_pending",
+      "labels": {},
+      "operator": ">",
+      "threshold": 0,
+      "severity": "critical",
+      "enabled": false
+    },
+    {
+      "key": "high-process-cpu",
+      "service_name": "*",
+      "metric_name": "process_cpu_usage",
+      "labels": {},
+      "operator": ">",
+      "threshold": 0.8,
+      "severity": "warning",
+      "enabled": false
+    },
+    {
+      "key": "low-process-uptime",
+      "service_name": "*",
+      "metric_name": "process_uptime_seconds",
+      "labels": {},
+      "operator": "<",
+      "threshold": 60,
+      "severity": "warning",
+      "enabled": false
+    }
+  ]
+}

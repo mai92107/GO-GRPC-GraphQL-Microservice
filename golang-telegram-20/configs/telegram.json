@@ -1,0 +1,45 @@
+{
+  "app": {
+    "name": "springboot-monitor-telegram",
+    "default_check_interval_seconds": 30,
+    "http_timeout_seconds": 5,
+    "metrics_enabled": true,
+    "response_time_warning_ms": 2000
+  },
+  "telegram": {
+    "enabled": true,
+    "bot_token": "8845895869:AAFa3Bdth0oFccNSdgBbEQeKr6bYV2_-upE",
+    "chat_id": "6135640146"
+  },
+  "services": [
+    {
+      "name": "order-service",
+      "environment": "production",
+      "base_url": "http://localhost:8081",
+      "health_path": "/actuator/health",
+      "metrics_path": "/actuator/prometheus",
+      "check_interval_seconds": 30,
+      "enabled": false
+    }
+  ],
+  "alert_rules": [
+    {
+      "key": "high-live-threads",
+      "service_name": "*",
+      "metric_name": "jvm_threads_live_threads",
+      "operator": ">",
+      "threshold": 100,
+      "severity": "warning",
+      "enabled": true
+    },
+    {
+      "key": "high-process-cpu",
+      "service_name": "*",
+      "metric_name": "process_cpu_usage",
+      "operator": ">",
+      "threshold": 0.8,
+      "severity": "warning",
+      "enabled": true
+    }
+  ]
+}
