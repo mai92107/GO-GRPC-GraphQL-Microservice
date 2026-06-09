@@ -12,10 +12,11 @@ import (
 )
 
 type Config struct {
-	App        AppConfig      `json:"app"`
-	Telegram   TelegramConfig `json:"telegram"`
-	Services   []Service      `json:"services"`
-	AlertRules []AlertRule    `json:"alert_rules"`
+	App              AppConfig              `json:"app"`
+	Telegram         TelegramConfig         `json:"telegram"`
+	CronResultNotify CronResultNotifyConfig `json:"cron_result_notify"`
+	Services         []Service              `json:"services"`
+	AlertRules       []AlertRule            `json:"alert_rules"`
 }
 
 type AppConfig struct {
@@ -30,6 +31,14 @@ type TelegramConfig struct {
 	Enabled  bool   `json:"enabled"`
 	BotToken string `json:"bot_token"`
 	ChatID   string `json:"chat_id"`
+}
+
+type CronResultNotifyConfig struct {
+	Enabled             bool   `json:"enabled"`
+	Host                string `json:"host"`
+	Path                string `json:"path"`
+	BearerToken         string `json:"bearer_token"`
+	SuccessResponseCode string `json:"success_response_code"`
 }
 
 type Service struct {
@@ -102,6 +111,10 @@ func applyDefaults(cfg *Config) {
 	if cfg.App.ResponseTimeWarningMS <= 0 {
 		cfg.App.ResponseTimeWarningMS = 2000
 	}
+	if cfg.CronResultNotify.SuccessResponseCode == "" {
+		cfg.CronResultNotify.SuccessResponseCode = "SUCCESS"
+	}
+	cfg.CronResultNotify.Host = strings.TrimRight(cfg.CronResultNotify.Host, "/")
 	for i := range cfg.Services {
 		if cfg.Services[i].Environment == "" {
 			cfg.Services[i].Environment = "production"
@@ -183,6 +196,11 @@ func validate(cfg Config) error {
 
 	if cfg.Telegram.Enabled && (cfg.Telegram.BotToken == "" || cfg.Telegram.ChatID == "") {
 		return errors.New("telegram.bot_token and telegram.chat_id are required when telegram.enabled is true")
+	}
+	if cfg.CronResultNotify.Enabled {
+		if cfg.CronResultNotify.Host == "" || cfg.CronResultNotify.Path == "" || cfg.CronResultNotify.BearerToken == "" {
+			return errors.New("cron_result_notify.host, path, and bearer_token are required when cron_result_notify.enabled is true")
+		}
 	}
 
 	return nil

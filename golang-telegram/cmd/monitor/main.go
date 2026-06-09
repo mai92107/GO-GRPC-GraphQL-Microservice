@@ -84,16 +84,24 @@ func metricRules(rules []config.AlertRule) []alert.MetricRule {
 
 func buildNotifier(cfg config.Config) notifier.Notifier {
 	logNotifier := notifier.LogNotifier{}
-	if !cfg.Telegram.Enabled {
-		return logNotifier
-	}
-	return notifier.NewMulti(
-		logNotifier,
-		notifier.NewTelegramNotifier(
+	notifiers := []notifier.Notifier{logNotifier}
+	if cfg.Telegram.Enabled {
+		notifiers = append(notifiers, notifier.NewTelegramNotifier(
 			cfg.Telegram.BotToken,
 			cfg.Telegram.ChatID,
 			time.Duration(cfg.App.HTTPTimeoutSeconds)*time.Second,
 			logNotifier,
-		),
-	)
+		))
+	}
+
+	if cfg.CronResultNotify.Enabled {
+		notifiers = append(notifiers, notifier.NewCronResultNotifier(
+			cfg.CronResultNotify.Host,
+			cfg.CronResultNotify.Path,
+			cfg.CronResultNotify.BearerToken,
+			cfg.CronResultNotify.SuccessResponseCode,
+			time.Duration(cfg.App.HTTPTimeoutSeconds)*time.Second,
+		))
+	}
+	return notifier.NewMulti(notifiers...)
 }

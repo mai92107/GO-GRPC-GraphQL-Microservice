@@ -72,7 +72,7 @@ func (handler Handler) statusAll() string {
 	for _, service := range services {
 		lines = append(lines, handler.statusLine(service.Name))
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, "\n\n")
 }
 
 func (handler Handler) status(serviceName string) string {
@@ -83,17 +83,54 @@ func (handler Handler) status(serviceName string) string {
 }
 
 func (handler Handler) statusLine(serviceName string) string {
+	lines := make([]string, 0)
 	check, ok := handler.repo.LastHealthCheck(serviceName)
 	if !ok {
-		return fmt.Sprintf("%s: no health check yet", serviceName)
+		lines = append(lines, fmt.Sprintf("%s: no health check yet", serviceName))
+	} else {
+		lines = append(lines, fmt.Sprintf(
+			"%s: %s, response=%dms, checked_at=%s",
+			check.ServiceName,
+			check.Status,
+			check.ResponseTime.Milliseconds(),
+			check.CheckedAt.Format("2006-01-02 15:04:05"),
+		))
 	}
-	return fmt.Sprintf(
-		"%s: %s, response=%dms, checked_at=%s",
-		check.ServiceName,
-		check.Status,
-		check.ResponseTime.Milliseconds(),
-		check.CheckedAt.Format("2006-01-02 15:04:05"),
-	)
+
+	metrics := handler.repo.LastMetricSnapshots(serviceName)
+	if len(metrics) == 0 {
+		return strings.Join(append(lines, "metrics: no metrics yet"), "\n")
+	}
+
+	lines = append(lines, "metrics:")
+	for _, snapshot := range metrics {
+		lines = append(lines, fmt.Sprintf(
+			"- %s%s=%g, collected_at=%s",
+			snapshot.Name,
+			formatLabels(snapshot.Labels),
+			snapshot.Value,
+			snapshot.CollectedAt.Format("2006-01-02 15:04:05"),
+		))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func formatLabels(labels map[string]string) string {
+	if len(labels) == 0 {
+		return ""
+	}
+
+	names := make([]string, 0, len(labels))
+	for name := range labels {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	pairs := make([]string, 0, len(names))
+	for _, name := range names {
+		pairs = append(pairs, fmt.Sprintf("%s=%q", name, labels[name]))
+	}
+	return "{" + strings.Join(pairs, ",") + "}"
 }
 
 func (handler Handler) alerts() string {

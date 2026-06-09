@@ -11,6 +11,13 @@
     "bot_token": "",
     "chat_id": ""
   },
+  "cron_result_notify": {
+    "enabled": false,
+    "host": "https://notify.example.com",
+    "path": "/cron/result",
+    "bearer_token": "replace-with-secret",
+    "success_response_code": "SUCCESS"
+  },
   "services": [
     {
       "name": "order-service",

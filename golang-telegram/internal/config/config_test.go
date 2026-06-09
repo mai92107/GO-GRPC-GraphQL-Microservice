@@ -88,6 +88,29 @@ func TestLoadRejectsWhenAllServicesAreDisabled(t *testing.T) {
 	}
 }
 
+func TestLoadValidatesEnabledCronResultNotify(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	content := []byte(`{
+		"cron_result_notify": {
+			"enabled": true,
+			"host": "https://notify.example.com",
+			"path": "/cron/result"
+		},
+		"services": [
+			{"name": "order-service", "base_url": "http://localhost:8081", "enabled": true}
+		]
+	}`)
+
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected enabled cron result notification without bearer token to be rejected")
+	}
+}
+
 func TestLoadValidatesAlertRule(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")

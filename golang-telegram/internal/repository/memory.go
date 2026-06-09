@@ -109,7 +109,7 @@ func (repo *MemoryRepository) LastMetricSnapshots(serviceName string) []model.Me
 		result = append(result, snapshot)
 	}
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].Name < result[j].Name
+		return metricKey(result[i]) < metricKey(result[j])
 	})
 	return result
 }

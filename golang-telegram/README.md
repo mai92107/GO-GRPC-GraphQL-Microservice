@@ -44,10 +44,29 @@ Telegram is read-only. It can receive alert and recovery notifications and suppo
 ```text
 /list_services
 /status
+/status <service_name>
 /alerts
 ```
 
+`/status` includes each server's latest health check and collected metrics.
+
 Hosts and alert rules must be changed in the JSON config and require a process restart.
+
+To forward alert and recovery events to a cron result notification API, add:
+
+```json
+"cron_result_notify": {
+  "enabled": true,
+  "host": "https://notify.example.com",
+  "path": "/cron/result",
+  "bearer_token": "replace-with-secret",
+  "success_response_code": "SUCCESS"
+}
+```
+
+The API receives `serviceName`, `ruleKey`, `severity`, `status`, `message`, `startedAt`,
+and optional `resolvedAt` fields. The bearer token is sent through the `Authorization`
+header and is not logged.
 
 ## Try Bot Commands Locally
 

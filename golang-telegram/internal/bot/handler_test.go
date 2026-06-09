@@ -1,7 +1,6 @@
 package bot
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -17,9 +16,38 @@ func TestHandleStatusCommand(t *testing.T) {
 		ResponseTime: 120 * time.Millisecond,
 		CheckedAt:    time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC),
 	})
+	repo.SaveMetricSnapshots([]model.MetricSnapshot{
+		{
+			ServiceName: "order-service",
+			Name:        "process_cpu_usage",
+			Value:       0.23,
+			CollectedAt: time.Date(2026, 6, 4, 12, 0, 1, 0, time.UTC),
+		},
+		{
+			ServiceName: "order-service",
+			Name:        "http_server_requests_seconds_count",
+			Labels:      map[string]string{"uri": "/orders", "method": "GET"},
+			Value:       42,
+			CollectedAt: time.Date(2026, 6, 4, 12, 0, 1, 0, time.UTC),
+		},
+	})
 
 	response := NewHandler(repo).HandleCommand("/status order-service")
-	if !strings.Contains(response, "order-service: UP") {
+	expected := `order-service: UP, response=120ms, checked_at=2026-06-04 12:00:00
+metrics:
+- http_server_requests_seconds_count{method="GET",uri="/orders"}=42, collected_at=2026-06-04 12:00:01
+- process_cpu_usage=0.23, collected_at=2026-06-04 12:00:01`
+	if response != expected {
+		t.Fatalf("unexpected response: %q", response)
+	}
+}
+
+func TestHandleStatusCommandWithoutCollectedData(t *testing.T) {
+	repo := repository.NewMemoryRepository([]model.Service{{Name: "order-service", Enabled: true}})
+
+	response := NewHandler(repo).HandleCommand("/status order-service")
+	expected := "order-service: no health check yet\nmetrics: no metrics yet"
+	if response != expected {
 		t.Fatalf("unexpected response: %q", response)
 	}
 }
