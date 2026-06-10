@@ -103,11 +103,18 @@ func parseLabels(text string) (map[string]string, error) {
 		return labels, nil
 	}
 
-	for _, part := range splitCSV(text) {
+	parts := splitCSV(text)
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" && i == len(parts)-1 {
+			continue
+		}
 		key, rawValue, ok := strings.Cut(part, "=")
 		if !ok {
 			return nil, fmt.Errorf("invalid label %q", part)
 		}
+		key = strings.TrimSpace(key)
+		rawValue = strings.TrimSpace(rawValue)
 		value, err := strconv.Unquote(rawValue)
 		if err != nil {
 			return nil, fmt.Errorf("invalid label value %q: %w", rawValue, err)
