@@ -160,6 +160,17 @@
       "severity": "warning",
       "message": "",
       "enabled": true
+    },
+    {
+      "key": "high-system-cpu",
+      "service_name": "*",
+      "metric_name": "system_cpu_usage",
+      "labels": {},
+      "operator": "\u003e",
+      "threshold": 0.8,
+      "severity": "warning",
+      "message": "",
+      "enabled": false
     }
   ]
 }

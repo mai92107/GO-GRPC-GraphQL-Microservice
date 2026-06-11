@@ -17,9 +17,15 @@ const (
 	JVMGCPauseSecondsCount         Name = "jvm_gc_pause_seconds_count"
 	JVMGCPauseSecondsSum           Name = "jvm_gc_pause_seconds_sum"
 	JVMThreadsLiveThreads          Name = "jvm_threads_live_threads"
+	JVMThreadsDaemonThreads        Name = "jvm_threads_daemon_threads"
+	JVMThreadsPeakThreads          Name = "jvm_threads_peak_threads"
+	JVMThreadsStartedThreadsTotal  Name = "jvm_threads_started_threads_total"
+	JVMThreadsStatesThreads        Name = "jvm_threads_states_threads"
 	HikariCPConnectionsActive      Name = "hikaricp_connections_active"
 	HikariCPConnectionsPending     Name = "hikaricp_connections_pending"
 	ProcessCPUUsage                Name = "process_cpu_usage"
+	SystemCPUUsage                 Name = "system_cpu_usage"
+	SystemCPUCount                 Name = "system_cpu_count"
 	ProcessUptimeSeconds           Name = "process_uptime_seconds"
 )
 
@@ -32,9 +38,15 @@ var allowed = map[Name]struct{}{
 	JVMGCPauseSecondsCount:         {},
 	JVMGCPauseSecondsSum:           {},
 	JVMThreadsLiveThreads:          {},
+	JVMThreadsDaemonThreads:        {},
+	JVMThreadsPeakThreads:          {},
+	JVMThreadsStartedThreadsTotal:  {},
+	JVMThreadsStatesThreads:        {},
 	HikariCPConnectionsActive:      {},
 	HikariCPConnectionsPending:     {},
 	ProcessCPUUsage:                {},
+	SystemCPUUsage:                 {},
+	SystemCPUCount:                 {},
 	ProcessUptimeSeconds:           {},
 }
 

@@ -72,8 +72,10 @@ func metricScaleFor(metricName string, samples []model.MetricSample) metricScale
 		maxValue = math.Max(maxValue, math.Abs(sample.Value))
 	}
 	switch {
-	case metricName == "process_cpu_usage":
+	case metricName == "process_cpu_usage" || metricName == "system_cpu_usage":
 		return metricScale{factor: 100, unit: "百分比（%）", decimals: 2}
+	case metricName == "system_cpu_count":
+		return metricScale{factor: 1, unit: "CPU 核心數", decimals: 0}
 	case strings.HasSuffix(metricName, "_bytes"):
 		const (
 			kib = 1024

@@ -183,6 +183,10 @@ normal metrics are summed and `*_max` metrics use the maximum value. Empty
 queries return a reason and do not generate a blank image. Charts show service,
 metric, time range, unit, and applicable thresholds. Restarting clears trends.
 
+Supported JVM thread metrics include live, daemon, peak, cumulative started,
+and state-classified thread counts. CPU metrics include process CPU usage,
+system CPU usage, and system CPU core count.
+
 ## 7. Logging
 
 ```mermaid

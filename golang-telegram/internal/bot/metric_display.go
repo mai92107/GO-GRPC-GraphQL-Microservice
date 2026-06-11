@@ -19,9 +19,15 @@ var metricChineseNames = map[string]string{
 	"jvm_gc_pause_seconds_count":         "GC 暫停次數",
 	"jvm_gc_pause_seconds_sum":           "GC 暫停總時間",
 	"jvm_threads_live_threads":           "JVM 存活執行緒",
+	"jvm_threads_daemon_threads":         "JVM 背景執行緒",
+	"jvm_threads_peak_threads":           "JVM 歷史最高執行緒",
+	"jvm_threads_started_threads_total":  "JVM 累積啟動執行緒",
+	"jvm_threads_states_threads":         "JVM 執行緒狀態",
 	"hikaricp_connections_active":        "資料庫使用中連線",
 	"hikaricp_connections_pending":       "資料庫等待連線",
 	"process_cpu_usage":                  "程序 CPU 使用率",
+	"system_cpu_usage":                   "系統 CPU 使用率",
+	"system_cpu_count":                   "系統 CPU 核心數",
 	"process_uptime_seconds":             "程序運行時間",
 }
 
@@ -76,7 +82,7 @@ func omitNormalLabel(name, value string) bool {
 
 func formatMetricValue(name string, value float64) string {
 	switch {
-	case name == "process_cpu_usage":
+	case name == "process_cpu_usage" || name == "system_cpu_usage":
 		return fmt.Sprintf("%.2f%%", value*100)
 	case strings.HasSuffix(name, "_bytes"):
 		return formatBytes(value)

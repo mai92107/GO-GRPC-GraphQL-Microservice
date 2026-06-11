@@ -43,3 +43,18 @@ func TestFormatMetricValuesUsesReadableUnits(t *testing.T) {
 		}
 	}
 }
+
+func TestSystemCPUAndThreadStateDisplay(t *testing.T) {
+	if got := formatMetricValue("system_cpu_usage", 0.35); got != "35.00%" {
+		t.Fatalf("unexpected system CPU value: %s", got)
+	}
+	output := formatMetricSnapshot(model.MetricSnapshot{
+		Name:        "jvm_threads_states_threads",
+		Labels:      map[string]string{"state": "blocked"},
+		Value:       2,
+		CollectedAt: time.Now(),
+	})
+	if !strings.Contains(output, "JVM 執行緒狀態") || !strings.Contains(output, `state="blocked"`) {
+		t.Fatalf("unexpected thread state output: %s", output)
+	}
+}

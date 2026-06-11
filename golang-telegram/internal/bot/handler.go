@@ -804,6 +804,7 @@ func metricGroupDisplayName(group string) string {
 		"jvm":      "JVM",
 		"hikaricp": "資料庫連線池",
 		"process":  "程序",
+		"system":   "系統",
 	}
 	if name := names[group]; name != "" {
 		return fmt.Sprintf("%s（%s）", name, group)

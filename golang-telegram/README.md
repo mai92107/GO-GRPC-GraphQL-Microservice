@@ -12,6 +12,8 @@ Detailed behavior and architecture are defined in
 - Manage services and alert rules through a single authorized Telegram chat
 - Validate, back up, atomically replace, and immediately apply JSON config
 - Keep supported metric trends in memory for eight hours
+- Monitor JVM live, daemon, peak, started, and state-classified threads
+- Monitor process CPU, system CPU usage, and system CPU core count
 - Generate 1h, 4h, and 8h PNG trend charts with threshold lines
 - Write structured daily JSONL logs while keeping normal terminal output limited
   to `監控 <service> 中`

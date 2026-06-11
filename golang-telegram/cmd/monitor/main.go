@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "configs/demo.json", "JSON config file path")
+	configPath := flag.String("config", "go /demo.json", "JSON config file path")
 	once := flag.Bool("once", false, "run checks once and exit")
 	command := flag.String("command", "", "run a local bot command after one check, for example: /status")
 	flag.Parse()

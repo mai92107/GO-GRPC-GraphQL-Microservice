@@ -86,3 +86,26 @@ func TestParsePrometheusAcceptsEscapedQuoteAndBraceInsideLabelValue(t *testing.T
 		t.Fatalf("unexpected URI label: %q", snapshots[0].Labels["uri"])
 	}
 }
+
+func TestParsePrometheusSupportsThreadAndSystemCPUMetrics(t *testing.T) {
+	input := `
+jvm_threads_live_threads 30
+jvm_threads_daemon_threads 20
+jvm_threads_peak_threads 42
+jvm_threads_started_threads_total 100
+jvm_threads_states_threads{state="runnable"} 8
+jvm_threads_states_threads{state="blocked"} 1
+system_cpu_usage 0.35
+system_cpu_count 8
+`
+	snapshots, err := ParsePrometheus("www-service", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshots) != 8 {
+		t.Fatalf("expected 8 snapshots, got %d", len(snapshots))
+	}
+	if snapshots[4].Labels["state"] != "runnable" {
+		t.Fatalf("thread state label was not retained: %#v", snapshots[4].Labels)
+	}
+}

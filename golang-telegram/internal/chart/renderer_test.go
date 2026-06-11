@@ -33,6 +33,8 @@ func TestMetricScaleUsesReadableYAxisUnits(t *testing.T) {
 		factor     float64
 	}{
 		{name: "CPU percentage", metricName: "process_cpu_usage", value: 0.5, unit: "百分比（%）", factor: 100},
+		{name: "system CPU percentage", metricName: "system_cpu_usage", value: 0.5, unit: "百分比（%）", factor: 100},
+		{name: "system CPU count", metricName: "system_cpu_count", value: 8, unit: "CPU 核心數", factor: 1},
 		{name: "memory GB", metricName: "jvm_memory_used_bytes", value: 2 * 1024 * 1024 * 1024, unit: "GB", factor: 1.0 / (1024 * 1024 * 1024)},
 		{name: "milliseconds", metricName: "http_server_requests_seconds_max", value: 0.25, unit: "毫秒", factor: 1000},
 		{name: "seconds", metricName: "http_server_requests_seconds_max", value: 2, unit: "秒", factor: 1},
