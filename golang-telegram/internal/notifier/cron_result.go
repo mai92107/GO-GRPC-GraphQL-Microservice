@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -60,7 +59,6 @@ func (notifier *CronResultNotifier) Notify(ctx context.Context, event model.Aler
 		return fmt.Errorf("marshal cron result notification: %w", err)
 	}
 
-	log.Printf("cron result notification url=%s request=%s", notifier.url, body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, notifier.url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build cron result notification request: %w", err)
@@ -78,8 +76,6 @@ func (notifier *CronResultNotifier) Notify(ctx context.Context, event model.Aler
 	if err != nil {
 		return fmt.Errorf("read cron result notification response: %w", err)
 	}
-	log.Printf("cron result notification response=%s", responseBody)
-
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return fmt.Errorf("cron result notification failed: http %d", resp.StatusCode)
 	}

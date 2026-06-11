@@ -2,15 +2,17 @@ package scheduler
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"sync"
 	"time"
 
 	"golang-springboot-monitor-bot/internal/alert"
+	"golang-springboot-monitor-bot/internal/applog"
 	"golang-springboot-monitor-bot/internal/collector"
 	"golang-springboot-monitor-bot/internal/model"
 	"golang-springboot-monitor-bot/internal/notifier"
 	"golang-springboot-monitor-bot/internal/repository"
+	"golang-springboot-monitor-bot/internal/trend"
 )
 
 type Scheduler struct {
@@ -19,6 +21,9 @@ type Scheduler struct {
 	alertEngine    *alert.Engine
 	notifier       notifier.Notifier
 	metricsEnabled bool
+	trends         *trend.Repository
+	logger         applog.ApplicationLogger
+	terminal       applog.TerminalStatusWriter
 	inFlight       map[string]bool
 	lastCheckedAt  map[string]time.Time
 	mu             sync.Mutex
@@ -30,6 +35,9 @@ func New(
 	alertEngine *alert.Engine,
 	notifier notifier.Notifier,
 	metricsEnabled bool,
+	trends *trend.Repository,
+	logger applog.ApplicationLogger,
+	terminal applog.TerminalStatusWriter,
 ) *Scheduler {
 	return &Scheduler{
 		repo:           repo,
@@ -37,9 +45,35 @@ func New(
 		alertEngine:    alertEngine,
 		notifier:       notifier,
 		metricsEnabled: metricsEnabled,
+		trends:         trends,
+		logger:         logger,
+		terminal:       terminal,
 		inFlight:       make(map[string]bool),
 		lastCheckedAt:  make(map[string]time.Time),
 	}
+}
+
+func (scheduler *Scheduler) SetMetricsEnabled(enabled bool) {
+	scheduler.mu.Lock()
+	defer scheduler.mu.Unlock()
+	scheduler.metricsEnabled = enabled
+}
+
+func (scheduler *Scheduler) CheckNow(ctx context.Context, serviceName string) error {
+	service, ok := scheduler.repo.Service(serviceName)
+	if !ok {
+		return fmt.Errorf("service %q not found", serviceName)
+	}
+	scheduler.mu.Lock()
+	if scheduler.inFlight[serviceName] {
+		scheduler.mu.Unlock()
+		return fmt.Errorf("service %q check is already in progress", serviceName)
+	}
+	scheduler.inFlight[serviceName] = true
+	scheduler.mu.Unlock()
+	defer scheduler.finishCheck(serviceName)
+	scheduler.checkService(ctx, service)
+	return nil
 }
 
 func (scheduler *Scheduler) RunOnce(ctx context.Context) {
@@ -107,6 +141,7 @@ func (scheduler *Scheduler) finishCheck(serviceName string) {
 }
 
 func (scheduler *Scheduler) checkService(ctx context.Context, service model.Service) {
+	previousHealth, hadPreviousHealth := scheduler.repo.LastHealthCheck(service.Name)
 	healthResult := scheduler.checker.Check(ctx, service)
 	check := model.HealthCheck{
 		ServiceName:    service.Name,
@@ -120,53 +155,56 @@ func (scheduler *Scheduler) checkService(ctx context.Context, service model.Serv
 		check.ErrorMessage = healthResult.Error.Error()
 	}
 
+	if !hadPreviousHealth || healthStateChanged(*previousHealth, check) {
+		scheduler.terminal.Monitoring(service.Name)
+	}
 	scheduler.repo.SaveHealthCheck(check)
-	logHealth(check)
+	if check.ErrorMessage != "" {
+		scheduler.logger.Error(ctx, "health_check_failed", healthResult.Error, applog.Field{Key: "service", Value: service.Name})
+	} else {
+		scheduler.logger.Info(ctx, "health_check_completed",
+			applog.Field{Key: "service", Value: service.Name},
+			applog.Field{Key: "duration_ms", Value: check.ResponseTime.Milliseconds()},
+			applog.Field{Key: "status", Value: check.Status},
+		)
+	}
 	scheduler.notify(ctx, scheduler.alertEngine.EvaluateHealth(check))
 
-	if !scheduler.metricsEnabled || check.Status != "UP" {
+	scheduler.mu.Lock()
+	metricsEnabled := scheduler.metricsEnabled
+	scheduler.mu.Unlock()
+	if !metricsEnabled || check.Status != "UP" {
 		return
 	}
 
 	metricsResult := scheduler.checker.CollectMetrics(ctx, service)
 	if metricsResult.Error != nil {
-		log.Printf("metrics service=%s error=%q", service.Name, metricsResult.Error.Error())
+		scheduler.logger.Error(ctx, "metrics_collection_failed", metricsResult.Error, applog.Field{Key: "service", Value: service.Name})
 		return
 	}
 
 	scheduler.repo.SaveMetricSnapshots(metricsResult.Snapshots)
-	log.Printf("metrics service=%s snapshots=%d response=%dms", service.Name, len(metricsResult.Snapshots), metricsResult.ResponseTime.Milliseconds())
+	scheduler.trends.Add(metricsResult.Snapshots)
+	scheduler.logger.Info(ctx, "metrics_collection_completed",
+		applog.Field{Key: "service", Value: service.Name},
+		applog.Field{Key: "snapshots", Value: len(metricsResult.Snapshots)},
+	)
 	scheduler.notify(ctx, scheduler.alertEngine.EvaluateMetrics(service.Name, metricsResult.Snapshots, metricsResult.CollectedAt))
+}
+
+func healthStateChanged(previous, current model.HealthCheck) bool {
+	return previous.Status != current.Status ||
+		previous.HTTPStatusCode != current.HTTPStatusCode ||
+		previous.ErrorMessage != current.ErrorMessage
 }
 
 func (scheduler *Scheduler) notify(ctx context.Context, events []model.AlertEvent) {
 	for _, event := range events {
 		if err := scheduler.notifier.Notify(ctx, event); err != nil {
-			log.Printf("notify service=%s rule=%s error=%q", event.ServiceName, event.RuleKey, err.Error())
+			scheduler.logger.Error(ctx, "notification_failed", err,
+				applog.Field{Key: "service", Value: event.ServiceName},
+				applog.Field{Key: "rule", Value: event.RuleKey},
+			)
 		}
 	}
-}
-
-func logHealth(check model.HealthCheck) {
-	if check.ErrorMessage != "" {
-		log.Printf(
-			"health service=%s env=%s status=%s http=%d response=%dms error=%q",
-			check.ServiceName,
-			check.Environment,
-			check.Status,
-			check.HTTPStatusCode,
-			check.ResponseTime.Milliseconds(),
-			check.ErrorMessage,
-		)
-		return
-	}
-
-	log.Printf(
-		"health service=%s env=%s status=%s http=%d response=%dms",
-		check.ServiceName,
-		check.Environment,
-		check.Status,
-		check.HTTPStatusCode,
-		check.ResponseTime.Milliseconds(),
-	)
 }

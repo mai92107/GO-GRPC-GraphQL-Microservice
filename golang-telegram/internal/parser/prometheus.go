@@ -78,11 +78,11 @@ func parseMetricLine(serviceName, line string) (model.MetricSnapshot, bool, erro
 
 func splitMetricAndValue(line string) (string, string, error) {
 	if open := strings.Index(line, "{"); open >= 0 {
-		close := strings.Index(line[open:], "}")
-		if close < 0 {
+		close, err := findLabelSetEnd(line, open)
+		if err != nil {
 			return "", "", fmt.Errorf("invalid label format")
 		}
-		end := open + close + 1
+		end := close + 1
 		fields := strings.Fields(strings.TrimSpace(line[end:]))
 		if len(fields) == 0 {
 			return "", "", fmt.Errorf("missing metric value")
@@ -95,6 +95,24 @@ func splitMetricAndValue(line string) (string, string, error) {
 		return "", "", fmt.Errorf("missing metric value")
 	}
 	return fields[0], fields[1], nil
+}
+
+func findLabelSetEnd(line string, open int) (int, error) {
+	quoted := false
+	escaped := false
+	for i := open + 1; i < len(line); i++ {
+		switch {
+		case escaped:
+			escaped = false
+		case quoted && line[i] == '\\':
+			escaped = true
+		case line[i] == '"':
+			quoted = !quoted
+		case line[i] == '}' && !quoted:
+			return i, nil
+		}
+	}
+	return -1, fmt.Errorf("unterminated label set")
 }
 
 func parseLabels(text string) (map[string]string, error) {

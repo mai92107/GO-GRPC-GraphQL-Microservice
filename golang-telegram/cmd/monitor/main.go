@@ -3,50 +3,69 @@ package main
 import (
 	"context"
 	"flag"
-	"log"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"golang-springboot-monitor-bot/internal/alert"
+	"golang-springboot-monitor-bot/internal/applog"
 	"golang-springboot-monitor-bot/internal/bot"
+	"golang-springboot-monitor-bot/internal/chart"
 	"golang-springboot-monitor-bot/internal/collector"
 	"golang-springboot-monitor-bot/internal/config"
 	"golang-springboot-monitor-bot/internal/notifier"
 	"golang-springboot-monitor-bot/internal/repository"
 	"golang-springboot-monitor-bot/internal/scheduler"
+	"golang-springboot-monitor-bot/internal/trend"
 )
 
 func main() {
-	configPath := flag.String("config", "configs/telegram.json", "JSON config file path")
+	configPath := flag.String("config", "configs/demo.json", "JSON config file path")
 	once := flag.Bool("once", false, "run checks once and exit")
 	command := flag.String("command", "", "run a local bot command after one check, for example: /status")
 	flag.Parse()
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		fmt.Fprintf(os.Stderr, "ERROR %s config load config: %v\n", time.Now().Format(time.RFC3339), err)
+		return
 	}
+	terminal := applog.NewTerminalWriter(os.Stdout, cfg.Logging.Timezone)
+	fileLogger, err := applog.New(cfg.Logging, terminal)
+	var appLogger applog.ApplicationLogger = fileLogger
+	if err != nil {
+		terminal.Error("logger", err)
+		appLogger = applog.NewFallback(terminal)
+	}
+	defer appLogger.Close()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	repo := repository.NewMemoryRepository(cfg.ModelServices())
+	trendRepo := trend.NewRepository()
 	checker := collector.NewHealthChecker(time.Duration(cfg.App.HTTPTimeoutSeconds) * time.Second)
 	alertEngine := alert.NewEngine(repo, alert.Thresholds{
 		ResponseTimeWarning: time.Duration(cfg.App.ResponseTimeWarningMS) * time.Millisecond,
 	}, metricRules(cfg.AlertRules))
-	notifierService := buildNotifier(cfg)
-	schedulerService := scheduler.New(repo, checker, alertEngine, notifierService, cfg.App.MetricsEnabled)
-	botHandler := bot.NewHandler(repo)
+	notifierService := buildNotifier(cfg, appLogger)
+	schedulerService := scheduler.New(repo, checker, alertEngine, notifierService, cfg.App.MetricsEnabled, trendRepo, appLogger, terminal)
+	configManager := config.NewManager(*configPath, cfg, func(updated config.Config) {
+		repo.ReplaceServices(updated.ModelServices())
+		alertEngine.ReplaceRules(alert.Thresholds{ResponseTimeWarning: time.Duration(updated.App.ResponseTimeWarningMS) * time.Millisecond}, metricRules(updated.AlertRules))
+		schedulerService.SetMetricsEnabled(updated.App.MetricsEnabled)
+		appLogger.Info(ctx, "configuration_applied")
+	})
+	botHandler := bot.NewManagementHandler(repo, trendRepo, chart.NewRenderer(), configManager, schedulerService.CheckNow, schedulerService.RunOnce, appLogger)
 
-	log.Printf("started %s with %d enabled service(s)", cfg.App.Name, len(repo.EnabledServices()))
+	appLogger.Info(ctx, "application_started", applog.Field{Key: "enabled_services", Value: len(repo.EnabledServices())})
 
 	if *once || *command != "" {
 		schedulerService.RunOnce(ctx)
 		if *command != "" {
-			log.Print(botHandler.HandleCommand(*command))
+			fmt.Fprintln(os.Stdout, botHandler.HandleCommand(*command))
 		}
 		return
 	}
@@ -57,6 +76,7 @@ func main() {
 			cfg.Telegram.ChatID,
 			time.Duration(cfg.App.HTTPTimeoutSeconds+30)*time.Second,
 			botHandler,
+			appLogger,
 		)
 		go poller.Run(ctx)
 	}
@@ -82,8 +102,8 @@ func metricRules(rules []config.AlertRule) []alert.MetricRule {
 	return result
 }
 
-func buildNotifier(cfg config.Config) notifier.Notifier {
-	logNotifier := notifier.LogNotifier{}
+func buildNotifier(cfg config.Config, logger applog.ApplicationLogger) notifier.Notifier {
+	logNotifier := notifier.LogNotifier{Logger: logger}
 	notifiers := []notifier.Notifier{logNotifier}
 	if cfg.Telegram.Enabled {
 		notifiers = append(notifiers, notifier.NewTelegramNotifier(

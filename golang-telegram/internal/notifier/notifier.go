@@ -5,10 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
+	"golang-springboot-monitor-bot/internal/applog"
 	"golang-springboot-monitor-bot/internal/model"
 )
 
@@ -16,10 +16,16 @@ type Notifier interface {
 	Notify(context.Context, model.AlertEvent) error
 }
 
-type LogNotifier struct{}
+type LogNotifier struct{ Logger applog.ApplicationLogger }
 
-func (LogNotifier) Notify(_ context.Context, event model.AlertEvent) error {
-	log.Printf("notification service=%s severity=%s status=%s message=%q", event.ServiceName, event.Severity, event.Status, event.Message)
+func (notifier LogNotifier) Notify(ctx context.Context, event model.AlertEvent) error {
+	if notifier.Logger != nil {
+		notifier.Logger.Info(ctx, "notification_dispatched",
+			applog.Field{Key: "service", Value: event.ServiceName},
+			applog.Field{Key: "severity", Value: event.Severity},
+			applog.Field{Key: "status", Value: event.Status},
+		)
+	}
 	return nil
 }
 

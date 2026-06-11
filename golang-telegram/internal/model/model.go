@@ -38,14 +38,32 @@ const (
 )
 
 type AlertEvent struct {
-	ID          int64
-	ServiceName string
-	RuleKey     string
-	Severity    string
-	Status      AlertStatus
-	Message     string
-	StartedAt   time.Time
-	ResolvedAt  *time.Time
+	ID              int64
+	ServiceName     string
+	RuleKey         string
+	Severity        string
+	Status          AlertStatus
+	Message         string
+	StartedAt       time.Time
+	LastTriggeredAt time.Time
+	ResolvedAt      *time.Time
+	AcknowledgedAt  *time.Time
+	AcknowledgedBy  string
+}
+
+type MetricSample = MetricSnapshot
+
+type TelegramSession struct {
+	ChatID    string
+	Operation string
+	Step      string
+	Values    map[string]string
+	ExpiresAt time.Time
+}
+
+type ConfigBackupMetadata struct {
+	Path      string
+	CreatedAt time.Time
 }
 
 type ServiceSnapshot struct {

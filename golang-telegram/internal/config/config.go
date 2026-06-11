@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"golang-springboot-monitor-bot/internal/metric"
 	"golang-springboot-monitor-bot/internal/model"
@@ -15,8 +16,16 @@ type Config struct {
 	App              AppConfig              `json:"app"`
 	Telegram         TelegramConfig         `json:"telegram"`
 	CronResultNotify CronResultNotifyConfig `json:"cron_result_notify"`
+	Logging          LogConfig              `json:"logging"`
 	Services         []Service              `json:"services"`
 	AlertRules       []AlertRule            `json:"alert_rules"`
+}
+
+type LogConfig struct {
+	Directory     string `json:"directory"`
+	Level         string `json:"level"`
+	RetentionDays int    `json:"retention_days"`
+	Timezone      string `json:"timezone"`
 }
 
 type AppConfig struct {
@@ -114,6 +123,18 @@ func applyDefaults(cfg *Config) {
 	if cfg.CronResultNotify.SuccessResponseCode == "" {
 		cfg.CronResultNotify.SuccessResponseCode = "SUCCESS"
 	}
+	if cfg.Logging.Directory == "" {
+		cfg.Logging.Directory = "logs"
+	}
+	if cfg.Logging.Level == "" {
+		cfg.Logging.Level = "info"
+	}
+	if cfg.Logging.RetentionDays <= 0 {
+		cfg.Logging.RetentionDays = 14
+	}
+	if cfg.Logging.Timezone == "" {
+		cfg.Logging.Timezone = "Asia/Taipei"
+	}
 	cfg.CronResultNotify.Host = strings.TrimRight(cfg.CronResultNotify.Host, "/")
 	for i := range cfg.Services {
 		if cfg.Services[i].Environment == "" {
@@ -141,13 +162,17 @@ func applyDefaults(cfg *Config) {
 	}
 }
 
+func Validate(cfg Config) error {
+	applyDefaults(&cfg)
+	return validate(cfg)
+}
+
 func validate(cfg Config) error {
-	if len(cfg.Services) == 0 {
-		return errors.New("config must contain at least one service")
+	if len(cfg.Services) >= 10 {
+		return errors.New("config must contain fewer than 10 services")
 	}
 
 	seen := make(map[string]bool, len(cfg.Services))
-	enabledCount := 0
 	for _, service := range cfg.Services {
 		if service.Name == "" {
 			return errors.New("service name is required")
@@ -159,20 +184,10 @@ func validate(cfg Config) error {
 			return fmt.Errorf("service %q is duplicated", service.Name)
 		}
 		seen[service.Name] = true
-		if service.Enabled {
-			enabledCount++
-		}
-	}
-
-	if enabledCount == 0 {
-		return errors.New("config must contain at least one enabled service; set services[].enabled to true")
 	}
 
 	ruleKeys := make(map[string]bool, len(cfg.AlertRules))
 	for i, rule := range cfg.AlertRules {
-		if !rule.Enabled {
-			continue
-		}
 		if rule.Key == "" {
 			return fmt.Errorf("alert_rules[%d].key is required", i)
 		}
@@ -201,6 +216,14 @@ func validate(cfg Config) error {
 		if cfg.CronResultNotify.Host == "" || cfg.CronResultNotify.Path == "" || cfg.CronResultNotify.BearerToken == "" {
 			return errors.New("cron_result_notify.host, path, and bearer_token are required when cron_result_notify.enabled is true")
 		}
+	}
+	switch strings.ToLower(cfg.Logging.Level) {
+	case "debug", "info", "warn", "error":
+	default:
+		return fmt.Errorf("logging.level must be debug, info, warn, or error")
+	}
+	if _, err := time.LoadLocation(cfg.Logging.Timezone); err != nil {
+		return fmt.Errorf("invalid logging.timezone %q: %w", cfg.Logging.Timezone, err)
 	}
 
 	return nil

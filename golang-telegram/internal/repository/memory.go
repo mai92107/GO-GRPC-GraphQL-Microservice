@@ -66,19 +66,42 @@ func (repo *MemoryRepository) Service(name string) (model.Service, bool) {
 	return service, ok
 }
 
+func (repo *MemoryRepository) ReplaceServices(services []model.Service) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	next := make(map[string]model.Service, len(services))
+	for _, service := range services {
+		next[service.Name] = service
+	}
+	repo.services = next
+}
+
 func (repo *MemoryRepository) SaveHealthCheck(check model.HealthCheck) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 
-	repo.healthChecks[check.ServiceName] = append(repo.healthChecks[check.ServiceName], check)
+	repo.healthChecks[check.ServiceName] = []model.HealthCheck{check}
 }
 
 func (repo *MemoryRepository) SaveMetricSnapshots(snapshots []model.MetricSnapshot) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 
+	byService := make(map[string]map[string]model.MetricSnapshot)
 	for _, snapshot := range snapshots {
-		repo.metrics[snapshot.ServiceName] = append(repo.metrics[snapshot.ServiceName], snapshot)
+		if byService[snapshot.ServiceName] == nil {
+			byService[snapshot.ServiceName] = make(map[string]model.MetricSnapshot)
+			for _, existing := range repo.metrics[snapshot.ServiceName] {
+				byService[snapshot.ServiceName][metricKey(existing)] = existing
+			}
+		}
+		byService[snapshot.ServiceName][metricKey(snapshot)] = snapshot
+	}
+	for serviceName, latest := range byService {
+		repo.metrics[serviceName] = repo.metrics[serviceName][:0]
+		for _, snapshot := range latest {
+			repo.metrics[serviceName] = append(repo.metrics[serviceName], snapshot)
+		}
 	}
 }
 
@@ -120,15 +143,34 @@ func (repo *MemoryRepository) UpsertOpenAlert(event model.AlertEvent) (model.Ale
 
 	key := alertKey(event.ServiceName, event.RuleKey)
 	if existing, ok := repo.alerts[key]; ok && existing.Status == model.AlertStatusOpen {
+		existing.LastTriggeredAt = event.StartedAt
+		repo.alerts[key] = existing
 		return existing, false
 	}
 
 	repo.nextAlertID++
 	event.ID = repo.nextAlertID
 	event.Status = model.AlertStatusOpen
+	event.LastTriggeredAt = event.StartedAt
 	repo.alerts[key] = event
 	repo.alertHistory = append(repo.alertHistory, event)
 	return event, true
+}
+
+func (repo *MemoryRepository) AcknowledgeAlert(id int64, by string, at time.Time) (model.AlertEvent, bool) {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+	for key, event := range repo.alerts {
+		if event.ID != id {
+			continue
+		}
+		event.AcknowledgedAt = &at
+		event.AcknowledgedBy = by
+		repo.alerts[key] = event
+		repo.alertHistory = append(repo.alertHistory, event)
+		return event, true
+	}
+	return model.AlertEvent{}, false
 }
 
 func (repo *MemoryRepository) ResolveAlert(serviceName, ruleKey string, resolvedAt time.Time) (model.AlertEvent, bool) {

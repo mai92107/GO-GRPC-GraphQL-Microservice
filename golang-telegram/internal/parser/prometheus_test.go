@@ -56,3 +56,33 @@ func TestParsePrometheusRejectsEmptyLabelBetweenLabels(t *testing.T) {
 		t.Fatal("expected empty label between labels to be rejected")
 	}
 }
+
+func TestParsePrometheusAcceptsBraceInsideQuotedLabelValue(t *testing.T) {
+	input := `http_server_requests_seconds_count{method="GET",uri="/v3/api-docs/{group}",status="200"} 12`
+
+	snapshots, err := ParsePrometheus("www-service", input)
+	if err != nil {
+		t.Fatalf("parse prometheus: %v", err)
+	}
+	if len(snapshots) != 1 {
+		t.Fatalf("expected one snapshot, got %d", len(snapshots))
+	}
+	if snapshots[0].Labels["uri"] != "/v3/api-docs/{group}" {
+		t.Fatalf("unexpected URI label: %q", snapshots[0].Labels["uri"])
+	}
+	if snapshots[0].Value != 12 {
+		t.Fatalf("unexpected value: %g", snapshots[0].Value)
+	}
+}
+
+func TestParsePrometheusAcceptsEscapedQuoteAndBraceInsideLabelValue(t *testing.T) {
+	input := `http_server_requests_seconds_count{uri="/example/\"quoted}\""} 1`
+
+	snapshots, err := ParsePrometheus("www-service", input)
+	if err != nil {
+		t.Fatalf("parse prometheus: %v", err)
+	}
+	if snapshots[0].Labels["uri"] != `/example/"quoted}"` {
+		t.Fatalf("unexpected URI label: %q", snapshots[0].Labels["uri"])
+	}
+}

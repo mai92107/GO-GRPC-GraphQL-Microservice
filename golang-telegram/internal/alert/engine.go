@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"golang-springboot-monitor-bot/internal/metric"
@@ -31,6 +32,17 @@ type Engine struct {
 	repo        *repository.MemoryRepository
 	thresholds  Thresholds
 	metricRules []MetricRule
+	mu          sync.RWMutex
+}
+
+func (engine *Engine) ReplaceRules(thresholds Thresholds, rules []MetricRule) {
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	if thresholds.ResponseTimeWarning <= 0 {
+		thresholds.ResponseTimeWarning = 2 * time.Second
+	}
+	engine.thresholds = thresholds
+	engine.metricRules = append([]MetricRule(nil), rules...)
 }
 
 func NewEngine(repo *repository.MemoryRepository, thresholds Thresholds, metricRules []MetricRule) *Engine {
@@ -41,6 +53,8 @@ func NewEngine(repo *repository.MemoryRepository, thresholds Thresholds, metricR
 }
 
 func (engine *Engine) EvaluateHealth(check model.HealthCheck) []model.AlertEvent {
+	engine.mu.RLock()
+	defer engine.mu.RUnlock()
 	now := check.CheckedAt
 	var events []model.AlertEvent
 
@@ -89,6 +103,8 @@ func (engine *Engine) EvaluateHealth(check model.HealthCheck) []model.AlertEvent
 }
 
 func (engine *Engine) EvaluateMetrics(serviceName string, snapshots []model.MetricSnapshot, collectedAt time.Time) []model.AlertEvent {
+	engine.mu.RLock()
+	defer engine.mu.RUnlock()
 	var events []model.AlertEvent
 
 	for _, rule := range engine.metricRules {

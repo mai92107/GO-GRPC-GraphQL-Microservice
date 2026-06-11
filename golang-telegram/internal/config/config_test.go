@@ -50,7 +50,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	}
 }
 
-func TestLoadRejectsEmptyServices(t *testing.T) {
+func TestLoadAllowsEmptyServices(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	content := []byte(`{
@@ -64,12 +64,12 @@ func TestLoadRejectsEmptyServices(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	if _, err := Load(path); err == nil {
-		t.Fatal("expected empty services config to be rejected")
+	if _, err := Load(path); err != nil {
+		t.Fatalf("expected empty services config to be allowed: %v", err)
 	}
 }
 
-func TestLoadRejectsWhenAllServicesAreDisabled(t *testing.T) {
+func TestLoadAllowsWhenAllServicesAreDisabled(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	content := []byte(`{
@@ -83,8 +83,8 @@ func TestLoadRejectsWhenAllServicesAreDisabled(t *testing.T) {
 		t.Fatalf("write config: %v", err)
 	}
 
-	if _, err := Load(path); err == nil {
-		t.Fatal("expected config with no enabled services to be rejected")
+	if _, err := Load(path); err != nil {
+		t.Fatalf("expected config with no enabled services to be allowed: %v", err)
 	}
 }
 

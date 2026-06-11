@@ -18,23 +18,20 @@
     "bearer_token": "replace-with-secret",
     "success_response_code": "SUCCESS"
   },
+  "logging": {
+    "directory": "logs",
+    "level": "info",
+    "retention_days": 14,
+    "timezone": "Asia/Taipei"
+  },
   "services": [
     {
-      "name": "order-service",
+      "name": "www-service",
       "environment": "uat",
-      "base_url": "http://localhost:8081",
+      "base_url": "https://tnwp5.newebpay.com/nwp-api-www",
       "health_path": "/actuator/health",
       "metrics_path": "/actuator/prometheus",
-      "check_interval_seconds": 10,
-      "enabled": true
-    },
-    {
-      "name": "payment-service",
-      "environment": "uat",
-      "base_url": "http://localhost:8082",
-      "health_path": "/actuator/health",
-      "metrics_path": "/actuator/prometheus",
-      "check_interval_seconds": 10,
+      "check_interval_seconds": 5,
       "enabled": true
     }
   ],
@@ -44,19 +41,21 @@
       "service_name": "*",
       "metric_name": "http_server_requests_seconds_count",
       "labels": {},
-      "operator": ">",
+      "operator": "\u003e",
       "threshold": 10000,
       "severity": "warning",
-      "enabled": false
+      "message": "",
+      "enabled": true
     },
     {
       "key": "high-http-request-duration-sum",
       "service_name": "*",
       "metric_name": "http_server_requests_seconds_sum",
       "labels": {},
-      "operator": ">",
+      "operator": "\u003e",
       "threshold": 60,
       "severity": "warning",
+      "message": "",
       "enabled": false
     },
     {
@@ -64,10 +63,11 @@
       "service_name": "*",
       "metric_name": "http_server_requests_seconds_max",
       "labels": {},
-      "operator": ">",
-      "threshold": 2,
+      "operator": "\u003e",
+      "threshold": 10,
       "severity": "warning",
-      "enabled": false
+      "message": "",
+      "enabled": true
     },
     {
       "key": "high-jvm-memory-used",
@@ -76,10 +76,11 @@
       "labels": {
         "area": "heap"
       },
-      "operator": ">",
+      "operator": "\u003e",
       "threshold": 1073741824,
       "severity": "warning",
-      "enabled": false
+      "message": "",
+      "enabled": true
     },
     {
       "key": "high-jvm-memory-max",
@@ -88,9 +89,10 @@
       "labels": {
         "area": "heap"
       },
-      "operator": ">",
+      "operator": "\u003e",
       "threshold": 2147483648,
       "severity": "warning",
+      "message": "",
       "enabled": false
     },
     {
@@ -98,29 +100,32 @@
       "service_name": "*",
       "metric_name": "jvm_gc_pause_seconds_count",
       "labels": {},
-      "operator": ">",
+      "operator": "\u003e",
       "threshold": 1000,
       "severity": "warning",
-      "enabled": false
+      "message": "",
+      "enabled": true
     },
     {
       "key": "high-gc-pause-duration",
       "service_name": "*",
       "metric_name": "jvm_gc_pause_seconds_sum",
       "labels": {},
-      "operator": ">",
+      "operator": "\u003e",
       "threshold": 60,
       "severity": "warning",
-      "enabled": false
+      "message": "",
+      "enabled": true
     },
     {
       "key": "high-live-threads",
       "service_name": "*",
       "metric_name": "jvm_threads_live_threads",
       "labels": {},
-      "operator": ">",
+      "operator": "\u003e",
       "threshold": 100,
       "severity": "warning",
+      "message": "",
       "enabled": false
     },
     {
@@ -128,40 +133,33 @@
       "service_name": "*",
       "metric_name": "hikaricp_connections_active",
       "labels": {},
-      "operator": ">",
-      "threshold": 50,
+      "operator": "\u003e",
+      "threshold": 30,
       "severity": "warning",
-      "enabled": false
+      "message": "",
+      "enabled": true
     },
     {
       "key": "db-pending-connections",
       "service_name": "*",
       "metric_name": "hikaricp_connections_pending",
       "labels": {},
-      "operator": ">",
+      "operator": "\u003e",
       "threshold": 0,
       "severity": "critical",
-      "enabled": false
+      "message": "",
+      "enabled": true
     },
     {
       "key": "high-process-cpu",
       "service_name": "*",
       "metric_name": "process_cpu_usage",
       "labels": {},
-      "operator": ">",
+      "operator": "\u003e",
       "threshold": 0.8,
       "severity": "warning",
-      "enabled": false
-    },
-    {
-      "key": "low-process-uptime",
-      "service_name": "*",
-      "metric_name": "process_uptime_seconds",
-      "labels": {},
-      "operator": "<",
-      "threshold": 60,
-      "severity": "warning",
-      "enabled": false
+      "message": "",
+      "enabled": true
     }
   ]
 }
