@@ -88,3 +88,33 @@ func TestGroupSamplesByLabelsCreatesSeparateSeries(t *testing.T) {
 		t.Fatalf("unexpected grouped series: %#v", grouped)
 	}
 }
+
+func TestRendererProducesNormalizedMultiMetricPNG(t *testing.T) {
+	now := time.Now()
+	var output bytes.Buffer
+	err := NewRenderer().RenderNormalized(&output, "order-service", "process_cpu_usage", "1h", []model.MetricSample{
+		{Name: "process_cpu_usage", Value: 0.2, CollectedAt: now.Add(-time.Minute)},
+		{Name: "process_cpu_usage", Value: 0.8, CollectedAt: now},
+		{Name: "system_cpu_usage", Value: 0.4, CollectedAt: now.Add(-time.Minute)},
+		{Name: "system_cpu_usage", Value: 0.6, CollectedAt: now},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := png.Decode(bytes.NewReader(output.Bytes())); err != nil {
+		t.Fatalf("invalid PNG: %v", err)
+	}
+}
+
+func TestNormalizeValuesUsesZeroForConstantSeries(t *testing.T) {
+	values := normalizeValues([]float64{5, 5, 5})
+	for _, value := range values {
+		if value != 0 {
+			t.Fatalf("constant series must normalize to zero: %#v", values)
+		}
+	}
+	values = normalizeValues([]float64{10, 15, 20})
+	if values[0] != 0 || values[1] != 50 || values[2] != 100 {
+		t.Fatalf("unexpected normalized values: %#v", values)
+	}
+}

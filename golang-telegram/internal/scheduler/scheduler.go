@@ -1,13 +1,16 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"golang-springboot-monitor-bot/internal/alert"
 	"golang-springboot-monitor-bot/internal/applog"
+	"golang-springboot-monitor-bot/internal/chart"
 	"golang-springboot-monitor-bot/internal/collector"
 	"golang-springboot-monitor-bot/internal/model"
 	"golang-springboot-monitor-bot/internal/notifier"
@@ -22,6 +25,7 @@ type Scheduler struct {
 	notifier       notifier.Notifier
 	metricsEnabled bool
 	trends         *trend.Repository
+	renderer       *chart.Renderer
 	logger         applog.ApplicationLogger
 	terminal       applog.TerminalStatusWriter
 	inFlight       map[string]bool
@@ -46,6 +50,7 @@ func New(
 		notifier:       notifier,
 		metricsEnabled: metricsEnabled,
 		trends:         trends,
+		renderer:       chart.NewRenderer(),
 		logger:         logger,
 		terminal:       terminal,
 		inFlight:       make(map[string]bool),
@@ -159,6 +164,20 @@ func (scheduler *Scheduler) checkService(ctx context.Context, service model.Serv
 		scheduler.terminal.Monitoring(service.Name)
 	}
 	scheduler.repo.SaveHealthCheck(check)
+	scheduler.trends.Add([]model.MetricSample{
+		{
+			ServiceName: service.Name,
+			Name:        "monitor_health_up",
+			Value:       healthValue(check),
+			CollectedAt: check.CheckedAt,
+		},
+		{
+			ServiceName: service.Name,
+			Name:        "monitor_response_time_ms",
+			Value:       float64(check.ResponseTime.Milliseconds()),
+			CollectedAt: check.CheckedAt,
+		},
+	})
 	if check.ErrorMessage != "" {
 		scheduler.logger.Error(ctx, "health_check_failed", healthResult.Error, applog.Field{Key: "service", Value: service.Name})
 	} else {
@@ -200,6 +219,9 @@ func healthStateChanged(previous, current model.HealthCheck) bool {
 
 func (scheduler *Scheduler) notify(ctx context.Context, events []model.AlertEvent) {
 	for _, event := range events {
+		if event.Status == model.AlertStatusOpen {
+			scheduler.attachAlertChart(ctx, &event)
+		}
 		if err := scheduler.notifier.Notify(ctx, event); err != nil {
 			scheduler.logger.Error(ctx, "notification_failed", err,
 				applog.Field{Key: "service", Value: event.ServiceName},
@@ -207,4 +229,72 @@ func (scheduler *Scheduler) notify(ctx context.Context, events []model.AlertEven
 			)
 		}
 	}
+}
+
+func (scheduler *Scheduler) attachAlertChart(ctx context.Context, event *model.AlertEvent) {
+	if scheduler.trends == nil || scheduler.renderer == nil || event.MetricName == "" {
+		return
+	}
+	metricNames := scheduler.relatedMetricNames(event.ServiceName, event.MetricName)
+	samples, err := scheduler.trends.QueryMetrics(event.ServiceName, metricNames, time.Hour, time.Now())
+	if err != nil {
+		scheduler.logger.Error(ctx, "alert_chart_query_failed", err,
+			applog.Field{Key: "service", Value: event.ServiceName},
+			applog.Field{Key: "rule", Value: event.RuleKey},
+		)
+		return
+	}
+	var output bytes.Buffer
+	if err := scheduler.renderer.RenderNormalized(&output, event.ServiceName, event.MetricName, "1h", samples); err != nil {
+		scheduler.logger.Error(ctx, "alert_chart_render_failed", err,
+			applog.Field{Key: "service", Value: event.ServiceName},
+			applog.Field{Key: "rule", Value: event.RuleKey},
+		)
+		return
+	}
+	event.ImagePNG = output.Bytes()
+}
+
+func (scheduler *Scheduler) relatedMetricNames(serviceName, primary string) []string {
+	groups := [][]string{
+		{"monitor_health_up", "monitor_response_time_ms", "process_uptime_seconds"},
+		{"process_cpu_usage", "system_cpu_usage"},
+		{"http_server_requests_seconds_count", "http_server_requests_seconds_sum", "http_server_requests_seconds_max"},
+		{"jvm_memory_used_bytes", "jvm_memory_max_bytes", "jvm_gc_pause_seconds_count", "jvm_gc_pause_seconds_sum"},
+	}
+	for _, group := range groups {
+		for _, name := range group {
+			if name == primary {
+				return group
+			}
+		}
+	}
+	prefix := ""
+	switch {
+	case strings.HasPrefix(primary, "jvm_threads_"):
+		prefix = "jvm_threads_"
+	case strings.HasPrefix(primary, "hikaricp_connections_"):
+		prefix = "hikaricp_connections_"
+	}
+	if prefix == "" {
+		return []string{primary}
+	}
+	names := map[string]struct{}{primary: {}}
+	for _, snapshot := range scheduler.repo.LastMetricSnapshots(serviceName) {
+		if strings.HasPrefix(snapshot.Name, prefix) {
+			names[snapshot.Name] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(names))
+	for name := range names {
+		result = append(result, name)
+	}
+	return result
+}
+
+func healthValue(check model.HealthCheck) float64 {
+	if check.Status == "UP" && check.ErrorMessage == "" {
+		return 1
+	}
+	return 0
 }

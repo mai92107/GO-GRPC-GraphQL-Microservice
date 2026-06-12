@@ -9,35 +9,30 @@ import (
 	"golang-springboot-monitor-bot/internal/repository"
 )
 
-func TestEvaluateHealthCreatesOneAlertThenRecovery(t *testing.T) {
+func TestEvaluateHealthCreatesAlertAfterThreeViolationsThenRecovery(t *testing.T) {
 	repo := repository.NewMemoryRepository([]model.Service{{Name: "order-service", Enabled: true}})
 	engine := NewEngine(repo, Thresholds{}, nil)
 	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
 
+	for i := 0; i < 3; i++ {
+		events := engine.EvaluateHealth(model.HealthCheck{
+			ServiceName:  "order-service",
+			Status:       "DOWN",
+			ErrorMessage: "timeout",
+			CheckedAt:    now.Add(time.Duration(i) * time.Minute),
+		})
+		if i < 2 && len(events) != 0 {
+			t.Fatalf("expected violation %d to be suppressed, got %#v", i+1, events)
+		}
+		if i == 2 && (len(events) != 1 || events[0].MetricName != "monitor_health_up") {
+			t.Fatalf("expected third violation alert, got %#v", events)
+		}
+	}
+
 	events := engine.EvaluateHealth(model.HealthCheck{
-		ServiceName:  "order-service",
-		Status:       "DOWN",
-		ErrorMessage: "timeout",
-		CheckedAt:    now,
-	})
-	if len(events) != 1 {
-		t.Fatalf("expected first alert, got %d", len(events))
-	}
-
-	events = engine.EvaluateHealth(model.HealthCheck{
-		ServiceName:  "order-service",
-		Status:       "DOWN",
-		ErrorMessage: "timeout",
-		CheckedAt:    now.Add(time.Minute),
-	})
-	if len(events) != 0 {
-		t.Fatalf("expected duplicate alert to be suppressed, got %d", len(events))
-	}
-
-	events = engine.EvaluateHealth(model.HealthCheck{
 		ServiceName: "order-service",
 		Status:      "UP",
-		CheckedAt:   now.Add(2 * time.Minute),
+		CheckedAt:   now.Add(3 * time.Minute),
 	})
 	if len(events) != 1 {
 		t.Fatalf("expected recovery event, got %d", len(events))
@@ -60,20 +55,23 @@ func TestEvaluateMetricsUsesConfiguredRuleAndRecovers(t *testing.T) {
 	}})
 	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
 
-	events := engine.EvaluateMetrics("order-service", []model.MetricSnapshot{{
-		ServiceName: "order-service",
-		Name:        "jvm_threads_live_threads",
-		Value:       120,
-	}}, now)
-	if len(events) != 1 || events[0].Status != model.AlertStatusOpen {
-		t.Fatalf("expected open metric alert, got %#v", events)
+	var events []model.AlertEvent
+	for i := 0; i < 3; i++ {
+		events = engine.EvaluateMetrics("order-service", []model.MetricSnapshot{{
+			ServiceName: "order-service",
+			Name:        "jvm_threads_live_threads",
+			Value:       120,
+		}}, now.Add(time.Duration(i)*time.Minute))
+	}
+	if len(events) != 1 || events[0].Status != model.AlertStatusOpen || events[0].MetricName != "jvm_threads_live_threads" {
+		t.Fatalf("expected open metric alert on third violation, got %#v", events)
 	}
 
 	events = engine.EvaluateMetrics("order-service", []model.MetricSnapshot{{
 		ServiceName: "order-service",
 		Name:        "jvm_threads_live_threads",
 		Value:       80,
-	}}, now.Add(time.Minute))
+	}}, now.Add(3*time.Minute))
 	if len(events) != 1 || events[0].Status != model.AlertStatusResolved {
 		t.Fatalf("expected metric recovery, got %#v", events)
 	}
@@ -93,17 +91,58 @@ func TestEvaluateMetricsDoesNotRecoverWhenMetricIsMissing(t *testing.T) {
 	}})
 	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
 
-	events := engine.EvaluateMetrics("order-service", []model.MetricSnapshot{{
-		Name:   "jvm_memory_used_bytes",
-		Labels: map[string]string{"area": "heap"},
-		Value:  120,
-	}}, now)
+	var events []model.AlertEvent
+	for i := 0; i < 3; i++ {
+		events = engine.EvaluateMetrics("order-service", []model.MetricSnapshot{{
+			Name:   "jvm_memory_used_bytes",
+			Labels: map[string]string{"area": "heap"},
+			Value:  120,
+		}}, now.Add(time.Duration(i)*time.Minute))
+	}
 	if len(events) != 1 {
 		t.Fatalf("expected alert, got %#v", events)
 	}
 
-	events = engine.EvaluateMetrics("order-service", nil, now.Add(time.Minute))
+	events = engine.EvaluateMetrics("order-service", nil, now.Add(3*time.Minute))
 	if len(events) != 0 {
 		t.Fatalf("missing metric must not trigger recovery, got %#v", events)
+	}
+}
+
+func TestNormalResultResetsConsecutiveViolationCount(t *testing.T) {
+	repo := repository.NewMemoryRepository([]model.Service{{Name: "order-service", Enabled: true}})
+	engine := NewEngine(repo, Thresholds{}, nil)
+	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
+
+	for i := 0; i < 2; i++ {
+		if events := engine.EvaluateHealth(model.HealthCheck{ServiceName: "order-service", Status: "DOWN", CheckedAt: now.Add(time.Duration(i) * time.Minute)}); len(events) != 0 {
+			t.Fatalf("unexpected early alert: %#v", events)
+		}
+	}
+	engine.EvaluateHealth(model.HealthCheck{ServiceName: "order-service", Status: "UP", CheckedAt: now.Add(2 * time.Minute)})
+	for i := 0; i < 2; i++ {
+		if events := engine.EvaluateHealth(model.HealthCheck{ServiceName: "order-service", Status: "DOWN", CheckedAt: now.Add(time.Duration(i+3) * time.Minute)}); len(events) != 0 {
+			t.Fatalf("normal result must reset count: %#v", events)
+		}
+	}
+}
+
+func TestOpenAlertRepeatsEveryFifteenMinutes(t *testing.T) {
+	repo := repository.NewMemoryRepository([]model.Service{{Name: "order-service", Enabled: true}})
+	engine := NewEngine(repo, Thresholds{}, nil)
+	now := time.Date(2026, 6, 4, 12, 0, 0, 0, time.UTC)
+	check := func(at time.Time) []model.AlertEvent {
+		return engine.EvaluateHealth(model.HealthCheck{ServiceName: "order-service", Status: "DOWN", CheckedAt: at})
+	}
+	check(now)
+	check(now.Add(time.Minute))
+	if events := check(now.Add(2 * time.Minute)); len(events) != 1 {
+		t.Fatalf("expected initial alert, got %#v", events)
+	}
+	if events := check(now.Add(16 * time.Minute)); len(events) != 0 {
+		t.Fatalf("must not repeat before 15 minutes, got %#v", events)
+	}
+	if events := check(now.Add(17 * time.Minute)); len(events) != 1 {
+		t.Fatalf("expected 15-minute repeat, got %#v", events)
 	}
 }

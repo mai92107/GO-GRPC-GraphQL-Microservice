@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"time"
 
@@ -50,6 +52,15 @@ func NewTelegramNotifier(botToken, chatID string, timeout time.Duration, fallbac
 }
 
 func (notifier *TelegramNotifier) Notify(ctx context.Context, event model.AlertEvent) error {
+	if len(event.ImagePNG) > 0 {
+		if err := notifier.sendPhoto(ctx, event); err != nil {
+			if textErr := notifier.send(ctx, event.Message, event); textErr != nil {
+				return fmt.Errorf("telegram image notification failed: %v; text fallback failed: %w", err, textErr)
+			}
+			return err
+		}
+		return nil
+	}
 	return notifier.send(ctx, event.Message, event)
 }
 
@@ -84,6 +95,45 @@ func (notifier *TelegramNotifier) send(ctx context.Context, text string, fallbac
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		notifier.notifyFallback(ctx, fallbackEvent)
 		return fmt.Errorf("telegram sendMessage failed: http %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (notifier *TelegramNotifier) sendPhoto(ctx context.Context, event model.AlertEvent) error {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	if err := writer.WriteField("chat_id", notifier.chatID); err != nil {
+		return err
+	}
+	if err := writer.WriteField("caption", event.Message); err != nil {
+		return err
+	}
+	part, err := writer.CreateFormFile("photo", "alert-trend.png")
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(part, bytes.NewReader(event.ImagePNG)); err != nil {
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendPhoto", notifier.botToken)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := notifier.client.Do(req)
+	if err != nil {
+		notifier.notifyFallback(ctx, event)
+		return fmt.Errorf("telegram sendPhoto request failed: %w", sanitizeTelegramError(err))
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		notifier.notifyFallback(ctx, event)
+		return fmt.Errorf("telegram sendPhoto failed: http %d", resp.StatusCode)
 	}
 	return nil
 }

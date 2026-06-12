@@ -41,9 +41,11 @@ type AlertEvent struct {
 	ID              int64
 	ServiceName     string
 	RuleKey         string
+	MetricName      string
 	Severity        string
 	Status          AlertStatus
 	Message         string
+	ImagePNG        []byte
 	StartedAt       time.Time
 	LastTriggeredAt time.Time
 	ResolvedAt      *time.Time

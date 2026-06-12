@@ -11,14 +11,15 @@ import (
 	"golang-springboot-monitor-bot/internal/model"
 )
 
-func TestAddBuffersCurrentMinuteUntilFlush(t *testing.T) {
+func TestQueryIncludesCurrentMinuteBuffer(t *testing.T) {
 	repo := newTestRepository(t)
 	now := time.Date(2026, 6, 12, 10, 46, 35, 0, time.UTC)
 	repo.Add([]model.MetricSample{sample("www", "process_cpu_usage", 0.2, now)})
 
 	assertPromFileCount(t, repo.directory, 0)
-	if _, err := repo.Query("www", "process_cpu_usage", time.Hour, now); err == nil {
-		t.Fatal("query must not include current minute buffer")
+	current, err := repo.Query("www", "process_cpu_usage", time.Hour, now)
+	if err != nil || len(current) != 1 || current[0].Value != 0.2 {
+		t.Fatalf("query must include current minute buffer: %#v, %v", current, err)
 	}
 
 	if err := repo.Flush(now.Truncate(time.Minute).Add(time.Minute)); err != nil {
@@ -31,6 +32,23 @@ func TestAddBuffersCurrentMinuteUntilFlush(t *testing.T) {
 	}
 	if len(result) != 1 || result[0].Value != 0.2 {
 		t.Fatalf("unexpected flushed result: %#v", result)
+	}
+}
+
+func TestQueryMetricsReturnsMultipleRequestedMetrics(t *testing.T) {
+	repo := newTestRepository(t)
+	now := time.Date(2026, 6, 12, 10, 46, 35, 0, time.UTC)
+	repo.Add([]model.MetricSample{
+		sample("www", "process_cpu_usage", 0.2, now),
+		sample("www", "system_cpu_usage", 0.4, now),
+		sample("www", "jvm_threads_live_threads", 10, now),
+	})
+	result, err := repo.QueryMetrics("www", []string{"process_cpu_usage", "system_cpu_usage"}, time.Hour, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected two requested metrics, got %#v", result)
 	}
 }
 

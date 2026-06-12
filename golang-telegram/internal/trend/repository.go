@@ -127,25 +127,52 @@ func (repo *Repository) flushBefore(currentMinute time.Time, includeCurrent bool
 }
 
 func (repo *Repository) Query(serviceName, metricName string, duration time.Duration, now time.Time) ([]model.MetricSample, error) {
+	return repo.QueryMetrics(serviceName, []string{metricName}, duration, now)
+}
+
+func (repo *Repository) QueryMetrics(serviceName string, metricNames []string, duration time.Duration, now time.Time) ([]model.MetricSample, error) {
 	if _, ok := supportedDurations[duration]; !ok {
 		return nil, fmt.Errorf("time range must be 1h, 4h, 8h, 16h, or 24h")
 	}
-
-	repo.fileMu.RLock()
-	defer repo.fileMu.RUnlock()
+	if len(metricNames) == 0 {
+		return nil, fmt.Errorf("at least one metric name is required")
+	}
+	requested := make(map[string]struct{}, len(metricNames))
+	for _, name := range metricNames {
+		requested[name] = struct{}{}
+	}
 
 	now = now.UTC()
 	currentMinute := now.Truncate(time.Minute)
 	cutoff := now.Add(-duration)
+	repo.mu.RLock()
+	var buffered []model.MetricSample
+	for minute, samples := range repo.buffers {
+		if minute.After(currentMinute) || minute.Add(time.Minute).Before(cutoff) {
+			continue
+		}
+		for _, sample := range samples {
+			if sample.ServiceName == serviceName {
+				if _, ok := requested[sample.Name]; ok {
+					buffered = append(buffered, sample)
+				}
+			}
+		}
+	}
+	repo.mu.RUnlock()
+
+	repo.fileMu.RLock()
 	paths, err := repo.queryFilesLocked(cutoff, currentMinute)
 	if err != nil {
+		repo.fileMu.RUnlock()
 		return nil, err
 	}
 
 	series := make(map[string][]model.MetricSample)
 	for _, path := range paths {
-		samples, err := readMatchingPromFile(path, serviceName, metricName)
+		samples, err := readMatchingPromFileMetrics(path, serviceName, requested)
 		if err != nil {
+			repo.fileMu.RUnlock()
 			return nil, fmt.Errorf("read trend file %s: %w", filepath.Base(path), err)
 		}
 		for _, sample := range samples {
@@ -156,9 +183,18 @@ func (repo *Repository) Query(serviceName, metricName string, duration time.Dura
 			series[key] = append(series[key], sample)
 		}
 	}
+	repo.fileMu.RUnlock()
+	for _, sample := range buffered {
+		if sample.CollectedAt.Before(cutoff) || sample.CollectedAt.After(now) {
+			continue
+		}
+		key := seriesKey(sample.ServiceName, sample.Name, sample.Labels)
+		series[key] = append(series[key], sample)
+	}
 
 	var result []model.MetricSample
 	for _, samples := range series {
+		samples = deduplicateSamples(samples)
 		sort.Slice(samples, func(i, j int) bool {
 			return samples[i].CollectedAt.Before(samples[j].CollectedAt)
 		})
@@ -172,7 +208,7 @@ func (repo *Repository) Query(serviceName, metricName string, duration time.Dura
 		return result[i].CollectedAt.Before(result[j].CollectedAt)
 	})
 	if len(result) == 0 {
-		return nil, fmt.Errorf("no trend data for service %q metric %q in the requested %s range", serviceName, metricName, duration)
+		return nil, fmt.Errorf("no trend data for service %q metrics %q in the requested %s range", serviceName, metricNames, duration)
 	}
 	return result, nil
 }
@@ -341,20 +377,26 @@ func readPromFile(path string) ([]model.MetricSample, error) {
 }
 
 func readMatchingPromFile(path, serviceName, metricName string) ([]model.MetricSample, error) {
+	return readMatchingPromFileMetrics(path, serviceName, map[string]struct{}{metricName: {}})
+}
+
+func readMatchingPromFileMetrics(path, serviceName string, metricNames map[string]struct{}) ([]model.MetricSample, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	metricWithLabels := metricName + "{"
-	metricWithoutLabels := metricName + " "
 	var samples []model.MetricSample
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(nil, 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
-		if !strings.HasPrefix(line, metricWithLabels) && !strings.HasPrefix(line, metricWithoutLabels) {
+		nameEnd := strings.IndexAny(line, "{ ")
+		if nameEnd <= 0 {
+			continue
+		}
+		if _, ok := metricNames[line[:nameEnd]]; !ok {
 			continue
 		}
 		sample, err := parsePromSample(line)

@@ -2,6 +2,7 @@ package chart
 
 import (
 	"fmt"
+	"hash/fnv"
 	"io"
 	"math"
 	"sort"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	gochart "github.com/wcharczuk/go-chart/v2"
+	"github.com/wcharczuk/go-chart/v2/drawing"
 
 	"golang-springboot-monitor-bot/internal/model"
 )
@@ -80,6 +82,103 @@ func (renderer *Renderer) Render(out io.Writer, serviceName, metricName, rangeTe
 	}
 	graph.Elements = []gochart.Renderable{gochart.Legend(&graph)}
 	return graph.Render(gochart.PNG, out)
+}
+
+func (renderer *Renderer) RenderNormalized(out io.Writer, serviceName, primaryMetric, rangeText string, samples []model.MetricSample) error {
+	if len(samples) == 0 {
+		return fmt.Errorf("cannot render chart without samples")
+	}
+
+	grouped := groupSamplesByMetricAndLabels(samples)
+	names := make([]string, 0, len(grouped))
+	for name := range grouped {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	series := make([]gochart.Series, 0, len(names))
+	for _, name := range names {
+		group := grouped[name]
+		times := make([]time.Time, 0, len(group))
+		values := make([]float64, 0, len(group))
+		for _, sample := range group {
+			times = append(times, sample.CollectedAt)
+			values = append(values, sample.Value)
+		}
+		values = normalizeValues(values)
+		style := gochart.Style{
+			StrokeColor: stableSeriesColor(name),
+			StrokeWidth: 1.5,
+		}
+		if group[0].Name == primaryMetric {
+			style.StrokeColor = gochart.ColorRed
+			style.StrokeWidth = 3
+		}
+		series = append(series, gochart.TimeSeries{
+			Name:    name,
+			Style:   style,
+			XValues: times,
+			YValues: values,
+		})
+	}
+
+	graph := gochart.Chart{
+		Width:  1100,
+		Height: 620,
+		Title:  fmt.Sprintf("%s | 告警關聯趨勢 | %s", serviceName, rangeText),
+		XAxis:  gochart.XAxis{Name: "時間", ValueFormatter: trendTimeFormatter(rangeText)},
+		YAxis: gochart.YAxis{
+			Name:           "正規化變化（%）",
+			ValueFormatter: metricScale{decimals: 0}.valueFormatter(),
+			Range:          &gochart.ContinuousRange{Min: 0, Max: 100},
+		},
+		Series: series,
+	}
+	graph.Elements = []gochart.Renderable{gochart.Legend(&graph)}
+	return graph.Render(gochart.PNG, out)
+}
+
+func groupSamplesByMetricAndLabels(samples []model.MetricSample) map[string][]model.MetricSample {
+	result := make(map[string][]model.MetricSample)
+	for _, sample := range samples {
+		name := sample.Name + " | " + formatSeriesLabels(sample.Labels)
+		result[name] = append(result[name], sample)
+	}
+	for name := range result {
+		sort.Slice(result[name], func(i, j int) bool {
+			return result[name][i].CollectedAt.Before(result[name][j].CollectedAt)
+		})
+	}
+	return result
+}
+
+func normalizeValues(values []float64) []float64 {
+	if len(values) == 0 {
+		return nil
+	}
+	minValue, maxValue := values[0], values[0]
+	for _, value := range values[1:] {
+		minValue = math.Min(minValue, value)
+		maxValue = math.Max(maxValue, value)
+	}
+	result := make([]float64, len(values))
+	if minValue == maxValue {
+		return result
+	}
+	for i, value := range values {
+		result[i] = (value - minValue) / (maxValue - minValue) * 100
+	}
+	return result
+}
+
+func stableSeriesColor(name string) drawing.Color {
+	hash := fnv.New32a()
+	_, _ = hash.Write([]byte(name))
+	color := gochart.GetAlternateColor(int(hash.Sum32()))
+	if color == gochart.ColorRed {
+		return gochart.ColorBlue
+	}
+	return color
 }
 
 func groupSamplesByLabels(samples []model.MetricSample) map[string][]model.MetricSample {

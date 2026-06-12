@@ -29,10 +29,12 @@ type MetricRule struct {
 }
 
 type Engine struct {
-	repo        *repository.MemoryRepository
-	thresholds  Thresholds
-	metricRules []MetricRule
-	mu          sync.RWMutex
+	repo              *repository.MemoryRepository
+	thresholds        Thresholds
+	metricRules       []MetricRule
+	consecutive       map[string]int
+	lastNotifications map[string]time.Time
+	mu                sync.Mutex
 }
 
 func (engine *Engine) ReplaceRules(thresholds Thresholds, rules []MetricRule) {
@@ -43,18 +45,25 @@ func (engine *Engine) ReplaceRules(thresholds Thresholds, rules []MetricRule) {
 	}
 	engine.thresholds = thresholds
 	engine.metricRules = append([]MetricRule(nil), rules...)
+	clear(engine.consecutive)
 }
 
 func NewEngine(repo *repository.MemoryRepository, thresholds Thresholds, metricRules []MetricRule) *Engine {
 	if thresholds.ResponseTimeWarning <= 0 {
 		thresholds.ResponseTimeWarning = 2 * time.Second
 	}
-	return &Engine{repo: repo, thresholds: thresholds, metricRules: metricRules}
+	return &Engine{
+		repo:              repo,
+		thresholds:        thresholds,
+		metricRules:       metricRules,
+		consecutive:       make(map[string]int),
+		lastNotifications: make(map[string]time.Time),
+	}
 }
 
 func (engine *Engine) EvaluateHealth(check model.HealthCheck) []model.AlertEvent {
-	engine.mu.RLock()
-	defer engine.mu.RUnlock()
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
 	now := check.CheckedAt
 	var events []model.AlertEvent
 
@@ -63,25 +72,29 @@ func (engine *Engine) EvaluateHealth(check model.HealthCheck) []model.AlertEvent
 		if check.ErrorMessage != "" {
 			message = fmt.Sprintf("%s: %s", message, check.ErrorMessage)
 		}
-		event, created := engine.repo.UpsertOpenAlert(model.AlertEvent{
+		if event, notify := engine.evaluateViolation(model.AlertEvent{
 			ServiceName: check.ServiceName,
 			RuleKey:     "health",
+			MetricName:  "monitor_health_up",
 			Severity:    "🆘",
 			Message:     message,
 			StartedAt:   now,
-		})
-		if created {
+		}); notify {
 			events = append(events, event)
 		}
-	} else if event, resolved := engine.repo.ResolveAlert(check.ServiceName, "health", now); resolved {
-		event.Message = fmt.Sprintf("[RECOVERY] %s is healthy again", check.ServiceName)
-		events = append(events, event)
+	} else {
+		engine.resetViolation(check.ServiceName, "health")
+		if event, resolved := engine.repo.ResolveAlert(check.ServiceName, "health", now); resolved {
+			event.Message = fmt.Sprintf("[RECOVERY] %s is healthy again", check.ServiceName)
+			events = append(events, event)
+		}
 	}
 
 	if check.ResponseTime > engine.thresholds.ResponseTimeWarning {
-		event, created := engine.repo.UpsertOpenAlert(model.AlertEvent{
+		if event, notify := engine.evaluateViolation(model.AlertEvent{
 			ServiceName: check.ServiceName,
 			RuleKey:     "response_time",
+			MetricName:  "monitor_response_time_ms",
 			Severity:    "⚠️",
 			Message: fmt.Sprintf(
 				"[ALERT] %s response time high: %dms > %dms",
@@ -90,21 +103,23 @@ func (engine *Engine) EvaluateHealth(check model.HealthCheck) []model.AlertEvent
 				engine.thresholds.ResponseTimeWarning.Milliseconds(),
 			),
 			StartedAt: now,
-		})
-		if created {
+		}); notify {
 			events = append(events, event)
 		}
-	} else if event, resolved := engine.repo.ResolveAlert(check.ServiceName, "response_time", now); resolved {
-		event.Message = fmt.Sprintf("[RECOVERY] %s response time is normal", check.ServiceName)
-		events = append(events, event)
+	} else {
+		engine.resetViolation(check.ServiceName, "response_time")
+		if event, resolved := engine.repo.ResolveAlert(check.ServiceName, "response_time", now); resolved {
+			event.Message = fmt.Sprintf("[RECOVERY] %s response time is normal", check.ServiceName)
+			events = append(events, event)
+		}
 	}
 
 	return events
 }
 
 func (engine *Engine) EvaluateMetrics(serviceName string, snapshots []model.MetricSnapshot, collectedAt time.Time) []model.AlertEvent {
-	engine.mu.RLock()
-	defer engine.mu.RUnlock()
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
 	var events []model.AlertEvent
 
 	for _, rule := range engine.metricRules {
@@ -144,24 +159,53 @@ func (engine *Engine) evaluateMetricRule(serviceName string, snapshots []model.M
 				rule.Threshold,
 			)
 		}
-		event, created := engine.repo.UpsertOpenAlert(model.AlertEvent{
+		event, notify := engine.evaluateViolation(model.AlertEvent{
 			ServiceName: serviceName,
 			RuleKey:     rule.Key,
+			MetricName:  rule.MetricName.String(),
 			Severity:    rule.Severity,
 			Message:     message,
 			StartedAt:   at,
 		})
-		if created {
+		if notify {
 			return []model.AlertEvent{event}
 		}
 		return nil
 	}
 
+	engine.resetViolation(serviceName, rule.Key)
 	if event, resolved := engine.repo.ResolveAlert(serviceName, rule.Key, at); resolved {
 		event.Message = fmt.Sprintf("[RECOVERY] %s metric %s is normal", serviceName, rule.MetricName)
 		return []model.AlertEvent{event}
 	}
 	return nil
+}
+
+const (
+	requiredConsecutiveViolations = 3
+	repeatNotificationInterval    = 15 * time.Minute
+)
+
+func (engine *Engine) evaluateViolation(candidate model.AlertEvent) (model.AlertEvent, bool) {
+	key := candidate.ServiceName + ":" + candidate.RuleKey
+	engine.consecutive[key]++
+	if engine.consecutive[key] < requiredConsecutiveViolations {
+		return model.AlertEvent{}, false
+	}
+
+	event, created := engine.repo.UpsertOpenAlert(candidate)
+	lastNotified := engine.lastNotifications[key]
+	if created || lastNotified.IsZero() || candidate.StartedAt.Sub(lastNotified) >= repeatNotificationInterval {
+		engine.lastNotifications[key] = candidate.StartedAt
+		return event, true
+	}
+	return model.AlertEvent{}, false
+}
+
+func (engine *Engine) resetViolation(serviceName, ruleKey string) {
+	key := serviceName + ":" + ruleKey
+	delete(engine.consecutive, key)
+	delete(engine.lastNotifications, key)
 }
 
 func matchingSnapshots(snapshots []model.MetricSnapshot, rule MetricRule) []model.MetricSnapshot {

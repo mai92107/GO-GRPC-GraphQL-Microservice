@@ -8,7 +8,10 @@ Detailed behavior and architecture are defined in
 
 - Poll `/actuator/health` and `/actuator/prometheus` concurrently per service
 - Evaluate health, response-time, and supported Prometheus metric alerts
+- Require three consecutive violations before opening any alert
 - Deduplicate alerts, acknowledge open alerts, and send recovery notifications
+- Attach a normalized one-hour related-metric trend chart to new alerts and
+  repeat it every 15 minutes until recovery
 - Manage services and alert rules through a single authorized Telegram chat
 - Validate, back up, atomically replace, and immediately apply JSON config
 - Buffer the current minute of supported metrics and persist completed minutes as `.prom` files
@@ -82,7 +85,7 @@ Trend storage configuration:
 }
 ```
 
-The current minute remains buffered in memory and is excluded from charts.
+The current minute remains buffered in memory and is included in trend queries.
 Completed minutes are written to a shared UTC-named `.prom` file.
 
 All `INFO`, `WARN`, `ERROR`, and optionally `DEBUG` events are written to
