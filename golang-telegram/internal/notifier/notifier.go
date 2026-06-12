@@ -16,6 +16,10 @@ type Notifier interface {
 	Notify(context.Context, model.AlertEvent) error
 }
 
+type TextNotifier interface {
+	SendText(context.Context, string) error
+}
+
 type LogNotifier struct{ Logger applog.ApplicationLogger }
 
 func (notifier LogNotifier) Notify(ctx context.Context, event model.AlertEvent) error {
@@ -46,9 +50,17 @@ func NewTelegramNotifier(botToken, chatID string, timeout time.Duration, fallbac
 }
 
 func (notifier *TelegramNotifier) Notify(ctx context.Context, event model.AlertEvent) error {
+	return notifier.send(ctx, event.Message, event)
+}
+
+func (notifier *TelegramNotifier) SendText(ctx context.Context, text string) error {
+	return notifier.send(ctx, text, model.AlertEvent{Message: text})
+}
+
+func (notifier *TelegramNotifier) send(ctx context.Context, text string, fallbackEvent model.AlertEvent) error {
 	payload := map[string]string{
 		"chat_id": notifier.chatID,
-		"text":    event.Message,
+		"text":    text,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -64,20 +76,22 @@ func (notifier *TelegramNotifier) Notify(ctx context.Context, event model.AlertE
 
 	resp, err := notifier.client.Do(req)
 	if err != nil {
-		if notifier.fallback != nil {
-			_ = notifier.fallback.Notify(ctx, event)
-		}
+		notifier.notifyFallback(ctx, fallbackEvent)
 		return fmt.Errorf("telegram sendMessage request failed: %w", sanitizeTelegramError(err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		if notifier.fallback != nil {
-			_ = notifier.fallback.Notify(ctx, event)
-		}
+		notifier.notifyFallback(ctx, fallbackEvent)
 		return fmt.Errorf("telegram sendMessage failed: http %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (notifier *TelegramNotifier) notifyFallback(ctx context.Context, event model.AlertEvent) {
+	if notifier.fallback != nil {
+		_ = notifier.fallback.Notify(ctx, event)
+	}
 }
 
 type MultiNotifier struct {

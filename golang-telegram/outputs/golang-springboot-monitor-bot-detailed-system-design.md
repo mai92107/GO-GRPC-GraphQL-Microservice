@@ -178,9 +178,9 @@ flowchart LR
 ```
 
 The in-memory trend key includes service, metric name, and a canonical sorted
-label set. Trend queries aggregate matching label series by collection time:
-normal metrics are summed and `*_max` metrics use the maximum value. Empty
-queries return a reason and do not generate a blank image. Charts show service,
+label set. Trend charts preserve every label series and draw each series as a
+separate line with its labels shown in the legend. Empty queries return a
+reason and do not generate a blank image. Charts show service,
 metric, time range, unit, and applicable thresholds. Restarting clears trends.
 
 Supported JVM thread metrics include live, daemon, peak, cumulative started,

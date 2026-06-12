@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "go /demo.json", "JSON config file path")
+	configPath := flag.String("config", "configs/demo.json", "JSON config file path")
 	once := flag.Bool("once", false, "run checks once and exit")
 	command := flag.String("command", "", "run a local bot command after one check, for example: /status")
 	flag.Parse()
@@ -41,8 +41,8 @@ func main() {
 	}
 	defer appLogger.Close()
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	repo := repository.NewMemoryRepository(cfg.ModelServices())
 	trendRepo := trend.NewRepository()
@@ -50,7 +50,7 @@ func main() {
 	alertEngine := alert.NewEngine(repo, alert.Thresholds{
 		ResponseTimeWarning: time.Duration(cfg.App.ResponseTimeWarningMS) * time.Millisecond,
 	}, metricRules(cfg.AlertRules))
-	notifierService := buildNotifier(cfg, appLogger)
+	notifierService, lifecycleNotifier := buildNotifier(cfg, appLogger)
 	schedulerService := scheduler.New(repo, checker, alertEngine, notifierService, cfg.App.MetricsEnabled, trendRepo, appLogger, terminal)
 	configManager := config.NewManager(*configPath, cfg, func(updated config.Config) {
 		repo.ReplaceServices(updated.ModelServices())
@@ -70,6 +70,18 @@ func main() {
 		return
 	}
 
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(signalChannel)
+	shutdownReason := make(chan string, 1)
+	go func() {
+		sig := <-signalChannel
+		shutdownReason <- signalReason(sig)
+		cancel()
+	}()
+
+	sendLifecycleNotification(lifecycleNotifier, "系統重新上線拉", appLogger)
+
 	if cfg.Telegram.Enabled {
 		poller := bot.NewTelegramPoller(
 			cfg.Telegram.BotToken,
@@ -82,6 +94,8 @@ func main() {
 	}
 
 	schedulerService.Run(ctx)
+	reason := <-shutdownReason
+	sendLifecycleNotification(lifecycleNotifier, "系統已被關閉\n原因："+reason, appLogger)
 }
 
 func metricRules(rules []config.AlertRule) []alert.MetricRule {
@@ -102,16 +116,19 @@ func metricRules(rules []config.AlertRule) []alert.MetricRule {
 	return result
 }
 
-func buildNotifier(cfg config.Config, logger applog.ApplicationLogger) notifier.Notifier {
+func buildNotifier(cfg config.Config, logger applog.ApplicationLogger) (notifier.Notifier, notifier.TextNotifier) {
 	logNotifier := notifier.LogNotifier{Logger: logger}
 	notifiers := []notifier.Notifier{logNotifier}
+	var lifecycleNotifier notifier.TextNotifier
 	if cfg.Telegram.Enabled {
-		notifiers = append(notifiers, notifier.NewTelegramNotifier(
+		telegramNotifier := notifier.NewTelegramNotifier(
 			cfg.Telegram.BotToken,
 			cfg.Telegram.ChatID,
 			time.Duration(cfg.App.HTTPTimeoutSeconds)*time.Second,
 			logNotifier,
-		))
+		)
+		notifiers = append(notifiers, telegramNotifier)
+		lifecycleNotifier = telegramNotifier
 	}
 
 	if cfg.CronResultNotify.Enabled {
@@ -123,5 +140,29 @@ func buildNotifier(cfg config.Config, logger applog.ApplicationLogger) notifier.
 			time.Duration(cfg.App.HTTPTimeoutSeconds)*time.Second,
 		))
 	}
-	return notifier.NewMulti(notifiers...)
+	return notifier.NewMulti(notifiers...), lifecycleNotifier
+}
+
+func sendLifecycleNotification(target notifier.TextNotifier, message string, logger applog.ApplicationLogger) {
+	if target == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := target.SendText(ctx, message); err != nil {
+		logger.Error(ctx, "lifecycle_notification_failed", err)
+		return
+	}
+	logger.Info(ctx, "lifecycle_notification_sent", applog.Field{Key: "message", Value: message})
+}
+
+func signalReason(sig os.Signal) string {
+	switch sig {
+	case os.Interrupt:
+		return "收到中斷訊號（SIGINT / Ctrl+C）"
+	case syscall.SIGTERM:
+		return "收到終止訊號（SIGTERM）"
+	default:
+		return fmt.Sprintf("收到系統訊號（%s）", sig)
+	}
 }

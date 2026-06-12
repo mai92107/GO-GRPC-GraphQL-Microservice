@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"golang-springboot-monitor-bot/internal/model"
@@ -59,6 +61,40 @@ func (checker *HealthChecker) CollectMetrics(ctx context.Context, service model.
 	for i := range snapshots {
 		snapshots[i].CollectedAt = startedAt
 	}
-	result.Snapshots = snapshots
+	result.Snapshots = excludeMonitoringRequestMetrics(snapshots, service.HealthPath, service.MetricsPath)
 	return result
+}
+
+func excludeMonitoringRequestMetrics(snapshots []model.MetricSnapshot, monitoringPaths ...string) []model.MetricSnapshot {
+	excludedPaths := make(map[string]struct{}, len(monitoringPaths))
+	for _, path := range monitoringPaths {
+		if normalized := normalizeRequestPath(path); normalized != "" {
+			excludedPaths[normalized] = struct{}{}
+		}
+	}
+
+	result := make([]model.MetricSnapshot, 0, len(snapshots))
+	for _, snapshot := range snapshots {
+		if strings.HasPrefix(snapshot.Name, "http_server_requests_seconds_") {
+			if _, excluded := excludedPaths[normalizeRequestPath(snapshot.Labels["uri"])]; excluded {
+				continue
+			}
+		}
+		result = append(result, snapshot)
+	}
+	return result
+}
+
+func normalizeRequestPath(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if parsed, err := url.Parse(value); err == nil && parsed.Path != "" {
+		value = parsed.Path
+	}
+	if value != "/" {
+		value = strings.TrimRight(value, "/")
+	}
+	return value
 }

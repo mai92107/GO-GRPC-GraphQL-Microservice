@@ -17,10 +17,12 @@ func NewSessionStore() *SessionStore {
 }
 
 func (store *SessionStore) Get(chatID string) (model.TelegramSession, bool) {
-	store.mu.RLock()
-	defer store.mu.RUnlock()
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
 	session, ok := store.sessions[chatID]
 	if ok && time.Now().After(session.ExpiresAt) {
+		delete(store.sessions, chatID)
 		return model.TelegramSession{}, false
 	}
 	return session, ok

@@ -73,3 +73,18 @@ func TestTrendTimeFormatterIncludesTime(t *testing.T) {
 		t.Fatalf("unexpected 8h formatter output: %q", got)
 	}
 }
+
+func TestGroupSamplesByLabelsCreatesSeparateSeries(t *testing.T) {
+	now := time.Now()
+	grouped := groupSamplesByLabels([]model.MetricSample{
+		{Name: "jvm_threads_states_threads", Labels: map[string]string{"state": "runnable"}, Value: 8, CollectedAt: now},
+		{Name: "jvm_threads_states_threads", Labels: map[string]string{"state": "blocked"}, Value: 1, CollectedAt: now},
+		{Name: "jvm_threads_states_threads", Labels: map[string]string{"state": "runnable"}, Value: 9, CollectedAt: now.Add(time.Minute)},
+	})
+	if len(grouped) != 2 {
+		t.Fatalf("expected two chart series, got %#v", grouped)
+	}
+	if len(grouped["state=runnable"]) != 2 || len(grouped["state=blocked"]) != 1 {
+		t.Fatalf("unexpected grouped series: %#v", grouped)
+	}
+}

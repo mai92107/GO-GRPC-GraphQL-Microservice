@@ -29,6 +29,8 @@ type Handler struct {
 	logger   applog.ApplicationLogger
 }
 
+const sessionTTL = 10 * time.Minute
+
 func NewHandler(repo *repository.MemoryRepository) Handler {
 	return Handler{repo: repo, sessions: NewSessionStore()}
 }
@@ -106,12 +108,15 @@ func (handler Handler) Handle(ctx context.Context, chatID, text, callback string
 		}
 		return handler.trend(fields)
 	case "/check":
-		if handler.checkNow == nil {
-			return Reply{Text: "立即檢查目前不可用。"}
-		}
 		if len(fields) == 1 {
+			if handler.checkAll == nil {
+				return Reply{Text: "立即檢查目前不可用。"}
+			}
 			go handler.checkAll(ctx)
 			return Reply{Text: "已開始檢查全部服務。"}
+		}
+		if handler.checkNow == nil {
+			return Reply{Text: "立即檢查目前不可用。"}
 		}
 		if err := handler.checkNow(ctx, fields[1]); err != nil {
 			return Reply{Text: err.Error()}
@@ -136,7 +141,7 @@ func (handler Handler) handleCallback(ctx context.Context, chatID, data string) 
 	case "status":
 		return Reply{Text: handler.statusAll(), Keyboard: backKeyboard()}
 	case "alerts":
-		return Reply{Text: handler.alertsWithButtons().Text, Keyboard: handler.alertsWithButtons().Keyboard}
+		return handler.alertsWithButtons()
 	case "trend_services":
 		return handler.trendServiceMenu()
 	case "metric_services":
@@ -146,6 +151,9 @@ func (handler Handler) handleCallback(ctx context.Context, chatID, data string) 
 	case "rules":
 		return handler.ruleMenu()
 	case "check_all":
+		if handler.checkAll == nil {
+			return Reply{Text: "立即檢查目前不可用。", Keyboard: backKeyboard()}
+		}
 		go handler.checkAll(ctx)
 		return Reply{Text: "已開始檢查全部服務。", Keyboard: backKeyboard()}
 	case "menu":
@@ -156,14 +164,17 @@ func (handler Handler) handleCallback(ctx context.Context, chatID, data string) 
 	case "noop":
 		return Reply{Silent: true}
 	case "service_add":
-		handler.sessions.Put(model.TelegramSession{ChatID: chatID, Operation: "service_add", Step: "name", Values: map[string]string{}, ExpiresAt: time.Now().Add(10 * time.Minute)})
+		handler.startSession(chatID, "service_add", "name", nil)
 		return Reply{Text: "請輸入服務名稱，或按取消。", Keyboard: cancelKeyboard()}
 	case "rule_add":
-		handler.sessions.Put(model.TelegramSession{ChatID: chatID, Operation: "rule_add", Step: "key", Values: map[string]string{}, ExpiresAt: time.Now().Add(10 * time.Minute)})
+		handler.startSession(chatID, "rule_add", "key", nil)
 		return Reply{Text: "請輸入規則識別碼（key）。", Keyboard: cancelKeyboard()}
 	}
 	if strings.HasPrefix(data, "ack:") {
-		id, _ := strconv.ParseInt(strings.TrimPrefix(data, "ack:"), 10, 64)
+		id, err := strconv.ParseInt(strings.TrimPrefix(data, "ack:"), 10, 64)
+		if err != nil {
+			return Reply{Text: "無效的告警識別碼。", Keyboard: backKeyboard()}
+		}
 		if _, ok := handler.repo.AcknowledgeAlert(id, chatID, time.Now()); !ok {
 			return Reply{Text: "告警不存在或已恢復。", Keyboard: backKeyboard()}
 		}
@@ -217,7 +228,7 @@ func (handler Handler) handleCallback(ctx context.Context, chatID, data string) 
 		}
 		return handler.trend([]string{"/trend", parts[0], parts[1], parts[2]})
 	}
-	if strings.HasPrefix(data, "confirm_service_add") {
+	if data == "confirm_service_add" {
 		return handler.applyServiceAdd(chatID)
 	}
 	if data == "confirm_rule_add" {
@@ -225,12 +236,12 @@ func (handler Handler) handleCallback(ctx context.Context, chatID, data string) 
 	}
 	if strings.HasPrefix(data, "service_edit:") {
 		name := strings.TrimPrefix(data, "service_edit:")
-		handler.sessions.Put(model.TelegramSession{ChatID: chatID, Operation: "service_edit", Step: "base_url", Values: map[string]string{"name": name}, ExpiresAt: time.Now().Add(10 * time.Minute)})
+		handler.startSession(chatID, "service_edit", "base_url", map[string]string{"name": name})
 		return Reply{Text: "請輸入新的服務網址（Base URL）。", Keyboard: cancelKeyboard()}
 	}
 	if strings.HasPrefix(data, "rule_edit:") {
 		key := strings.TrimPrefix(data, "rule_edit:")
-		handler.sessions.Put(model.TelegramSession{ChatID: chatID, Operation: "rule_edit", Step: "threshold", Values: map[string]string{"key": key}, ExpiresAt: time.Now().Add(10 * time.Minute)})
+		handler.startSession(chatID, "rule_edit", "threshold", map[string]string{"key": key})
 		return Reply{Text: "請輸入新的門檻值（threshold）。", Keyboard: cancelKeyboard()}
 	}
 	if strings.HasPrefix(data, "rule_enable:") {
@@ -241,19 +252,19 @@ func (handler Handler) handleCallback(ctx context.Context, chatID, data string) 
 	}
 	if strings.HasPrefix(data, "rule_enable_custom:") {
 		key := strings.TrimPrefix(data, "rule_enable_custom:")
-		handler.sessions.Put(model.TelegramSession{ChatID: chatID, Operation: "rule_enable_custom", Step: "threshold", Values: map[string]string{"key": key}, ExpiresAt: time.Now().Add(10 * time.Minute)})
+		handler.startSession(chatID, "rule_enable_custom", "threshold", map[string]string{"key": key})
 		return Reply{Text: "請輸入自訂門檻值。此值將回寫 JSON 設定。", Keyboard: cancelKeyboard()}
 	}
 	if strings.HasPrefix(data, "rule_disable:") {
 		key := strings.TrimPrefix(data, "rule_disable:")
-		handler.sessions.Put(model.TelegramSession{ChatID: chatID, Operation: "rule_disable:" + key, Step: "confirm", Values: map[string]string{}, ExpiresAt: time.Now().Add(10 * time.Minute)})
+		handler.startSession(chatID, "rule_disable:"+key, "confirm", nil)
 		return Reply{Text: fmt.Sprintf("確認停用「%s」？", handler.ruleTitleByKey(key)), Keyboard: [][]Button{{{Text: "確認停用", Data: "confirm_mutation"}}, {{Text: "取消", Data: "cancel"}}}}
 	}
 	if data == "confirm_service_edit" || data == "confirm_rule_edit" {
 		return handler.applyEdit(chatID)
 	}
 	if strings.HasPrefix(data, "service_toggle:") || strings.HasPrefix(data, "service_delete:") || strings.HasPrefix(data, "rule_delete:") {
-		handler.sessions.Put(model.TelegramSession{ChatID: chatID, Operation: data, Step: "confirm", Values: map[string]string{}, ExpiresAt: time.Now().Add(10 * time.Minute)})
+		handler.startSession(chatID, data, "confirm", nil)
 		return Reply{Text: "確認執行 " + data + "？", Keyboard: [][]Button{{{Text: "確認", Data: "confirm_mutation"}, {Text: "取消", Data: "cancel"}}}}
 	}
 	if data == "confirm_mutation" {
@@ -263,6 +274,19 @@ func (handler Handler) handleCallback(ctx context.Context, chatID, data string) 
 		return handler.enableRuleWithCustomThreshold(chatID)
 	}
 	return Reply{Text: "未知操作。", Keyboard: backKeyboard()}
+}
+
+func (handler Handler) startSession(chatID, operation, step string, values map[string]string) {
+	if values == nil {
+		values = make(map[string]string)
+	}
+	handler.sessions.Put(model.TelegramSession{
+		ChatID:    chatID,
+		Operation: operation,
+		Step:      step,
+		Values:    values,
+		ExpiresAt: time.Now().Add(sessionTTL),
+	})
 }
 
 func (handler Handler) handleSession(chatID, text string, session model.TelegramSession) Reply {

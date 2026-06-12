@@ -49,43 +49,36 @@ func (repo *Repository) Query(serviceName, metricName string, duration time.Dura
 		return nil, fmt.Errorf("no trend data for service %q metric %q", serviceName, metricName)
 	}
 	cutoff := now.Add(-duration)
-	aggregated := make(map[int64]model.MetricSample)
+	var result []model.MetricSample
 	for _, series := range matching {
+		var filtered []model.MetricSample
 		for _, sample := range series {
 			if sample.CollectedAt.Before(cutoff) || sample.CollectedAt.After(now) {
 				continue
 			}
-			key := sample.CollectedAt.UnixNano()
-			existing, ok := aggregated[key]
-			if !ok {
-				sample.Labels = nil
-				aggregated[key] = sample
-				continue
-			}
-			if strings.HasSuffix(metricName, "_max") {
-				if sample.Value > existing.Value {
-					existing.Value = sample.Value
-				}
-			} else {
-				existing.Value += sample.Value
-			}
-			aggregated[key] = existing
+			filtered = append(filtered, sample)
 		}
+		result = append(result, Downsample(filtered, 500)...)
 	}
-	result := make([]model.MetricSample, 0, len(aggregated))
-	for _, sample := range aggregated {
-		result = append(result, sample)
-	}
-	sort.Slice(result, func(i, j int) bool { return result[i].CollectedAt.Before(result[j].CollectedAt) })
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].CollectedAt.Equal(result[j].CollectedAt) {
+			return seriesKey(result[i].ServiceName, result[i].Name, result[i].Labels) <
+				seriesKey(result[j].ServiceName, result[j].Name, result[j].Labels)
+		}
+		return result[i].CollectedAt.Before(result[j].CollectedAt)
+	})
 	if len(result) == 0 {
 		return nil, fmt.Errorf("no samples in the requested %s range", duration)
 	}
-	return Downsample(result, 500), nil
+	return result, nil
 }
 
 func Downsample(samples []model.MetricSample, max int) []model.MetricSample {
 	if len(samples) <= max || max <= 0 {
 		return append([]model.MetricSample(nil), samples...)
+	}
+	if max == 1 {
+		return []model.MetricSample{samples[len(samples)-1]}
 	}
 	result := make([]model.MetricSample, 0, max)
 	step := float64(len(samples)-1) / float64(max-1)

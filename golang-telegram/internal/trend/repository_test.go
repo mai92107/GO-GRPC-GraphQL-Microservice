@@ -29,7 +29,7 @@ func TestQueryFiltersRangeAndDownsamples(t *testing.T) {
 	}
 }
 
-func TestQueryAggregatesLabelSeries(t *testing.T) {
+func TestQueryKeepsLabelSeriesSeparate(t *testing.T) {
 	repo := NewRepository()
 	now := time.Now()
 	repo.Add([]model.MetricSample{
@@ -40,7 +40,24 @@ func TestQueryAggregatesLabelSeries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result) != 1 || result[0].Value != 120 {
-		t.Fatalf("unexpected aggregated result: %#v", result)
+	if len(result) != 2 {
+		t.Fatalf("expected two separate label series, got %#v", result)
+	}
+	values := map[string]float64{}
+	for _, sample := range result {
+		values[sample.Labels["area"]] = sample.Value
+	}
+	if values["heap"] != 100 || values["nonheap"] != 20 {
+		t.Fatalf("unexpected separate series: %#v", result)
+	}
+}
+
+func TestDownsampleToOneKeepsLatestSample(t *testing.T) {
+	samples := []model.MetricSample{{Value: 1}, {Value: 2}}
+
+	result := Downsample(samples, 1)
+
+	if len(result) != 1 || result[0].Value != 2 {
+		t.Fatalf("expected latest sample, got %#v", result)
 	}
 }

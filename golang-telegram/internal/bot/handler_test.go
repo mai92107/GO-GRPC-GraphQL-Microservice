@@ -102,6 +102,30 @@ func TestAlertAcknowledgement(t *testing.T) {
 	}
 }
 
+func TestInvalidAlertAcknowledgementID(t *testing.T) {
+	handler := NewHandler(repository.NewMemoryRepository(nil))
+
+	reply := handler.Handle(context.Background(), "123", "", "ack:not-a-number")
+
+	if reply.Text != "無效的告警識別碼。" {
+		t.Fatalf("unexpected reply: %s", reply.Text)
+	}
+}
+
+func TestCheckAllUnavailableDoesNotPanic(t *testing.T) {
+	handler := NewHandler(repository.NewMemoryRepository(nil))
+
+	reply := handler.Handle(context.Background(), "123", "/check", "")
+	if reply.Text != "立即檢查目前不可用。" {
+		t.Fatalf("unexpected command reply: %s", reply.Text)
+	}
+
+	reply = handler.Handle(context.Background(), "123", "", "check_all")
+	if reply.Text != "立即檢查目前不可用。" {
+		t.Fatalf("unexpected callback reply: %s", reply.Text)
+	}
+}
+
 func TestMetricInlineKeyboardCategoryFlow(t *testing.T) {
 	repo := repository.NewMemoryRepository([]model.Service{{Name: "www-service", Enabled: true}})
 	repo.SaveMetricSnapshots([]model.MetricSnapshot{

@@ -14,6 +14,7 @@ Detailed behavior and architecture are defined in
 - Keep supported metric trends in memory for eight hours
 - Monitor JVM live, daemon, peak, started, and state-classified threads
 - Monitor process CPU, system CPU usage, and system CPU core count
+- Notify Telegram when the monitor starts and when it shuts down from SIGINT or SIGTERM
 - Generate 1h, 4h, and 8h PNG trend charts with threshold lines
 - Write structured daily JSONL logs while keeping normal terminal output limited
   to `監控 <service> 中`

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -23,17 +24,38 @@ func (renderer *Renderer) Render(out io.Writer, serviceName, metricName, rangeTe
 	}
 
 	scale := metricScaleFor(metricName, samples)
-	times := make([]time.Time, 0, len(samples))
+	grouped := groupSamplesByLabels(samples)
 	values := make([]float64, 0, len(samples))
+	start, end := samples[0].CollectedAt, samples[0].CollectedAt
 	for _, sample := range samples {
-		times = append(times, sample.CollectedAt)
 		values = append(values, sample.Value*scale.factor)
+		if sample.CollectedAt.Before(start) {
+			start = sample.CollectedAt
+		}
+		if sample.CollectedAt.After(end) {
+			end = sample.CollectedAt
+		}
 	}
-	series := []gochart.Series{gochart.TimeSeries{
-		Name:    metricName,
-		XValues: times,
-		YValues: values,
-	}}
+	seriesNames := make([]string, 0, len(grouped))
+	for name := range grouped {
+		seriesNames = append(seriesNames, name)
+	}
+	sort.Strings(seriesNames)
+	series := make([]gochart.Series, 0, len(seriesNames)+len(thresholds))
+	for _, name := range seriesNames {
+		group := grouped[name]
+		times := make([]time.Time, 0, len(group))
+		groupValues := make([]float64, 0, len(group))
+		for _, sample := range group {
+			times = append(times, sample.CollectedAt)
+			groupValues = append(groupValues, sample.Value*scale.factor)
+		}
+		series = append(series, gochart.TimeSeries{
+			Name:    name,
+			XValues: times,
+			YValues: groupValues,
+		})
+	}
 	yRange := dataYRange(values)
 	for _, threshold := range thresholds {
 		scaledThreshold := threshold * scale.factor
@@ -43,7 +65,7 @@ func (renderer *Renderer) Render(out io.Writer, serviceName, metricName, rangeTe
 		series = append(series, gochart.TimeSeries{
 			Name:    fmt.Sprintf("門檻值 %s", scale.format(scaledThreshold)),
 			Style:   gochart.Style{StrokeColor: gochart.ColorRed, StrokeWidth: 1},
-			XValues: []time.Time{times[0], times[len(times)-1]},
+			XValues: []time.Time{start, end},
 			YValues: []float64{scaledThreshold, scaledThreshold},
 		})
 	}
@@ -58,6 +80,36 @@ func (renderer *Renderer) Render(out io.Writer, serviceName, metricName, rangeTe
 	}
 	graph.Elements = []gochart.Renderable{gochart.Legend(&graph)}
 	return graph.Render(gochart.PNG, out)
+}
+
+func groupSamplesByLabels(samples []model.MetricSample) map[string][]model.MetricSample {
+	result := make(map[string][]model.MetricSample)
+	for _, sample := range samples {
+		name := formatSeriesLabels(sample.Labels)
+		result[name] = append(result[name], sample)
+	}
+	for name := range result {
+		sort.Slice(result[name], func(i, j int) bool {
+			return result[name][i].CollectedAt.Before(result[name][j].CollectedAt)
+		})
+	}
+	return result
+}
+
+func formatSeriesLabels(labels map[string]string) string {
+	if len(labels) == 0 {
+		return "整體"
+	}
+	keys := make([]string, 0, len(labels))
+	for key := range labels {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%s", key, labels[key]))
+	}
+	return strings.Join(parts, ", ")
 }
 
 type metricScale struct {
