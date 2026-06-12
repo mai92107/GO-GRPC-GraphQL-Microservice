@@ -766,6 +766,8 @@ func (handler Handler) trendRangeMenu(serviceName, metricName string) Reply {
 			{{Text: "最近 1 小時", Data: "tr:" + serviceName + ":" + metricName + ":1h"}},
 			{{Text: "最近 4 小時", Data: "tr:" + serviceName + ":" + metricName + ":4h"}},
 			{{Text: "最近 8 小時", Data: "tr:" + serviceName + ":" + metricName + ":8h"}},
+			{{Text: "最近 16 小時", Data: "tr:" + serviceName + ":" + metricName + ":16h"}},
+			{{Text: "最近 24 小時", Data: "tr:" + serviceName + ":" + metricName + ":24h"}},
 			{{Text: "返回指標選擇", Data: "tu:" + serviceName + ":" + metricParts(metricName, 0) + ":" + metricParts(metricName, 1)}},
 		},
 	}
@@ -854,15 +856,15 @@ func metricSubgroupDisplayName(subgroup string) string {
 
 func (handler Handler) trend(fields []string) Reply {
 	if len(fields) != 4 || handler.trends == nil || handler.renderer == nil {
-		return Reply{Text: "用法：/trend <service_name> <metric_name> <1h|4h|8h>"}
+		return Reply{Text: "用法：/trend <service_name> <metric_name> <1h|4h|8h|16h|24h>"}
 	}
 	if err := metric.Validate(metric.Name(fields[2])); err != nil {
 		return Reply{Text: err.Error()}
 	}
-	durations := map[string]time.Duration{"1h": time.Hour, "4h": 4 * time.Hour, "8h": 8 * time.Hour}
+	durations := map[string]time.Duration{"1h": time.Hour, "4h": 4 * time.Hour, "8h": 8 * time.Hour, "16h": 16 * time.Hour, "24h": 24 * time.Hour}
 	duration, ok := durations[fields[3]]
 	if !ok {
-		return Reply{Text: "時間範圍必須是 1h、4h 或 8h。"}
+		return Reply{Text: "時間範圍必須是 1h、4h、8h、16h 或 24h。"}
 	}
 	samples, err := handler.trends.Query(fields[1], fields[2], duration, time.Now())
 	if err != nil {

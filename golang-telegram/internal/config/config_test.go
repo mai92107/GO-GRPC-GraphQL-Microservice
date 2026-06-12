@@ -34,6 +34,9 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if cfg.App.DefaultCheckIntervalSeconds != 60 {
 		t.Fatalf("unexpected default interval: %d", cfg.App.DefaultCheckIntervalSeconds)
 	}
+	if cfg.TrendStorage.Directory != "trends" || cfg.TrendStorage.RetentionHours != 24 {
+		t.Fatalf("unexpected trend storage defaults: %#v", cfg.TrendStorage)
+	}
 
 	service := cfg.Services[0]
 	if service.BaseURL != "http://localhost:8081" {
@@ -47,6 +50,21 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	}
 	if service.CheckIntervalSeconds != 60 {
 		t.Fatalf("unexpected service interval: %d", service.CheckIntervalSeconds)
+	}
+}
+
+func TestLoadRejectsTrendRetentionShorterThan24Hours(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	content := []byte(`{
+		"trend_storage": {"retention_hours": 8},
+		"services": []
+	}`)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil {
+		t.Fatal("expected trend retention shorter than 24 hours to be rejected")
 	}
 }
 

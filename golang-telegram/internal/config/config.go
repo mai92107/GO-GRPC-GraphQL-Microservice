@@ -17,8 +17,14 @@ type Config struct {
 	Telegram         TelegramConfig         `json:"telegram"`
 	CronResultNotify CronResultNotifyConfig `json:"cron_result_notify"`
 	Logging          LogConfig              `json:"logging"`
+	TrendStorage     TrendStorageConfig     `json:"trend_storage"`
 	Services         []Service              `json:"services"`
 	AlertRules       []AlertRule            `json:"alert_rules"`
+}
+
+type TrendStorageConfig struct {
+	Directory      string `json:"directory"`
+	RetentionHours int    `json:"retention_hours"`
 }
 
 type LogConfig struct {
@@ -135,6 +141,12 @@ func applyDefaults(cfg *Config) {
 	if cfg.Logging.Timezone == "" {
 		cfg.Logging.Timezone = "Asia/Taipei"
 	}
+	if cfg.TrendStorage.Directory == "" {
+		cfg.TrendStorage.Directory = "trends"
+	}
+	if cfg.TrendStorage.RetentionHours <= 0 {
+		cfg.TrendStorage.RetentionHours = 24
+	}
 	cfg.CronResultNotify.Host = strings.TrimRight(cfg.CronResultNotify.Host, "/")
 	for i := range cfg.Services {
 		if cfg.Services[i].Environment == "" {
@@ -224,6 +236,9 @@ func validate(cfg Config) error {
 	}
 	if _, err := time.LoadLocation(cfg.Logging.Timezone); err != nil {
 		return fmt.Errorf("invalid logging.timezone %q: %w", cfg.Logging.Timezone, err)
+	}
+	if cfg.TrendStorage.RetentionHours < 24 {
+		return errors.New("trend_storage.retention_hours must be at least 24")
 	}
 
 	return nil

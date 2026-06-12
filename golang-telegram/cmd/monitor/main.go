@@ -45,7 +45,18 @@ func main() {
 	defer cancel()
 
 	repo := repository.NewMemoryRepository(cfg.ModelServices())
-	trendRepo := trend.NewRepository()
+	trendRepo, err := trend.NewRepository(cfg.TrendStorage.Directory, time.Duration(cfg.TrendStorage.RetentionHours)*time.Hour)
+	if err != nil {
+		appLogger.Error(ctx, "trend_repository_initialization_failed", err)
+		return
+	}
+	defer func() {
+		if err := trendRepo.Close(); err != nil {
+			appLogger.Error(context.Background(), "trend_repository_close_failed", err)
+		}
+	}()
+	go trendRepo.Run(ctx)
+	go logTrendErrors(ctx, trendRepo, appLogger)
 	checker := collector.NewHealthChecker(time.Duration(cfg.App.HTTPTimeoutSeconds) * time.Second)
 	alertEngine := alert.NewEngine(repo, alert.Thresholds{
 		ResponseTimeWarning: time.Duration(cfg.App.ResponseTimeWarningMS) * time.Millisecond,
@@ -164,5 +175,16 @@ func signalReason(sig os.Signal) string {
 		return "收到終止訊號（SIGTERM）"
 	default:
 		return fmt.Sprintf("收到系統訊號（%s）", sig)
+	}
+}
+
+func logTrendErrors(ctx context.Context, repo *trend.Repository, logger applog.ApplicationLogger) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case err := <-repo.Errors():
+			logger.Error(ctx, "trend_repository_failed", err)
+		}
 	}
 }

@@ -11,17 +11,18 @@ Detailed behavior and architecture are defined in
 - Deduplicate alerts, acknowledge open alerts, and send recovery notifications
 - Manage services and alert rules through a single authorized Telegram chat
 - Validate, back up, atomically replace, and immediately apply JSON config
-- Keep supported metric trends in memory for eight hours
+- Buffer the current minute of supported metrics and persist completed minutes as `.prom` files
 - Monitor JVM live, daemon, peak, started, and state-classified threads
 - Monitor process CPU, system CPU usage, and system CPU core count
 - Notify Telegram when the monitor starts and when it shuts down from SIGINT or SIGTERM
-- Generate 1h, 4h, and 8h PNG trend charts with threshold lines
+- Generate 1h, 4h, 8h, 16h, and 24h PNG trend charts with threshold lines
 - Write structured daily JSONL logs while keeping normal terminal output limited
   to `監控 <service> 中`
 - Keep optional `cron_result_notify` notification integration
 
 There is no mute, unmute, or notification-suppression capability. JSON is the
-only persistent configuration source. Runtime state and trends reset at restart.
+only persistent configuration source. Runtime state resets at restart; completed
+trend minute files are retained for 24 hours by default.
 
 ## Run
 
@@ -44,7 +45,7 @@ single administrator `telegram.chat_id`.
 /metric <service_name>
 /alerts
 /check [service_name]
-/trend <service_name> <metric_name> <1h|4h|8h>
+/trend <service_name> <metric_name> <1h|4h|8h|16h|24h>
 ```
 
 `/menu` opens the Inline Keyboard management interface. Service and alert-rule
@@ -53,7 +54,7 @@ write the JSON configuration safely, and immediately update the running monitor.
 The bot registers a clickable Telegram command menu at startup, so users can
 select common commands from the input area instead of typing them.
 Trend charts also use a button flow: select service, metric group, metric
-subgroup, exact metric, and then the 1h, 4h, or 8h range.
+subgroup, exact metric, and then the 1h, 4h, 8h, 16h, or 24h range.
 
 ## Logging
 
@@ -69,6 +70,20 @@ Default configuration:
   }
 }
 ```
+
+Trend storage configuration:
+
+```json
+{
+  "trend_storage": {
+    "directory": "trends",
+    "retention_hours": 24
+  }
+}
+```
+
+The current minute remains buffered in memory and is excluded from charts.
+Completed minutes are written to a shared UTC-named `.prom` file.
 
 All `INFO`, `WARN`, `ERROR`, and optionally `DEBUG` events are written to
 `logs/monitor-YYYY-MM-DD.log`. Errors additionally appear on the terminal.

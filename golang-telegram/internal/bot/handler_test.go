@@ -194,6 +194,10 @@ func TestTrendInlineKeyboardCategoryFlow(t *testing.T) {
 	if !keyboardContains(reply.Keyboard, "tr:www-service:http_server_requests_seconds_count:1h") {
 		t.Fatalf("unexpected trend range menu: %#v", reply.Keyboard)
 	}
+	if !keyboardContains(reply.Keyboard, "tr:www-service:http_server_requests_seconds_count:16h") ||
+		!keyboardContains(reply.Keyboard, "tr:www-service:http_server_requests_seconds_count:24h") {
+		t.Fatalf("extended trend ranges are missing: %#v", reply.Keyboard)
+	}
 	for _, row := range reply.Keyboard {
 		for _, button := range row {
 			if len([]byte(button.Data)) > 64 {

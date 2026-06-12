@@ -40,7 +40,11 @@ func TestSuccessfulCheckOnlyPrintsMonitoringProgress(t *testing.T) {
 	}
 	defer logger.Close()
 	engine := alert.NewEngine(repo, alert.Thresholds{}, nil)
-	scheduler := New(repo, collector.NewHealthChecker(time.Second), engine, notifier.LogNotifier{Logger: logger}, true, trend.NewRepository(), logger, terminal)
+	trendRepo, err := trend.NewRepository(filepath.Join(t.TempDir(), "trends"), 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scheduler := New(repo, collector.NewHealthChecker(time.Second), engine, notifier.LogNotifier{Logger: logger}, true, trendRepo, logger, terminal)
 
 	scheduler.RunOnce(context.Background())
 	if got := terminalOutput.String(); got != "監控 order-service 中\n" {
