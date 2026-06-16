@@ -68,7 +68,9 @@ func TestAuthCSRFEmailAndHorizontalIsolation(t *testing.T) {
 	assertStatus(t, response, 200)
 	response = request(t, handler, "DELETE", "/api/admin/payment-methods/test_wallet", nil, adminCookie, adminCSRF)
 	assertStatus(t, response, 200)
-	response = request(t, handler, "POST", "/api/admin/merchants", map[string]any{"code": "px_mart", "name": "全聯", "aliases": []string{"全聯福利中心"}}, adminCookie, adminCSRF)
+	response = request(t, handler, "POST", "/api/admin/merchants", map[string]any{
+		"code": "px_mart", "name": "全聯", "aliases": []string{"全聯福利中心"}, "category_codes": []string{"grocery"},
+	}, adminCookie, adminCSRF)
 	assertStatus(t, response, 201)
 	response = request(t, handler, "GET", "/api/admin/merchants", nil, adminCookie, "")
 	assertStatus(t, response, 200)
@@ -160,7 +162,10 @@ func apiPool(t *testing.T) *pgxpool.Pool {
 	if err = pool.Ping(context.Background()); err != nil {
 		t.Skipf("database unavailable: %v", err)
 	}
-	if _, err = pool.Exec(context.Background(), `DROP SCHEMA public CASCADE; CREATE SCHEMA public`); err != nil {
+	if _, err = pool.Exec(context.Background(), `DROP SCHEMA public CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = pool.Exec(context.Background(), `CREATE SCHEMA public`); err != nil {
 		t.Fatal(err)
 	}
 	conn, err := pool.Acquire(context.Background())

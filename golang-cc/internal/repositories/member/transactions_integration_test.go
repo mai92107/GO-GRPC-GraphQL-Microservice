@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rafa/golang-cc/internal/platform/config"
 	"github.com/rafa/golang-cc/internal/services/recommendations"
@@ -30,7 +31,7 @@ func TestTransactionLifecycleRestoresCapAndIsolatesUsers(t *testing.T) {
 
 	june := WriteInput{
 		CardID: cardA, AmountMinor: 10000, CategoryCode: "dining",
-		MerchantName: "全聯福利中心", PaymentMethodCode: "physical_card", TransactionDate: recommendations.MustLocalDate("2026-06-10"), Note: "June",
+		MerchantCode: "px_mart", MerchantName: "全聯福利中心", PaymentMethodCode: "physical_card", TransactionDate: recommendations.MustLocalDate("2026-06-10"), Note: "June",
 	}
 	created, err := service.Create(ctx, userA, june)
 	if err != nil {
@@ -84,7 +85,7 @@ func TestConcurrentCreatesDoNotExceedCap(t *testing.T) {
 	service := NewTransactionRepository(pool)
 	input := WriteInput{
 		CardID: cardA, AmountMinor: 10000, CategoryCode: "dining",
-		MerchantName: "全聯福利中心", PaymentMethodCode: "physical_card", TransactionDate: recommendations.MustLocalDate("2026-06-10"),
+		MerchantCode: "px_mart", MerchantName: "全聯福利中心", PaymentMethodCode: "physical_card", TransactionDate: recommendations.MustLocalDate("2026-06-10"),
 	}
 
 	var wait sync.WaitGroup
@@ -210,6 +211,9 @@ func TestDAWHO2026AccountTierRewards(t *testing.T) {
 	for index, tc := range tiers {
 		t.Run(tc.name, func(t *testing.T) {
 			cardID := fmt.Sprintf("24000000-0000-0000-0000-%012d", index+1)
+			if _, err := pool.Exec(ctx, `DELETE FROM member_cards WHERE user_id=$1 AND card_product_id=$2`, userA, "51000000-0000-0000-0000-000000000001"); err != nil {
+				t.Fatal(err)
+			}
 			if err := repo.CreateCard(ctx, cardID, string(userA), "51000000-0000-0000-0000-000000000001", CardWrite{IsActive: true, AccountTier: tc.tier}); err != nil {
 				t.Fatal(err)
 			}
@@ -263,7 +267,7 @@ func TestRecommendationDisambiguatesSameNicknameAndRanksEachCardOnce(t *testing.
 	}
 
 	result, err := NewTransactionRepository(pool).Recommend(
-		ctx, userA, 20000, "transport", "捷運", "apple_pay", recommendations.MustLocalDate("2026-06-15"),
+		ctx, userA, 20000, "transport", "", "捷運", recommendations.MustLocalDate("2026-06-15"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -305,25 +309,33 @@ func TestLatestCardActivitiesRespectPaymentMethodsAndStacking(t *testing.T) {
 		t.Helper()
 		var merchantCode string
 		if merchant != "" {
-			_ = pool.QueryRow(ctx, `SELECT code FROM merchants WHERE name=$1`, merchant).Scan(&merchantCode)
+			if err := pool.QueryRow(ctx, `SELECT code FROM merchants WHERE name=$1`, merchant).Scan(&merchantCode); errors.Is(err, pgx.ErrNoRows) {
+				merchantCode = ""
+			} else if err != nil {
+				t.Fatalf("merchant %q not found: %v", merchant, err)
+			}
 		}
 		result, err := repository.Recommend(ctx, userA, 100000, category, merchantCode, merchant, date)
 		if err != nil {
 			t.Fatal(err)
 		}
+		seen := []string{}
 		for _, card := range result.Recommendations {
+			for _, option := range card.PaymentOptions {
+				seen = append(seen, fmt.Sprintf("%s/%s=%s allocations=%d", card.CardName, option.PaymentMethodCode, option.TotalUnweighted.String(), len(option.Allocations)))
+			}
 			if card.CardName == cardName {
 				for _, option := range card.PaymentOptions {
-					if option.PaymentMethodCode == method && option.TotalUnweighted.Cmp(recommendations.MustDecimal(want)) == 0 {
+					if paymentOptionIncludes(option, method) && option.TotalUnweighted.Cmp(recommendations.MustDecimal(want)) == 0 {
 						return
 					}
 				}
 			}
 		}
-		t.Fatalf("%s method=%s reward=%s not recommended", cardName, method, want)
+		t.Fatalf("%s method=%s reward=%s not recommended; merchant_code=%q seen=%v empty_reason=%q", cardName, method, want, merchantCode, seen, result.EmptyReason)
 	}
 
-	assertCardReward("U Bear 信用卡", "online", "Steam", "online_card", "100")
+	assertCardReward("U Bear 信用卡", "online", "Steam", recommendations.AnyPaymentCode, "100")
 	assertCardReward("U Bear 信用卡", "dining", "一般餐廳", "line_pay", "30")
 	assertCardReward("Unicard", "dining", "一般餐廳", "physical_card", "40")
 	assertCardReward("英雄聯盟信用卡（已停止申辦）", "overseas", "海外實體商店", "apple_pay", "25")
@@ -335,6 +347,21 @@ func TestLatestCardActivitiesRespectPaymentMethodsAndStacking(t *testing.T) {
 	assertCardReward("LINE Bank聯名卡", "insurance", "保險公司", "physical_card", "10")
 	assertCardReward("LINE Bank聯名卡", "overseas", "海外網路商店", "online_card", "25")
 	assertCardReward("LINE Bank聯名卡", "online", "PChome", "online_card", "40")
+}
+
+func paymentOptionIncludes(option recommendations.PaymentOption, method string) bool {
+	if option.PaymentMethodCode == recommendations.AnyPaymentCode {
+		return true
+	}
+	if option.PaymentMethodCode == method {
+		return true
+	}
+	for _, candidate := range option.PaymentMethods {
+		if candidate.Code == method {
+			return true
+		}
+	}
+	return false
 }
 
 func integrationPool(t *testing.T) *pgxpool.Pool {
@@ -353,7 +380,10 @@ func integrationPool(t *testing.T) *pgxpool.Pool {
 		t.Skipf("database unavailable: %v", err)
 	}
 
-	if _, err := pool.Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public`); err != nil {
+	if _, err := pool.Exec(ctx, `DROP SCHEMA public CASCADE`); err != nil {
+		t.Fatalf("reset database: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `CREATE SCHEMA public`); err != nil {
 		t.Fatalf("reset database: %v", err)
 	}
 	connection, err := pool.Acquire(ctx)
@@ -405,12 +435,10 @@ func seedIntegrationData(t *testing.T, pool *pgxpool.Pool) {
 		INSERT INTO card_activity_benefit_categories (benefit_id, category_code)
 			VALUES ($1, 'dining')`,
 			[]any{ruleA}},
-		{`
-		INSERT INTO merchants(code,name,is_active,is_system) VALUES('px_mart','全聯',true,false);
-		INSERT INTO merchant_aliases(merchant_code,alias) VALUES('px_mart','全聯福利中心');
-		INSERT INTO card_activity_benefit_merchants (benefit_id, merchant_code)
-			VALUES ($1, 'px_mart')`,
-			[]any{ruleA}},
+		{`INSERT INTO merchants(code,name,is_active,is_system) VALUES('px_mart','全聯',true,false)`, nil},
+		{`INSERT INTO merchant_aliases(merchant_code,alias) VALUES('px_mart','全聯福利中心')`, nil},
+		{`INSERT INTO card_activity_benefit_merchants (benefit_id, merchant_code)
+			VALUES ($1, 'px_mart')`, []any{ruleA}},
 	}
 	for _, statement := range statements {
 		if _, err := pool.Exec(ctx, statement.sql, statement.args...); err != nil {

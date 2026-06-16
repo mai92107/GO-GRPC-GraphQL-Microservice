@@ -35,7 +35,7 @@ services:
       mailpit:
         condition: service_started
     volumes:
-      - ./configs/docker.json:/app/configs/local.json:ro
+      - ./configs/local.json:/app/configs/local.json:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- --header='Authorization: Bearer local-monitoring-token-change-me' http://localhost:8080/actuator/health >/dev/null"]
       interval: 5s
