@@ -10,8 +10,6 @@ import (
 	"regexp"
 )
 
-const DefaultPath = "configs/local.json"
-
 var telegramBotTokenPattern = regexp.MustCompile(`^[0-9]+:[A-Za-z0-9_-]+$`)
 
 type Config struct {

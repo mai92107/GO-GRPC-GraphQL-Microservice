@@ -7,7 +7,7 @@ import (
 )
 
 func RegisterMember(engine *gin.Engine, c *membercontroller.Controller, authService servermw.Authenticator) {
-	member := engine.Group("/api/member", servermw.Authentication(authService), servermw.Role("member"))
+	member := engine.Group("/api/member", servermw.Authentication(authService), servermw.Role(servermw.MEMBER))
 	member.GET("/catalog/cards", c.Catalog)
 	member.GET("/cards", c.ListCards)
 	member.GET("/cards/:id", c.GetCard)

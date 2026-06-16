@@ -42,6 +42,44 @@ npm run dev
 
 正式前端由 `npm run build` 輸出至 `web/dist`，並嵌入 Go server。
 
+## 本地 CI/CD
+
+本機可以用 Makefile 串起測試、編譯、Docker build 與 Docker Compose 部署：
+
+```bash
+make deploy
+```
+
+`make deploy` 會依序執行 Go 測試、前端測試、前端正式 build、Go build、`docker compose build app`，最後用 `docker compose up -d` 啟動或更新服務。預設不執行 `docker compose down`，避免每次部署都停止 PostgreSQL 與 Mailpit；需要完整停止時可另外執行：
+
+```bash
+make down
+```
+
+常用指令：
+
+```bash
+make test
+make build
+make docker-build
+make status
+make logs
+```
+
+若要在本機 Git push 前自動部署，可以安裝 Git hook：
+
+```bash
+./scripts/install-git-hooks.sh pre-push
+```
+
+也可以改成 commit 成功後部署：
+
+```bash
+./scripts/install-git-hooks.sh post-commit
+```
+
+Git hooks 存在於本機 `.git/hooks`，不會被 Git 自動同步到其他開發者電腦。安裝腳本可重複執行；若原本已有同名 hook，會先備份成 `.bak`。
+
 ## 設定
 
 應用程式由 JSON 設定讀取 DB、Mail、Server、Monitoring 與 Telegram：

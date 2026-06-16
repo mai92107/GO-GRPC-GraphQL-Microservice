@@ -13,7 +13,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rafa/golang-cc/internal/platform/config"
-	publicrepo "github.com/rafa/golang-cc/internal/repositories/public"
 	publicservice "github.com/rafa/golang-cc/internal/services/public"
 	"github.com/rafa/golang-cc/internal/utils/secure"
 	"github.com/rafa/golang-cc/migrations"
@@ -41,8 +40,7 @@ func (f *fakeEmail) SendPasswordReset(_ context.Context, _, link string) error {
 func TestAuthCSRFEmailAndHorizontalIsolation(t *testing.T) {
 	pool := apiPool(t)
 	mailer := &fakeEmail{}
-	authService := publicservice.New(publicrepo.New(pool), mailer, "http://localhost:8080")
-	handler := New(pool, authService, false, "test-monitoring-token", nil)
+	handler := New(pool, mailer, "http://localhost:8080", false, "test-monitoring-token", nil)
 	adminPassword := "admin-password-123"
 	hash, _ := publicservice.HashPassword(adminPassword)
 	adminID := secure.UUID()

@@ -13,6 +13,11 @@ import (
 	"github.com/rafa/golang-cc/internal/platform/httpcontext"
 )
 
+const (
+	ADMIN = "admin"
+	MEMBER = "member"
+)
+
 type Authenticator interface {
 	Authenticate(context.Context, string) (domain.User, error)
 }
