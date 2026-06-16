@@ -3,6 +3,8 @@ set -eu
 
 HOOK_NAME="${1:-pre-push}"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+PROJECT_PREFIX="$(git rev-parse --show-prefix)"
+PROJECT_DIR="${PROJECT_PREFIX%/}"
 HOOKS_DIR="$REPO_ROOT/.git/hooks"
 HOOK_PATH="$HOOKS_DIR/$HOOK_NAME"
 
@@ -18,6 +20,16 @@ esac
 
 mkdir -p "$HOOKS_DIR"
 
+if [ -z "$PROJECT_DIR" ]; then
+	PROJECT_DIR="."
+fi
+
+if [ ! -f "$REPO_ROOT/$PROJECT_DIR/Makefile" ]; then
+	echo "Makefile not found at $REPO_ROOT/$PROJECT_DIR/Makefile" >&2
+	echo "Run this installer from the project directory that contains Makefile." >&2
+	exit 1
+fi
+
 if [ -f "$HOOK_PATH" ]; then
 	BACKUP_PATH="$HOOK_PATH.bak"
 	if [ -f "$BACKUP_PATH" ]; then
@@ -27,12 +39,13 @@ if [ -f "$HOOK_PATH" ]; then
 	echo "Backed up existing hook to $BACKUP_PATH"
 fi
 
-cat > "$HOOK_PATH" <<'HOOK'
+cat > "$HOOK_PATH" <<HOOK
 #!/bin/sh
 set -eu
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-cd "$REPO_ROOT"
+PROJECT_DIR="$PROJECT_DIR"
+cd "\$REPO_ROOT/\$PROJECT_DIR"
 
 make deploy
 HOOK
