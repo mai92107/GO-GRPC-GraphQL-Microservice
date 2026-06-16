@@ -1,0 +1,2 @@
+-- This migration intentionally has no automatic down migration because it promotes
+-- user-owned data into shared catalog data. Restore from backup when rollback is required.

@@ -1,0 +1,1 @@
+-- Seed data is retained on downgrade to avoid deleting member-owned catalog cards.

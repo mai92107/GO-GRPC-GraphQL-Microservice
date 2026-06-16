@@ -1,0 +1,1 @@
+-- Test fixture cleanup is intentionally irreversible.

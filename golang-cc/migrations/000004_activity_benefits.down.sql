@@ -1,0 +1,3 @@
+-- This migration intentionally has no automatic down migration because it
+-- normalizes multiple benefits into a structure that cannot be losslessly
+-- represented by the legacy single-rule activity table.

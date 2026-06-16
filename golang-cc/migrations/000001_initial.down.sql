@@ -1,0 +1,13 @@
+DROP TABLE IF EXISTS reward_allocations;
+DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS reward_rule_categories;
+DROP TABLE IF EXISTS reward_rules;
+DROP TABLE IF EXISTS reward_preferences;
+DROP TABLE IF EXISTS reward_units;
+DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS cards;
+DROP TABLE IF EXISTS password_reset_tokens;
+DROP TABLE IF EXISTS invitations;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS schema_migrations;
