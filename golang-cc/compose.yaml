@@ -1,0 +1,46 @@
+name: golang-cc
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: credit_cards
+      POSTGRES_USER: credit_cards
+      POSTGRES_PASSWORD: local-development-only
+    ports:
+      - "54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U credit_cards -d credit_cards"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+      - ./migrations:/migrations:ro
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "10259:1025"
+      - "8029:8025"
+
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    volumes:
+      - ./configs/docker.json:/app/configs/local.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --header='Authorization: Bearer local-monitoring-token-change-me' http://localhost:8080/actuator/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  postgres-data:

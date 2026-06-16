@@ -1,0 +1,51 @@
+package routes
+
+import (
+	"github.com/gin-gonic/gin"
+	admincontroller "github.com/rafa/golang-cc/internal/controllers/admin"
+	servermw "github.com/rafa/golang-cc/internal/server/middleware"
+)
+
+func RegisterAdmin(engine *gin.Engine, c *admincontroller.Controller, authService servermw.Authenticator) {
+	admin := engine.Group("/api/admin", servermw.Authentication(authService), servermw.Role("admin"))
+	admin.GET("/invitations", c.ListInvitations)
+	admin.GET("/dashboard", c.Dashboard)
+	admin.GET("/users", c.ListUsers)
+	admin.GET("/telegram-bindings", c.ListTelegramBindings)
+	admin.GET("/banks", c.ListBanks)
+	admin.GET("/card-products", c.ListCardProducts)
+	admin.GET("/activities", c.ListActivities)
+	admin.GET("/categories", c.ListCategories)
+	admin.GET("/reward-units", c.ListRewardUnits)
+	admin.GET("/payment-methods", c.ListPaymentMethods)
+	admin.GET("/merchants", c.ListMerchants)
+
+	write := admin.Group("", servermw.CSRF())
+	write.POST("/invitations", c.CreateInvitation)
+	write.DELETE("/invitations/:id", c.DeleteInvitation)
+	write.POST("/users/:id/password-reset", c.SendUserPasswordReset)
+	write.POST("/telegram-bindings", c.CreateTelegramBinding)
+	write.DELETE("/telegram-bindings/:chat_id", c.DeleteTelegramBinding)
+	write.PATCH("/users/:id", c.UpdateUserStatus)
+	write.POST("/banks", c.CreateBank)
+	write.PATCH("/banks/:id", c.UpdateBank)
+	write.DELETE("/banks/:id", c.DeleteBank)
+	write.POST("/card-products", c.CreateCardProduct)
+	write.PATCH("/card-products/:id", c.UpdateCardProduct)
+	write.DELETE("/card-products/:id", c.DeleteCardProduct)
+	write.POST("/activities", c.CreateActivity)
+	write.PATCH("/activities/:id", c.UpdateActivity)
+	write.DELETE("/activities/:id", c.DeleteActivity)
+	write.POST("/categories", c.CreateCategory)
+	write.PATCH("/categories/:code", c.UpdateCategory)
+	write.DELETE("/categories/:code", c.DeleteCategory)
+	write.POST("/reward-units", c.CreateRewardUnit)
+	write.PATCH("/reward-units/:id", c.UpdateRewardUnit)
+	write.DELETE("/reward-units/:id", c.DeleteRewardUnit)
+	write.POST("/payment-methods", c.CreatePaymentMethod)
+	write.PATCH("/payment-methods/:code", c.UpdatePaymentMethod)
+	write.DELETE("/payment-methods/:code", c.DeletePaymentMethod)
+	write.POST("/merchants", c.CreateMerchant)
+	write.PATCH("/merchants/:code", c.UpdateMerchant)
+	write.DELETE("/merchants/:code", c.DeleteMerchant)
+}

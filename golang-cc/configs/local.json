@@ -1,0 +1,27 @@
+{
+  "database": {
+    "username": "credit_cards",
+    "password": "local-development-only",
+    "host": "localhost",
+    "port": 54329,
+    "database": "credit_cards",
+    "sslmode": "disable"
+  },
+  "mail": {
+    "smtp_address": "localhost:10259",
+    "from": "no-reply@credit-cards.local",
+    "web_address": "http://localhost:8029"
+  },
+  "server": {
+    "address": ":8080",
+    "public_base_url": "http://localhost:8080",
+    "secure_cookie": false
+  },
+  "monitoring": {
+    "token": "local-monitoring-token-change-me"
+  },
+  "telegram": {
+    "enabled": true,
+    "bot_token": "8886960637:AAHSD4jRUx8Plivy_ZKdKXpXnmhUpoRiIgA"
+  }
+}

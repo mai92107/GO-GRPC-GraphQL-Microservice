@@ -1,0 +1,61 @@
+.clickable-row {
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.clickable-row:hover {
+  border-color: var(--sage);
+  background: var(--cream);
+}
+
+.activity-detail {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.activity-detail h3 {
+  margin: 0;
+}
+
+.activity-benefit {
+  margin-top: 10px;
+  padding: 11px;
+  border-radius: 12px;
+  background: var(--cream);
+}
+
+.activity-benefit p {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.settings-tabs {
+  margin-bottom: 18px;
+}
+
+.bank-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+}
+
+.bank-tabs .button {
+  flex: 0 0 auto;
+}
+
+.activity-card-name {
+  display: inline-block;
+  margin-bottom: 6px;
+  color: var(--forest-dark);
+  font-size: 12px;
+  font-weight: 800;
+}
