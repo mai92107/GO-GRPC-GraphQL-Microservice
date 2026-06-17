@@ -1,6 +1,13 @@
 #!/bin/sh
 set -eu
 
+psql --set ON_ERROR_STOP=on --username "$POSTGRES_USER" --dbname postgres <<'SQL'
+SELECT 'CREATE DATABASE credit_cards_test'
+WHERE NOT EXISTS (
+  SELECT 1 FROM pg_database WHERE datname = 'credit_cards_test'
+)\gexec
+SQL
+
 for migration in /migrations/*.up.sql; do
   version="$(basename "$migration" | cut -d_ -f1)"
   psql --set ON_ERROR_STOP=on --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --file "$migration"

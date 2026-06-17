@@ -4,7 +4,11 @@ HEALTH_TOKEN := local-monitoring-token-change-me
 HEALTH_URL := http://localhost:8080/actuator/health
 export GOCACHE := $(CURDIR)/.gocache
 
-.PHONY: test build docker-build deploy logs status down health
+.PHONY: test test-db build docker-build deploy logs status down health
+
+test-db:
+	docker compose up -d postgres
+	docker compose exec -T postgres sh -c "psql -U credit_cards -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname = 'credit_cards_test'\" | grep -q 1 || createdb -U credit_cards credit_cards_test"
 
 test:
 	go test -p 1 -count=1 ./...
@@ -18,7 +22,7 @@ build:
 docker-build:
 	docker compose build $(COMPOSE_SERVICE)
 
-deploy: test build docker-build
+deploy: test-db test build docker-build
 	docker compose up -d
 	$(MAKE) health
 

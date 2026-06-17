@@ -4,7 +4,7 @@
     "password": "local-development-only",
     "host": "localhost",
     "port": 54329,
-    "database": "credit_cards",
+    "database": "credit_cards_test",
     "sslmode": "disable"
   },
   "mail": {
