@@ -8,7 +8,7 @@ import (
 
 func RegisterAdmin(engine *gin.Engine, c *admincontroller.Controller, authService servermw.Authenticator) {
 	admin := engine.Group("/api/admin", servermw.Authentication(authService), servermw.Role(servermw.ADMIN))
-	admin.GET("/invitations", c.ListInvitations)
+	admin.GET("/invitings", c.ListInvitings)
 	admin.GET("/dashboard", c.Dashboard)
 	admin.GET("/users", c.ListUsers)
 	admin.GET("/telegram-bindings", c.ListTelegramBindings)

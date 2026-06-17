@@ -14,8 +14,8 @@ func (s *Service) CreateInvitation(ctx context.Context, email, invitedBy string)
 	return s.auth.CreateInvitation(ctx, strings.TrimSpace(email), invitedBy)
 }
 
-func (s *Service) ListInvitations(ctx context.Context) ([]domain.Invitation, error) {
-	return s.repository.ListInvitations(ctx)
+func (s *Service) ListInvitings(ctx context.Context) ([]domain.Invitation, error) {
+	return s.repository.ListInvitings(ctx)
 }
 
 func (s *Service) DeleteInvitation(ctx context.Context, id string) error {

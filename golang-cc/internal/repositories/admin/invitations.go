@@ -6,8 +6,8 @@ import (
 	"github.com/rafa/golang-cc/internal/domain"
 )
 
-func (r *Repository) ListInvitations(ctx context.Context) ([]domain.Invitation, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id,email,expires_at,accepted_at,created_at FROM invitations ORDER BY created_at DESC`)
+func (r *Repository) ListInvitings(ctx context.Context) ([]domain.Invitation, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id,email,expires_at,accepted_at,created_at FROM invitations WHERE accepted_at IS NULL ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}

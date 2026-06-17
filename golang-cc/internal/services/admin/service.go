@@ -14,7 +14,7 @@ type Repository interface {
 	DeleteTelegramBinding(context.Context, int64) error
 	UpdateUserStatus(context.Context, string, string, string) error
 	UserEmail(context.Context, string) (string, error)
-	ListInvitations(context.Context) ([]domain.Invitation, error)
+	ListInvitings(context.Context) ([]domain.Invitation, error)
 	DeleteInvitation(context.Context, string) error
 	ListBanks(context.Context) ([]domain.Bank, error)
 	CreateBank(context.Context, string, domain.BankInput) error

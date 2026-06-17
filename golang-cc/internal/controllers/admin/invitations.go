@@ -21,8 +21,8 @@ func (c *Controller) CreateInvitation(ctx *gin.Context) {
 	data(ctx, http.StatusCreated, gin.H{"sent": true})
 }
 
-func (c *Controller) ListInvitations(ctx *gin.Context) {
-	result, err := c.service.ListInvitations(ctx.Request.Context())
+func (c *Controller) ListInvitings(ctx *gin.Context) {
+	result, err := c.service.ListInvitings(ctx.Request.Context())
 	if err != nil {
 		failure(ctx, http.StatusInternalServerError, "internal_error", "查詢失敗")
 		return
