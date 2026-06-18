@@ -17,7 +17,6 @@ docker compose up
 預設帳號：
 
 - 管理員：`admin@example.test` / `admin-password-123`
-- 會員：`member@example.test` / `iammemberno1`
 
 PostgreSQL 僅在 `postgres-data` volume 第一次建立時執行 `docker/postgres-init/00-initialize.sh`。初始化流程會依序套用所有 `migrations/*.up.sql`，並建立兩個預設帳號；SQL 只保存 Argon2id 雜湊。後續容器重啟不會重新初始化或覆寫資料。
 

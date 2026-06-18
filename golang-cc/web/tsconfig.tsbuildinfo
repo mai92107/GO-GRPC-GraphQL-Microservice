@@ -1,1 +1,1 @@
-{"root":["./src/adminapp.tsx","./src/app.tsx","./src/api.ts","./src/components.tsx","./src/format.test.ts","./src/format.ts","./src/main.tsx","./src/preferences.test.ts","./src/preferences.ts"],"version":"5.9.3"}
+{"root":["./src/adminapp.tsx","./src/app.tsx","./src/api.ts","./src/components.tsx","./src/format.test.ts","./src/format.ts","./src/main.tsx","./src/preferences.test.ts","./src/preferences.ts","./src/admin/head.tsx","./src/admin/nav.tsx","./src/admin/pages/dashboard.tsx","./src/admin/pages/member.tsx"],"version":"5.9.3"}

@@ -2,13 +2,55 @@ import {useEffect,useState,type FormEvent} from "react";
 import {Building2,CreditCard,Gift,LayoutDashboard,LogOut,MessageCircle,Settings,Trash2,Users} from "lucide-react";
 import {api,mutate,type AdminUser,type Merchant,type PaymentMethod,type TelegramBinding,type Unit,type User} from "./api";
 import {ActivityDetails,Dialog,Empty,Field,Logo} from "./components";
+import Nav from "./admin/Nav";
+import Dashboard from "./admin/Pages/Dashboard";
+import { Members } from "./admin/Pages/Member";
+import TelegramBindings from "./admin/Pages/Telegram";
+import Banks from "./admin/Pages/Banks";
 
 type Tab="dashboard"|"members"|"telegram"|"banks"|"cards"|"activities"|"system";
-export default function AdminApp({user,onLogout}:{user:User;onLogout:()=>void}){
+
+export default function AdminApp(
+  {user,onLogout}:{user:User;onLogout:()=>void}){
+
   const [tab,setTab]=useState<Tab>("dashboard");
-  return <div className="shell"><header className="topbar"><Logo/><div className="user"><span>管理後台<br/>{user.email}</span><span className="avatar">管</span><button className="icon-button" aria-label="登出" onClick={onLogout}><LogOut size={17}/></button></div></header><main className="content">{tab==="dashboard"?<Dashboard/>:tab==="members"?<Members/>:tab==="telegram"?<TelegramBindings/>:tab==="banks"?<Banks/>:tab==="cards"?<Products/>:tab==="activities"?<Activities/>:<System/>}</main><nav className="bottom-nav" aria-label="管理導覽"><Nav icon={<LayoutDashboard/>} label="總覽" active={tab==="dashboard"} onClick={()=>setTab("dashboard")}/><Nav icon={<Users/>} label="會員" active={tab==="members"} onClick={()=>setTab("members")}/><Nav icon={<MessageCircle/>} label="Telegram" active={tab==="telegram"} onClick={()=>setTab("telegram")}/><Nav icon={<Building2/>} label="銀行" active={tab==="banks"} onClick={()=>setTab("banks")}/><Nav icon={<CreditCard/>} label="卡片" active={tab==="cards"} onClick={()=>setTab("cards")}/><Nav icon={<Gift/>} label="活動" active={tab==="activities"} onClick={()=>setTab("activities")}/><Nav icon={<Settings/>} label="系統" active={tab==="system"} onClick={()=>setTab("system")}/></nav></div>
+  const pages = {
+    dashboard: Dashboard,
+    members: Members,
+    telegram: TelegramBindings,
+    banks: Banks,
+    cards: Products,
+    activities: Activities,
+    system: System
+  };
+  const Page = pages[tab] || Dashboard;
+
+  return <div className="shell">
+    <header className="topbar">
+      <Logo/>
+      <div className="user">
+        <span>管理後台<br/>{user.email}</span>
+        <span className="avatar">管</span>
+        <button className="icon-button" aria-label="登出" onClick={onLogout}>
+          <LogOut size={17}/>
+        </button>
+      </div>
+    </header>
+    <main className="content">
+      <Page/>
+    </main>
+    <nav className="bottom-nav" aria-label="管理導覽">
+      <Nav icon={<LayoutDashboard/>} label="總覽" active={tab==="dashboard"} onClick={()=>setTab("dashboard")}/>
+      <Nav icon={<Users/>} label="會員" active={tab==="members"} onClick={()=>setTab("members")}/>
+      <Nav icon={<MessageCircle/>} label="Telegram" active={tab==="telegram"} onClick={()=>setTab("telegram")}/>
+      <Nav icon={<Building2/>} label="銀行" active={tab==="banks"} onClick={()=>setTab("banks")}/>
+      <Nav icon={<CreditCard/>} label="卡片" active={tab==="cards"} onClick={()=>setTab("cards")}/>
+      <Nav icon={<Gift/>} label="活動" active={tab==="activities"} onClick={()=>setTab("activities")}/>
+      <Nav icon={<Settings/>} label="系統" active={tab==="system"} onClick={()=>setTab("system")}/>
+    </nav>
+  </div>
 }
-function Nav({icon,label,active,onClick}:{icon:React.ReactNode;label:string;active:boolean;onClick:()=>void}){return <button className={active?"active":""} onClick={onClick}>{icon}{label}</button>}
+
 function Head({title,text}:{title:string;text:string}){return <div className="page-head"><div><h1>{title}</h1><p>{text}</p></div>{title==="卡片活動"&&<AdminCurrentActivities/>}</div>}
 type CurrentActivityGroup={bank_id:string;bank_name:string;activities:any[]};
 function AdminCurrentActivities(){
@@ -17,18 +59,7 @@ function AdminCurrentActivities(){
   const activities=groups.find(x=>x.bank_id===activeBank)?.activities||[];
   return <><button className="button secondary" onClick={show}>查看當前活動</button>{open&&<Dialog title="當前所有活動" onClose={()=>setOpen(false)}>{groups.length?<><div className="bank-tabs" role="tablist" aria-label="銀行">{groups.map(group=><button type="button" role="tab" aria-selected={activeBank===group.bank_id} className={`button ${activeBank===group.bank_id?"":"ghost"}`} key={group.bank_id} onClick={()=>setActiveBank(group.bank_id)}>{group.bank_name}</button>)}</div><ActivityDetails activities={activities} units={units} categories={categories} methods={methods} merchants={merchants}/></>:<Empty title="目前沒有有效活動" text="今天沒有啟用且在活動期間內的活動。"/>}</Dialog>}</>
 }
-function Dashboard(){const [d,setD]=useState<Record<string,number>>({});useEffect(()=>{api<Record<string,number>>("/admin/dashboard").then(setD)},[]);return <><Head title="管理總覽" text="全域銀行卡片、活動與會員狀態。"/><div className="card-list">{Object.entries(d).map(([k,v])=><div className="panel" key={k}><h2>{v}</h2><p className="muted">{({members:"會員數",banks:"銀行數",cards:"卡片數",active_activities:"有效活動"} as Record<string,string>)[k]}</p></div>)}</div></>}
-function Members(){const [users,setUsers]=useState<any[]>([]),[invites,setInvites]=useState<any[]>([]),[email,setEmail]=useState("");const load=()=>Promise.all([api<any[]>("/admin/users"),api<any[]>("/admin/invitations")]).then(([u,i])=>{setUsers(u);setInvites(i.filter((x:any)=>!x.accepted_at))});useEffect(()=>{load()},[]);async function invite(e:FormEvent){e.preventDefault();await mutate("/admin/invitations","POST",{email});setEmail("");load()}async function toggle(u:any){await mutate(`/admin/users/${u.id}`,"PATCH",{status:u.status==="active"?"disabled":"active"});load()}return <><Head title="會員與邀請" text="只有管理員能邀請、停用會員與寄送密碼重設信。"/><div className="settings-grid"><section className="panel"><h2>邀請會員</h2><form className="stack" onSubmit={invite}><Field label="Email"><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required/></Field><button className="button">寄送啟用連結</button></form><div className="list">{invites.map(i=><div className="list-row" key={i.id}><div><h3>{i.email}</h3><p>等待接受</p></div></div>)}</div></section><section className="panel"><h2>會員</h2><div className="list">{users.filter(u=>u.role==="member").map(u=><div className="list-row" key={u.id}><div><h3>{u.display_name}</h3><p>{u.email} · {u.status}</p></div><div className="toolbar"><button className="button ghost" onClick={()=>mutate(`/admin/users/${u.id}/password-reset`,"POST")}>重設密碼</button><button className="button secondary" onClick={()=>toggle(u)}>{u.status==="active"?"停用":"啟用"}</button></div></div>)}</div></section></div></>}
-function TelegramBindings(){
-  const [bindings,setBindings]=useState<TelegramBinding[]>([]),[users,setUsers]=useState<AdminUser[]>([]),[chatID,setChatID]=useState(""),[userID,setUserID]=useState(""),[notice,setNotice]=useState(""),[error,setError]=useState("");
-  const load=()=>Promise.all([api<TelegramBinding[]>("/admin/telegram-bindings"),api<AdminUser[]>("/admin/users")]).then(([b,u])=>{setBindings(b);setUsers(u);const available=u.filter(x=>x.role==="member"&&x.status==="active"&&!b.some(binding=>binding.user_id===x.id));setUserID(current=>available.some(x=>x.id===current)?current:available[0]?.id||"")});
-  useEffect(()=>{load().catch(e=>setError((e as Error).message))},[]);
-  const available=users.filter(x=>x.role==="member"&&x.status==="active"&&!bindings.some(binding=>binding.user_id===x.id));
-  async function create(e:FormEvent){e.preventDefault();setError("");setNotice("");const parsed=Number(chatID);if(!Number.isSafeInteger(parsed)||parsed===0){setError("Chat ID 格式無效");return}try{await mutate("/admin/telegram-bindings","POST",{chat_id:parsed,user_id:userID});setChatID("");setNotice("Telegram Chat 綁定完成");await load()}catch(e){setError((e as Error).message)}}
-  async function remove(binding:TelegramBinding){if(!confirm(`確定解除 ${binding.display_name} 的 Telegram 綁定？`))return;setError("");setNotice("");try{await mutate(`/admin/telegram-bindings/${binding.chat_id}`,"DELETE");setNotice("Telegram Chat 綁定已解除");await load()}catch(e){setError((e as Error).message)}}
-  return <><Head title="Telegram 綁定" text="將會員與 Telegram Chat ID 綁定後，會員即可透過 Bot 取得卡片推薦。"/>{error&&<div className="error preference-message">{error}</div>}{notice&&<div className="notice preference-message">{notice}</div>}<div className="settings-grid"><section className="panel"><h2>新增綁定</h2><p className="muted">請會員先對 Bot 輸入 /recommand，Bot 會回覆尚未綁定的 Chat ID。</p><form className="stack" onSubmit={create}><Field label="Telegram Chat ID"><input inputMode="numeric" pattern="-?[0-9]+" placeholder="例如：123456789" value={chatID} onChange={e=>setChatID(e.target.value.trim())} required/></Field><Field label="啟用會員"><select value={userID} onChange={e=>setUserID(e.target.value)} required disabled={!available.length}><option value="">{available.length?"請選擇會員":"沒有可綁定的啟用會員"}</option>{available.map(x=><option value={x.id} key={x.id}>{x.display_name} · {x.email}</option>)}</select></Field><button className="button" disabled={!available.length}>建立綁定</button></form></section><section className="panel"><h2>目前綁定</h2><div className="list">{bindings.map(x=><div className="list-row" key={x.chat_id}><div><h3>{x.display_name}</h3><p>{x.email}<br/>Chat ID：{x.chat_id}</p></div><button className="icon-button" aria-label={`解除 ${x.display_name} Telegram 綁定`} onClick={()=>remove(x)}><Trash2 size={16}/></button></div>)}</div>{bindings.length===0&&<p className="muted">目前沒有 Telegram 綁定。</p>}</section></div></>
-}
-function Banks(){const [items,setItems]=useState<any[]>([]),[name,setName]=useState("");const load=()=>api<any[]>("/admin/banks").then(setItems);useEffect(()=>{load()},[]);async function create(e:FormEvent){e.preventDefault();await mutate("/admin/banks","POST",{name,is_active:true});setName("");load()}async function remove(id:string){try{await mutate(`/admin/banks/${id}`,"DELETE");load()}catch(e){alert((e as Error).message)}}async function toggle(x:any){await mutate(`/admin/banks/${x.id}`,"PATCH",{name:x.name,code:x.code,website_url:x.website_url,is_active:!x.is_active});load()}return <><Head title="銀行管理" text="建立與維護卡片所屬銀行。"/><section className="panel"><form className="toolbar" onSubmit={create}><input value={name} onChange={e=>setName(e.target.value)} placeholder="銀行名稱" required/><button className="button">新增銀行</button></form><div className="list">{items.map(x=><div className="list-row" key={x.id}><div><h3>{x.name}</h3><p>{x.is_active?"啟用":"停用"}</p></div><div className="toolbar"><button className="button ghost" onClick={()=>toggle(x)}>{x.is_active?"停用":"啟用"}</button><button className="icon-button" onClick={()=>remove(x.id)}><Trash2 size={16}/></button></div></div>)}</div></section></>}
+
 function Products(){const [items,setItems]=useState<any[]>([]),[banks,setBanks]=useState<any[]>([]),[form,setForm]=useState({bank_id:"",name:"",tiers:""});const load=()=>Promise.all([api<any[]>("/admin/card-products"),api<any[]>("/admin/banks")]).then(([c,b])=>{setItems(c);setBanks(b);if(!form.bank_id&&b[0])setForm(v=>({...v,bank_id:b[0].id}))});useEffect(()=>{load()},[]);async function create(e:FormEvent){e.preventDefault();await mutate("/admin/card-products","POST",{bank_id:form.bank_id,name:form.name,account_tiers:form.tiers.split(",").map(x=>x.trim()).filter(Boolean),is_active:true});setForm(v=>({...v,name:"",tiers:""}));load()}async function toggle(x:any){await mutate(`/admin/card-products/${x.id}`,"PATCH",{bank_id:x.bank_id,name:x.name,account_tiers:x.account_tiers,is_active:!x.is_active});load()}async function remove(x:any){try{await mutate(`/admin/card-products/${x.id}`,"DELETE");load()}catch(e){alert((e as Error).message)}}return <><Head title="銀行卡片目錄" text="會員只能從此目錄加入持有卡片。"/><section className="panel"><form className="toolbar" onSubmit={create}><select value={form.bank_id} onChange={e=>setForm({...form,bank_id:e.target.value})}>{banks.map(b=><option value={b.id} key={b.id}>{b.name}</option>)}</select><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="卡片名稱" required/><input value={form.tiers} onChange={e=>setForm({...form,tiers:e.target.value})} placeholder="帳戶等級（逗號分隔）"/><button className="button">新增卡片</button></form><div className="list">{items.map(x=><div className="list-row" key={x.id}><div><h3>{x.bank_name} · {x.name}</h3><p>{x.activities.length} 個活動 · {x.account_tiers.length?`等級：${x.account_tiers.join("、")}`:"無帳戶等級"} · {x.is_active?"啟用":"停用"}</p></div><div className="toolbar"><button className="button ghost" onClick={()=>toggle(x)}>{x.is_active?"停用":"啟用"}</button><button className="icon-button" onClick={()=>remove(x)}><Trash2 size={16}/></button></div></div>)}</div></section></>}
 function Activities(){
   const [items,setItems]=useState<any[]>([]),[cards,setCards]=useState<any[]>([]),[units,setUnits]=useState<Unit[]>([]),[categories,setCategories]=useState<any[]>([]),[methods,setMethods]=useState<PaymentMethod[]>([]),[merchants,setMerchants]=useState<Merchant[]>([]),[benefits,setBenefits]=useState<any[]>([]);
