@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { TreePine } from "lucide-react";
-import type { CatalogCard, Merchant, PaymentMethod, Unit } from "./api";
+import type { CatalogCard, Merchant, PaymentMethod, Unit } from "./models";
 import { formatBenefitTitle, formatReward } from "./format";
 
 export function Logo({ compact = false }: { compact?: boolean }) {

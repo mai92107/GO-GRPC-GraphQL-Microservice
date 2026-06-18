@@ -264,6 +264,13 @@ textarea:focus-visible {
   padding: 20px;
   box-shadow: 0 8px 25px rgba(57, 70, 60, 0.05);
 }
+.inputBlock {
+  font-size: 20px;
+  border-radius: 10px;
+  padding: 2px 10px;
+  border-width: 1px;
+  border-color: #ffffff;
+}
 .recommend-form {
   grid-column: span 4;
 }
