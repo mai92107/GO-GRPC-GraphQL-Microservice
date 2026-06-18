@@ -49,7 +49,7 @@ npm run dev
 make deploy
 ```
 
-`make deploy` 會依序執行 Go 測試、前端測試、前端正式 build、Go build、`docker compose build app`，最後用 `docker compose up -d` 啟動或更新服務。預設不執行 `docker compose down`，避免每次部署都停止 PostgreSQL 與 Mailpit；需要完整停止時可另外執行：
+`make deploy` 會先依 `web/package-lock.json` 自動安裝前端依賴，再依序執行 Go 測試、前端測試、前端正式 build、Go build、`docker compose build app`，最後啟動或更新服務並等待容器通過健康檢查。預設不執行 `docker compose down`，避免每次部署都停止 PostgreSQL 與 Mailpit；需要完整停止時可另外執行：
 
 ```bash
 make down
@@ -86,6 +86,8 @@ Git hooks 存在於本機 `.git/hooks`，不會被 Git 自動同步到其他開�
 - 本機：`configs/local.json`
 - Docker：`configs/docker.json`
 - 測試：`configs/test.json`
+
+Server 預設讀取 `configs/local.json`；可透過 `APP_CONFIG_PATH` 指定其他設定檔。Docker Compose 已設定為讀取 `configs/docker.json`。
 
 PostgreSQL 設定拆分為 `username`、`password`、`host`、`port`、`database` 與 `sslmode`。`monitoring.token` 必須使用獨立監控 token，不得使用管理員密碼。
 

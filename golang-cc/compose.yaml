@@ -27,6 +27,8 @@ services:
 
   app:
     build: .
+    environment:
+      APP_CONFIG_PATH: configs/docker.json
     ports:
       - "8080:8080"
     depends_on:
@@ -35,7 +37,7 @@ services:
       mailpit:
         condition: service_started
     volumes:
-      - ./configs/local.json:/app/configs/local.json:ro
+      - ./configs/docker.json:/app/configs/docker.json:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- --header='Authorization: Bearer local-monitoring-token-change-me' http://localhost:8080/actuator/health >/dev/null"]
       interval: 5s

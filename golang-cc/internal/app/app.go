@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,7 +21,11 @@ import (
 
 func RunServer() error {
 	// load 基本資料
-	cfg, err := config.LoadFromProject("configs/local.json")
+	configPath := os.Getenv("APP_CONFIG_PATH")
+	if configPath == "" {
+		configPath = "configs/local.json"
+	}
+	cfg, err := config.LoadFromProject(configPath)
 	if err != nil {
 		return err
 	}
