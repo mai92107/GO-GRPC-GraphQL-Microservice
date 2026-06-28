@@ -9,7 +9,7 @@ import (
 	"github.com/rafa/golang-cc/internal/domain"
 )
 
-func (r *Repository) AcceptInvitation(ctx context.Context, tokenHash []byte, now time.Time, user domain.User, passwordHash string, preferenceIDs []string) error {
+func (r *Repository) AcceptInvitation(ctx context.Context, tokenHash []byte, now time.Time, user domain.User, passwordHash string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -30,11 +30,6 @@ func (r *Repository) AcceptInvitation(ctx context.Context, tokenHash []byte, now
 	}
 	if _, err = tx.Exec(ctx, `UPDATE invitations SET accepted_at=$2 WHERE token_hash=$1`, tokenHash, now); err != nil {
 		return err
-	}
-	for _, id := range preferenceIDs {
-		if _, err = tx.Exec(ctx, `INSERT INTO reward_preferences(user_id,reward_unit_id,weight) VALUES($1,$2,1)`, user.ID, id); err != nil {
-			return err
-		}
 	}
 	return tx.Commit(ctx)
 }

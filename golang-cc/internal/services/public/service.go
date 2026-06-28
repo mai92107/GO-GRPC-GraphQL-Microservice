@@ -17,7 +17,7 @@ type Repository interface {
 	Authenticate(context.Context, []byte, time.Time) (domain.User, error)
 	DeleteSession(context.Context, []byte) error
 	InvitationEmail(context.Context, []byte, time.Time) (string, error)
-	AcceptInvitation(context.Context, []byte, time.Time, domain.User, string, []string) error
+	AcceptInvitation(context.Context, []byte, time.Time, domain.User, string) error
 	ActiveUserByEmail(context.Context, string) (string, string, error)
 	CreatePasswordReset(context.Context, string, string, []byte, time.Time) error
 	ResetPassword(context.Context, []byte, string, time.Time) error

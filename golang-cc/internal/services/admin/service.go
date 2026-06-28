@@ -20,7 +20,9 @@ type Repository interface {
 	CreateBank(context.Context, string, domain.BankInput) error
 	UpdateBank(context.Context, string, domain.BankInput) error
 	DeleteBank(context.Context, string) error
+	ListCardNetworks(context.Context) ([]domain.CardNetwork, error)
 	ListCardProducts(context.Context) ([]domain.CardProduct, error)
+	GetCardProduct(context.Context, string, bool) (domain.CardProduct, error)
 	CreateCardProduct(context.Context, string, domain.CardProductInput) error
 	UpdateCardProduct(context.Context, string, domain.CardProductInput) error
 	DeleteCardProduct(context.Context, string) error
@@ -41,9 +43,12 @@ type Repository interface {
 	UpdatePaymentMethod(context.Context, string, string, bool) error
 	DeletePaymentMethod(context.Context, string) error
 	ListMerchants(context.Context) ([]domain.Merchant, error)
-	CreateMerchant(context.Context, domain.Merchant) error
+	CreateMerchant(context.Context, domain.Merchant) (string, error)
 	UpdateMerchant(context.Context, domain.Merchant) error
 	DeleteMerchant(context.Context, string) error
+	PublishComponentVersion(context.Context, string, domain.RewardComponentVersionInput) (string, error)
+	PublishConditionVersion(context.Context, string, domain.RewardConditionVersionInput) (string, error)
+	PublishCapVersion(context.Context, string, domain.RewardCapVersionInput) (string, error)
 }
 
 type AuthService interface {

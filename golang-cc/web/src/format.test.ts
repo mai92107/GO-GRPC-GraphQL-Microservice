@@ -20,8 +20,8 @@ describe("reward formatting", () => {
 
   it("describes restricted payment benefits using their payment methods", () => {
     expect(formatBenefitTitle("原始名稱", "0.045", ["line_pay", "jkopay"], [
-      { code: "line_pay", name: "LINE Pay" },
-      { code: "jkopay", name: "街口支付" },
+      { id: "line_pay", name: "LINE Pay" },
+      { id: "jkopay", name: "街口支付" },
     ])).toBe("指定行動支付 (LINE Pay, 街口支付) (4.5%)");
   });
 });

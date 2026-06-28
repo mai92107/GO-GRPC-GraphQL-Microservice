@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	ADMIN = "admin"
+	ADMIN  = "admin"
 	MEMBER = "member"
 )
 

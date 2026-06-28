@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/rafa/golang-cc/internal/domain"
 	memberrepo "github.com/rafa/golang-cc/internal/repositories/member"
@@ -27,6 +28,7 @@ type CardInput struct {
 	StatementDay  *int
 	PaymentDueDay *int
 	AccountTier   string
+	CardNetworkID string
 }
 
 type PreferenceInput struct {
@@ -36,21 +38,21 @@ type PreferenceInput struct {
 
 type RecommendationInput struct {
 	AmountMinor  int64
-	CategoryCode string
-	MerchantCode string
+	CategoryID   string
+	MerchantID   string
 	MerchantName string
 	Date         recommendations.LocalDate
 }
 
 type TransactionInput struct {
-	CardID            string
-	AmountMinor       int64
-	CategoryCode      string
-	MerchantName      string
-	MerchantCode      string
-	PaymentMethodCode string
-	TransactionDate   recommendations.LocalDate
-	Note              string
+	CardID          string
+	AmountMinor     int64
+	CategoryID      string
+	MerchantName    string
+	MerchantID      string
+	PaymentMethodID string
+	TransactionDate recommendations.LocalDate
+	Note            string
 }
 
 type Transaction struct {
@@ -58,10 +60,10 @@ type Transaction struct {
 	UserID            string
 	CardID            string
 	AmountMinor       int64
-	CategoryCode      string
+	CategoryID        string
 	MerchantName      string
-	MerchantCode      string
-	PaymentMethodCode string
+	MerchantID        string
+	PaymentMethodID   string
 	PaymentMethodName string
 	TransactionDate   recommendations.LocalDate
 	Note              string
@@ -72,6 +74,10 @@ var ErrTransactionNotFound = memberrepo.ErrNotFound
 
 func (s *Service) Catalog(ctx context.Context) ([]domain.CatalogCard, error) {
 	return s.repository.Catalog(ctx)
+}
+
+func (s *Service) CatalogCard(ctx context.Context, id string) (domain.CatalogCard, error) {
+	return s.repository.CatalogCard(ctx, id)
 }
 
 func (s *Service) ListCards(ctx context.Context, userID string) ([]domain.MemberCard, error) {
@@ -90,7 +96,8 @@ func (s *Service) CreateCard(ctx context.Context, userID string, input CardInput
 	err := s.repository.CreateCard(ctx, id, userID, input.CardProductID, memberrepo.CardWrite{
 		Nickname: input.Nickname, LastFour: input.LastFour, IsActive: input.IsActive,
 		StatementDay: input.StatementDay, PaymentDueDay: input.PaymentDueDay,
-		AccountTier: input.AccountTier,
+		AccountTier:   input.AccountTier,
+		CardNetworkID: input.CardNetworkID,
 	})
 	return id, err
 }
@@ -99,7 +106,8 @@ func (s *Service) UpdateCard(ctx context.Context, userID, id string, input CardI
 	return s.repository.UpdateCard(ctx, id, userID, memberrepo.CardWrite{
 		Nickname: input.Nickname, LastFour: input.LastFour, IsActive: input.IsActive,
 		StatementDay: input.StatementDay, PaymentDueDay: input.PaymentDueDay,
-		AccountTier: input.AccountTier,
+		AccountTier:   input.AccountTier,
+		CardNetworkID: input.CardNetworkID,
 	})
 }
 
@@ -116,7 +124,32 @@ func (s *Service) Categories(ctx context.Context) ([]domain.MemberCategory, erro
 }
 
 func (s *Service) PaymentMethods(ctx context.Context) ([]domain.MemberPaymentMethod, error) {
-	return s.repository.PaymentMethods(ctx)
+	return s.repository.PaymentMethods(ctx, "")
+}
+
+func (s *Service) UserPaymentMethods(ctx context.Context, userID string) ([]domain.MemberPaymentMethod, error) {
+	return s.repository.PaymentMethods(ctx, userID)
+}
+
+func (s *Service) UpdatePaymentMethods(ctx context.Context, userID string, codes []string) error {
+	if userID == "" {
+		return domain.ErrInvalidInput
+	}
+	return s.repository.UpdatePaymentMethods(ctx, userID, codes)
+}
+
+func (s *Service) RewardOverview(ctx context.Context, userID, memberCardID string, at time.Time) (domain.MemberCardRewardOverview, error) {
+	if userID == "" || memberCardID == "" || at.IsZero() {
+		return domain.MemberCardRewardOverview{}, domain.ErrInvalidInput
+	}
+	return s.repository.RewardOverview(ctx, userID, memberCardID, at)
+}
+
+func (s *Service) SetQualificationStatus(ctx context.Context, userID, memberCardID, planID string, qualified bool, effectiveFrom time.Time) error {
+	if userID == "" || memberCardID == "" || planID == "" || effectiveFrom.IsZero() {
+		return domain.ErrInvalidInput
+	}
+	return s.repository.SetQualificationStatus(ctx, userID, memberCardID, planID, qualified, effectiveFrom)
 }
 
 func (s *Service) Merchants(ctx context.Context, category string) ([]domain.MemberMerchant, error) {
@@ -140,11 +173,18 @@ func (s *Service) UpdatePreferences(ctx context.Context, userID string, input []
 }
 
 func (s *Service) Recommend(ctx context.Context, userID string, input RecommendationInput) (recommendations.Result, error) {
-	return s.transactions.Recommend(ctx, recommendations.ID(userID), input.AmountMinor, input.CategoryCode, input.MerchantCode, input.MerchantName, input.Date)
+	return s.transactions.Recommend(ctx, recommendations.ID(userID), input.AmountMinor, input.CategoryID, input.MerchantID, input.MerchantName, input.Date)
 }
 
 func (s *Service) ListTransactions(ctx context.Context, userID, id string) ([]domain.TransactionSummary, error) {
 	return s.transactions.List(ctx, userID, id)
+}
+
+func (s *Service) RewardCalculations(ctx context.Context, userID, transactionID string) ([]domain.RewardCalculationSnapshot, error) {
+	if userID == "" || transactionID == "" {
+		return nil, domain.ErrInvalidInput
+	}
+	return s.repository.RewardCalculations(ctx, userID, transactionID)
 }
 
 func (s *Service) CreateTransaction(ctx context.Context, userID string, input TransactionInput) (Transaction, error) {
@@ -177,7 +217,7 @@ func IsTransactionNotFound(err error) bool {
 func repositoryTransactionInput(input TransactionInput) memberrepo.WriteInput {
 	return memberrepo.WriteInput{
 		CardID: recommendations.ID(input.CardID), AmountMinor: input.AmountMinor,
-		CategoryCode: input.CategoryCode, MerchantCode: input.MerchantCode, MerchantName: input.MerchantName, PaymentMethodCode: input.PaymentMethodCode,
+		CategoryID: input.CategoryID, MerchantID: input.MerchantID, MerchantName: input.MerchantName, PaymentMethodID: input.PaymentMethodID,
 		TransactionDate: input.TransactionDate, Note: input.Note,
 	}
 }
@@ -185,15 +225,15 @@ func repositoryTransactionInput(input TransactionInput) memberrepo.WriteInput {
 func serviceTransaction(input memberrepo.Transaction) Transaction {
 	return Transaction{
 		ID: string(input.ID), UserID: string(input.UserID), CardID: string(input.CardID),
-		AmountMinor: input.AmountMinor, CategoryCode: input.CategoryCode, MerchantCode: input.MerchantCode, MerchantName: input.MerchantName, PaymentMethodCode: input.PaymentMethodCode, PaymentMethodName: input.PaymentMethodName,
+		AmountMinor: input.AmountMinor, CategoryID: input.CategoryID, MerchantID: input.MerchantID, MerchantName: input.MerchantName, PaymentMethodID: input.PaymentMethodID, PaymentMethodName: input.PaymentMethodName,
 		TransactionDate: input.TransactionDate, Note: input.Note, Allocations: input.Allocations,
 	}
 }
 
 func validateTransaction(userID string, input TransactionInput) error {
 	if userID == "" || input.CardID == "" || input.AmountMinor <= 0 ||
-		input.TransactionDate.Time.IsZero() || strings.TrimSpace(input.CategoryCode) == "" ||
-		strings.TrimSpace(input.PaymentMethodCode) == "" {
+		input.TransactionDate.Time.IsZero() || strings.TrimSpace(input.CategoryID) == "" ||
+		strings.TrimSpace(input.PaymentMethodID) == "" {
 		return domain.ErrInvalidInput
 	}
 	return nil

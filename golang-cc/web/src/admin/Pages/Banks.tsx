@@ -1,6 +1,6 @@
-import { Trash2 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Empty } from "../../components";
+import { Building2, Plus, Trash2 } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Dialog, Empty, SearchField, StatusBadge } from "../../components";
 import Head from "../../tool/Head";
 import {
   activateBank,
@@ -17,6 +17,8 @@ export default function Banks() {
   const [creating, setCreating] = useState(false);
   const [processingID, setProcessingID] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -39,6 +41,7 @@ export default function Banks() {
     try {
       await createBank(name.trim());
       setName("");
+      setShowCreate(false);
       await load();
     } catch (requestError) {
       setError((requestError as Error).message);
@@ -54,7 +57,7 @@ export default function Banks() {
       await activateBank(
         bank.id,
         bank.name,
-        bank.code,
+        bank.id,
         bank.website_url,
         bank.is_active,
       );
@@ -80,43 +83,55 @@ export default function Banks() {
     }
   }
 
+  const filtered = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    return keyword
+      ? items.filter((bank) =>
+          `${bank.name} ${bank.id}`.toLowerCase().includes(keyword),
+        )
+      : items;
+  }, [items, query]);
+
   return (
     <>
-      <Head title="銀行管理" text="建立與維護卡片所屬銀行。" />
+      <Head
+        title="銀行管理"
+        text="建立與維護卡片所屬銀行。"
+        actions={
+          <button className="button" onClick={() => setShowCreate(true)}>
+            <Plus size={17} /> 新增銀行
+          </button>
+        }
+      />
       <section className="panel">
         {error && <div className="error">{error}</div>}
-        <form className="toolbar" onSubmit={create}>
-          <input
-            className="inputBlock"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="銀行名稱"
-            disabled={creating}
-            required
+        <div className="collection-toolbar">
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            placeholder="搜尋銀行名稱或代碼"
           />
-          <button className="button" disabled={creating}>
-            {creating ? "新增中…" : "新增銀行"}
-          </button>
-        </form>
+          <span className="collection-count">{filtered.length} 家銀行</span>
+        </div>
 
         {loading ? (
           <p className="muted">載入銀行資料中…</p>
         ) : items.length === 0 ? (
           <Empty title="尚未建立銀行" text="先建立銀行後才能新增卡片。" />
+        ) : filtered.length === 0 ? (
+          <Empty title="找不到銀行" text="請嘗試其他搜尋關鍵字。" />
         ) : (
-          <div className="list" style={{ marginTop: "1em" }}>
-            {items.map((bank) => {
+          <div className="entity-grid">
+            {filtered.map((bank) => {
               const processing = processingID === bank.id;
               return (
-                <div className="list-row" key={bank.id}>
-                  <div>
+                <article className="entity-card" key={bank.id}>
+                  <div className="entity-icon"><Building2 size={21} /></div>
+                  <div className="entity-copy">
                     <h3>{bank.name}</h3>
-                    <p>
-                      {bank.code || "無代碼"} ·{" "}
-                      {bank.is_active ? "啟用" : "停用"}
-                    </p>
+                    <StatusBadge active={bank.is_active} />
                   </div>
-                  <div className="toolbar">
+                  <div className="entity-actions">
                     <button
                       type="button"
                       className="button ghost"
@@ -135,12 +150,38 @@ export default function Banks() {
                       <Trash2 size={16} />
                     </button>
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
         )}
       </section>
+      {showCreate && (
+        <Dialog title="新增銀行" onClose={() => !creating && setShowCreate(false)}>
+          <form className="stack" onSubmit={create}>
+            <label className="field">
+              <span>銀行名稱</span>
+              <input
+                autoFocus
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="例如：玉山銀行"
+                disabled={creating}
+                required
+              />
+              <small>建立後可在卡片目錄中選擇這家銀行。</small>
+            </label>
+            <div className="dialog-actions">
+              <button type="button" className="button ghost" onClick={() => setShowCreate(false)}>
+                取消
+              </button>
+              <button className="button" disabled={creating || !name.trim()}>
+                {creating ? "新增中…" : "新增銀行"}
+              </button>
+            </div>
+          </form>
+        </Dialog>
+      )}
     </>
   );
 }

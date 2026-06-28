@@ -7,7 +7,7 @@ import (
 )
 
 func (r *Repository) ListBanks(ctx context.Context) ([]domain.Bank, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id,name,COALESCE(code,''),COALESCE(website_url,''),is_active FROM banks ORDER BY name`)
+	rows, err := r.pool.Query(ctx, `SELECT id,name,is_active FROM banks ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -15,7 +15,7 @@ func (r *Repository) ListBanks(ctx context.Context) ([]domain.Bank, error) {
 	result := []domain.Bank{}
 	for rows.Next() {
 		var item domain.Bank
-		if err := rows.Scan(&item.ID, &item.Name, &item.Code, &item.WebsiteURL, &item.IsActive); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.IsActive); err != nil {
 			return nil, err
 		}
 		result = append(result, item)
@@ -24,12 +24,12 @@ func (r *Repository) ListBanks(ctx context.Context) ([]domain.Bank, error) {
 }
 
 func (r *Repository) CreateBank(ctx context.Context, id string, input domain.BankInput) error {
-	_, err := r.pool.Exec(ctx, `INSERT INTO banks(id,name,code,website_url,is_active) VALUES($1,$2,NULLIF($3,''),NULLIF($4,''),$5)`, id, input.Name, input.Code, input.WebsiteURL, input.IsActive)
+	_, err := r.pool.Exec(ctx, `INSERT INTO banks(id,name,website_url,is_active) VALUES($1,$2,NULLIF($3,''),$4)`, id, input.Name, input.WebsiteURL, input.IsActive)
 	return err
 }
 
 func (r *Repository) UpdateBank(ctx context.Context, id string, input domain.BankInput) error {
-	tag, err := r.pool.Exec(ctx, `UPDATE banks SET name=$2,code=NULLIF($3,''),website_url=NULLIF($4,''),is_active=$5,updated_at=now() WHERE id=$1`, id, input.Name, input.Code, input.WebsiteURL, input.IsActive)
+	tag, err := r.pool.Exec(ctx, `UPDATE banks SET name=$2,website_url=NULLIF($3,''),is_active=$4,updated_at=now() WHERE id=$1`, id, input.Name, input.WebsiteURL, input.IsActive)
 	if err != nil {
 		return err
 	}

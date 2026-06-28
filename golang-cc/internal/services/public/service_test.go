@@ -31,7 +31,7 @@ func (f *fakeRepository) DeleteSession(context.Context, []byte) error { return n
 func (f *fakeRepository) InvitationEmail(context.Context, []byte, time.Time) (string, error) {
 	return "", nil
 }
-func (f *fakeRepository) AcceptInvitation(context.Context, []byte, time.Time, domain.User, string, []string) error {
+func (f *fakeRepository) AcceptInvitation(context.Context, []byte, time.Time, domain.User, string) error {
 	return nil
 }
 func (f *fakeRepository) ActiveUserByEmail(context.Context, string) (string, string, error) {

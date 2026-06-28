@@ -7,16 +7,16 @@ import (
 )
 
 type merchantRequest struct {
-	Code          string   `json:"code"`
-	Name          string   `json:"name" binding:"required"`
-	Aliases       []string `json:"aliases"`
-	CategoryCodes []string `json:"category_codes" binding:"required,min=1"`
-	IsActive      *bool    `json:"is_active"`
+	Name        string   `json:"name" binding:"required"`
+	Aliases     []string `json:"aliases"`
+	CategoryIDs []string `json:"category_ids" binding:"required,min=1"`
+	IsActive    *bool    `json:"is_active"`
 }
 
 func (c *Controller) ListMerchants(ctx *gin.Context) {
 	items, err := c.service.ListMerchants(ctx)
 	if err != nil {
+		println("Error listing merchants:", err.Error())
 		failure(ctx, 500, "internal_error", "查詢失敗")
 		return
 	}
@@ -25,11 +25,17 @@ func (c *Controller) ListMerchants(ctx *gin.Context) {
 
 func (c *Controller) CreateMerchant(ctx *gin.Context) {
 	var input merchantRequest
-	if ctx.ShouldBindJSON(&input) != nil || c.service.CreateMerchant(ctx, input.Code, input.Name, input.Aliases, input.CategoryCodes) != nil {
+	if ctx.ShouldBindJSON(&input) != nil {
 		failure(ctx, 400, "validation_failed", "店家資料無效")
 		return
 	}
-	data(ctx, 201, gin.H{"code": input.Code})
+	id, err := c.service.CreateMerchant(ctx, input.Name, input.Aliases, input.CategoryIDs)
+	if err != nil {
+		println("Error creating merchant:", err.Error())
+		failure(ctx, 400, "validation_failed", "店家資料無效")
+		return
+	}
+	data(ctx, 201, gin.H{"id": id})
 }
 
 func (c *Controller) UpdateMerchant(ctx *gin.Context) {
@@ -38,7 +44,7 @@ func (c *Controller) UpdateMerchant(ctx *gin.Context) {
 		failure(ctx, 400, "validation_failed", "店家資料無效")
 		return
 	}
-	if err := c.service.UpdateMerchant(ctx, ctx.Param("code"), input.Name, input.Aliases, input.CategoryCodes, *input.IsActive); err != nil {
+	if err := c.service.UpdateMerchant(ctx, ctx.Param("id"), input.Name, input.Aliases, input.CategoryIDs, *input.IsActive); err != nil {
 		failure(ctx, 400, "validation_failed", "店家資料無效")
 		return
 	}
@@ -46,7 +52,7 @@ func (c *Controller) UpdateMerchant(ctx *gin.Context) {
 }
 
 func (c *Controller) DeleteMerchant(ctx *gin.Context) {
-	if err := c.service.DeleteMerchant(ctx, ctx.Param("code")); err != nil {
+	if err := c.service.DeleteMerchant(ctx, ctx.Param("id")); err != nil {
 		failure(ctx, http.StatusConflict, "merchant_in_use", "店家使用中，請停用")
 		return
 	}

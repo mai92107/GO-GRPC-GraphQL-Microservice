@@ -26,7 +26,7 @@ export default function MemberApp({
   const Page = pages[tab] || Recommend;
 
   return (
-    <div className="shell">
+    <div className="shell member-shell">
       <HeaderBar user={user} onLogout={onLogout} />
       <main className="content">
         <Page />

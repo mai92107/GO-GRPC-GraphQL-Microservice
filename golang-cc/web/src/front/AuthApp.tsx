@@ -22,6 +22,7 @@ export default function Auth({ onLogin }: { onLogin: (user: User, csrf: string) 
     [name, setName] = useState(""),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");

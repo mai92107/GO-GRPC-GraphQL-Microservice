@@ -48,8 +48,8 @@ func (f *fakeMembers) Recommend(_ context.Context, userID string, input memberse
 func TestInteractiveRecommendationFlow(t *testing.T) {
 	now := time.Date(2026, 6, 15, 10, 0, 0, 0, time.FixedZone("test", 8*60*60))
 	members := &fakeMembers{
-		categories: []domain.MemberCategory{{Code: "dining", Name: "餐飲"}, {Code: "grocery", Name: "量販超市"}, {Code: "travel", Name: "旅遊"}},
-		merchants:  []domain.MemberMerchant{{Code: "px_mart", Name: "全聯"}},
+		categories: []domain.MemberCategory{{ID: "dining", Name: "餐飲"}, {ID: "grocery", Name: "量販超市"}, {ID: "travel", Name: "旅遊"}},
+		merchants:  []domain.MemberMerchant{{ID: "px_mart", Name: "全聯"}},
 		result: recommendations.Result{Recommendations: []recommendations.CardRecommendation{{
 			CardName:   "最佳卡",
 			TotalScore: recommendations.MustDecimal("100"),
@@ -58,7 +58,7 @@ func TestInteractiveRecommendationFlow(t *testing.T) {
 				AllocatedReward: recommendations.MustDecimal("100"),
 			}},
 			PaymentOptions: []recommendations.PaymentOption{{
-				PaymentMethodCode: "line_pay", PaymentMethodName: "LINE Pay",
+				PaymentMethodID: "line_pay", PaymentMethodName: "LINE Pay",
 				Allocations: []recommendations.RuleEvaluation{{ActivityName: "本期活動", RuleName: "量販回饋", RewardUnit: recommendations.RewardUnit{Symbol: "NT$", Precision: 2}, AllocatedReward: recommendations.MustDecimal("100")}},
 				Reminders:   []string{"需先登錄"},
 			}},
@@ -86,14 +86,14 @@ func TestInteractiveRecommendationFlow(t *testing.T) {
 	if !strings.Contains(response.Text, "推薦第一名：最佳卡") || !strings.Contains(response.Text, "需先登錄") {
 		t.Fatalf("recommendation response: %q", response.Text)
 	}
-	if members.userID != "member-1" || members.input.AmountMinor != 100050 || members.input.CategoryCode != "grocery" || members.input.MerchantCode != "px_mart" {
+	if members.userID != "member-1" || members.input.AmountMinor != 100050 || members.input.CategoryID != "grocery" || members.input.MerchantID != "px_mart" {
 		t.Fatalf("unexpected recommendation input: user=%s input=%+v", members.userID, members.input)
 	}
 }
 
 func TestUnboundCancelAndExpiredConversation(t *testing.T) {
 	now := time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC)
-	members := &fakeMembers{categories: []domain.MemberCategory{{Code: "dining", Name: "餐飲"}}}
+	members := &fakeMembers{categories: []domain.MemberCategory{{ID: "dining", Name: "餐飲"}}}
 	controller := NewWithClock(fakeBindings{users: map[int64]string{1: "member"}}, members, func() time.Time { return now })
 
 	if response := controller.HandleMessage(context.Background(), 2, "/recommand"); !strings.Contains(response.Text, "chat_id：2") {
@@ -114,7 +114,7 @@ func TestUnboundCancelAndExpiredConversation(t *testing.T) {
 }
 
 func TestCategoryAndRecommendationFailures(t *testing.T) {
-	members := &fakeMembers{categories: []domain.MemberCategory{{Code: "dining", Name: "餐飲"}}}
+	members := &fakeMembers{categories: []domain.MemberCategory{{ID: "dining", Name: "餐飲"}}}
 	controller := New(fakeBindings{users: map[int64]string{1: "member"}}, members)
 	controller.HandleMessage(context.Background(), 1, "/recommand")
 	if response := controller.HandleCallback(context.Background(), 1, "category:disabled"); !strings.Contains(response.Text, "已停用") {

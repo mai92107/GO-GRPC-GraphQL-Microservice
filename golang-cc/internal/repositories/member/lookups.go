@@ -6,7 +6,9 @@ import (
 )
 
 func (r *Repository) Catalog(ctx context.Context) ([]domain.CatalogCard, error) {
-	rows, err := r.pool.Query(ctx, `SELECT cp.id,cp.bank_id,b.name,cp.name,cp.is_active,cp.account_tiers FROM card_products cp JOIN banks b ON b.id=cp.bank_id WHERE cp.is_active AND b.is_active ORDER BY b.name,cp.name`)
+	rows, err := r.pool.Query(ctx, `SELECT cp.id,cp.bank_id,b.name,cp.name,COALESCE(cp.card_image_url,''),COALESCE(cp.primary_color,''),cp.is_active,cp.account_tiers,
+		COALESCE(cp.qualified_type,''),COALESCE(cp.selectable_type,'')
+		FROM card_products cp JOIN banks b ON b.id=cp.bank_id WHERE cp.is_active AND b.is_active ORDER BY b.name,cp.name`)
 	if err != nil {
 		return nil, err
 	}
@@ -14,23 +16,75 @@ func (r *Repository) Catalog(ctx context.Context) ([]domain.CatalogCard, error) 
 	out := []domain.CatalogCard{}
 	for rows.Next() {
 		var x domain.CatalogCard
-		if err := rows.Scan(&x.ID, &x.BankID, &x.BankName, &x.Name, &x.IsActive, &x.AccountTiers); err != nil {
+		if err := rows.Scan(&x.ID, &x.BankID, &x.BankName, &x.Name, &x.CardImageURL, &x.PrimaryColor, &x.IsActive, &x.AccountTiers, &x.QualifiedType, &x.SelectableType); err != nil {
 			return nil, err
 		}
 		x.Activities = []domain.CardProductActivity{}
 		out = append(out, x)
 	}
 	for i := range out {
-		acts, err := r.catalogActivities(ctx, out[i].ID)
+		networkRows, err := r.pool.Query(ctx, `SELECT n.id,n.id,n.name FROM catalog.card_product_networks pn
+			JOIN catalog.card_networks n ON n.id=pn.card_network_id
+			WHERE pn.card_product_id=$1 AND n.is_active ORDER BY n.name`, out[i].ID)
 		if err != nil {
 			return nil, err
 		}
-		out[i].Activities = acts
+		for networkRows.Next() {
+			var network domain.CardNetwork
+			if err := networkRows.Scan(&network.ID, &network.Code, &network.Name); err != nil {
+				networkRows.Close()
+				return nil, err
+			}
+			out[i].Networks = append(out[i].Networks, network)
+		}
+		networkRows.Close()
 	}
 	return out, rows.Err()
 }
+
+func (r *Repository) CatalogCard(ctx context.Context, id string) (domain.CatalogCard, error) {
+	var x domain.CatalogCard
+	err := r.pool.QueryRow(ctx, `SELECT cp.id,cp.bank_id,b.name,cp.name,COALESCE(cp.card_image_url,''),COALESCE(cp.primary_color,''),cp.is_active,cp.account_tiers,
+		COALESCE(cp.qualified_type,''),COALESCE(cp.selectable_type,'')
+		FROM card_products cp JOIN banks b ON b.id=cp.bank_id WHERE cp.id=$1 AND cp.is_active AND b.is_active`, id).
+		Scan(&x.ID, &x.BankID, &x.BankName, &x.Name, &x.CardImageURL, &x.PrimaryColor, &x.IsActive, &x.AccountTiers, &x.QualifiedType, &x.SelectableType)
+	if err != nil {
+		return x, err
+	}
+	networkRows, err := r.pool.Query(ctx, `SELECT n.id,n.id,n.name FROM catalog.card_product_networks pn
+		JOIN catalog.card_networks n ON n.id=pn.card_network_id
+		WHERE pn.card_product_id=$1 AND n.is_active ORDER BY n.name`, x.ID)
+	if err != nil {
+		return x, err
+	}
+	for networkRows.Next() {
+		var network domain.CardNetwork
+		if err := networkRows.Scan(&network.ID, &network.Code, &network.Name); err != nil {
+			networkRows.Close()
+			return x, err
+		}
+		x.Networks = append(x.Networks, network)
+	}
+	networkRows.Close()
+	acts, err := r.catalogActivities(ctx, x.ID)
+	if err != nil {
+		return x, err
+	}
+	x.Activities = acts
+	return x, nil
+}
+
 func (r *Repository) catalogActivities(ctx context.Context, productID string) ([]domain.CardProductActivity, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id,name,start_date::text,end_date::text,is_active,COALESCE(source_url,''),verified_at::text FROM card_activities WHERE card_product_id=$1 ORDER BY start_date DESC`, productID)
+	rows, err := r.pool.Query(ctx, `SELECT p.id,p.name,
+		COALESCE((min(v.effective_from) AT TIME ZONE 'Asia/Taipei')::date::text,'2000-01-01'),
+		COALESCE(((max(v.effective_to)-interval '1 microsecond') AT TIME ZONE 'Asia/Taipei')::date::text,'2099-12-31'),
+		p.status='published',COALESCE(p.source_url,''),p.verified_at::date::text
+		FROM reward.programs p
+		LEFT JOIN reward.components c ON c.reward_program_id=p.id
+		LEFT JOIN reward.component_versions v ON v.reward_component_id=c.id
+		WHERE p.card_product_id=$1 AND p.status<>'archived'
+		GROUP BY p.id
+		ORDER BY COALESCE((min(v.effective_from) AT TIME ZONE 'Asia/Taipei')::date,DATE '2000-01-01') DESC`, productID)
 	if err != nil {
 		return nil, err
 	}
@@ -51,11 +105,47 @@ func (r *Repository) catalogActivities(ctx context.Context, productID string) ([
 	return out, rows.Err()
 }
 func (r *Repository) catalogBenefits(ctx context.Context, activityID string) ([]domain.ActivityBenefit, error) {
-	rows, err := r.pool.Query(ctx, `SELECT b.id,b.reward_unit_id,b.name,b.rate::text,b.monthly_cap::text,b.stack_group,b.priority,b.required_account_tiers,b.action_required,b.action_message,
-		ARRAY(SELECT p.payment_method_code FROM card_activity_benefit_payment_methods p WHERE p.benefit_id=b.id ORDER BY p.payment_method_code),
-		ARRAY(SELECT c.category_code FROM card_activity_benefit_categories c WHERE c.benefit_id=b.id ORDER BY c.category_code),
-		ARRAY(SELECT m.merchant_code FROM card_activity_benefit_merchants m WHERE m.benefit_id=b.id ORDER BY m.merchant_code)
-		FROM card_activity_benefits b WHERE b.card_activity_id=$1 AND b.is_active ORDER BY b.priority,b.name`, activityID)
+	rows, err := r.pool.Query(ctx, `SELECT c.id,cv.reward_unit_id,cv.name,c.layer,c.display_order,cv.effect_type,cv.reward_value::text,
+		cap.limit_value::text,c.stack_group,c.priority,
+		COALESCE(req.qualified_names,'{}'),COALESCE(req.action_required,'none'),COALESCE(req.action_message,''),
+		COALESCE(req.payment_methods,'{}'),COALESCE(req.categories,'{}'),COALESCE(req.merchants,'{}')
+		FROM reward.components c
+		JOIN LATERAL (
+			SELECT * FROM reward.component_versions v WHERE v.reward_component_id=c.id
+			ORDER BY v.effective_from DESC LIMIT 1
+		) cv ON true
+		LEFT JOIN LATERAL (
+			SELECT v.limit_value FROM reward.component_caps cc
+			JOIN reward.cap_versions v ON v.reward_cap_id=cc.reward_cap_id
+			WHERE cc.reward_component_id=c.id ORDER BY v.effective_from DESC LIMIT 1
+		) cap ON true
+		LEFT JOIN LATERAL (
+			SELECT array_remove(array_agg(DISTINCT qpv.name) FILTER (WHERE cp.plan_type='qualified'),NULL) AS qualified_names,
+				CASE WHEN count(*) FILTER (WHERE cp.plan_type='selectable')>0 THEN 'app_switch'
+				     WHEN count(rem.value)>0 THEN 'account_setup'
+				     ELSE 'none' END AS action_required,
+				COALESCE(max(spv.reminder_text) FILTER (WHERE cp.plan_type='selectable' AND spv.reminder_text<>''), max(rem.value),'') AS action_message,
+				array_remove(array_agg(DISTINCT pm.value),NULL) AS payment_methods,
+				array_remove(array_agg(DISTINCT cat.value),NULL) AS categories,
+				array_remove(array_agg(DISTINCT mer.value),NULL) AS merchants
+			FROM reward.requirements rr
+			JOIN reward.conditions rc ON rc.id=rr.reward_condition_id AND rc.is_active
+			JOIN reward.condition_versions x ON x.reward_condition_id=rr.reward_condition_id
+			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'card_plan_ids') plan_id ON true
+			LEFT JOIN catalog.card_plans cp ON cp.id=plan_id.value::uuid
+			LEFT JOIN LATERAL (
+				SELECT name FROM catalog.card_plan_versions pv WHERE pv.card_plan_id=cp.id ORDER BY pv.effective_from DESC LIMIT 1
+			) qpv ON cp.plan_type='qualified'
+			LEFT JOIN LATERAL (
+				SELECT reminder_text FROM catalog.card_plan_versions pv WHERE pv.card_plan_id=cp.id ORDER BY pv.effective_from DESC LIMIT 1
+			) spv ON cp.plan_type='selectable'
+			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'payment_method_ids') pm(value) ON rc.condition_type='payment_method'
+			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'category_ids') cat(value) ON rc.condition_type='category'
+			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'merchant_ids') mer(value) ON rc.condition_type='merchant'
+			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'reminder_messages') rem(value) ON rc.condition_type='channel'
+			WHERE rr.reward_component_id=c.id
+		) req ON true
+		WHERE c.reward_program_id=$1 AND c.is_active ORDER BY c.layer,c.display_order,c.priority,cv.name`, activityID)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +153,7 @@ func (r *Repository) catalogBenefits(ctx context.Context, activityID string) ([]
 	out := []domain.ActivityBenefit{}
 	for rows.Next() {
 		var b domain.ActivityBenefit
-		if err := rows.Scan(&b.ID, &b.RewardUnitID, &b.Name, &b.Rate, &b.MonthlyCap, &b.StackGroup, &b.Priority, &b.RequiredAccountTiers, &b.ActionRequired, &b.ActionMessage, &b.PaymentMethods, &b.CategoryCodes, &b.MerchantCodes); err != nil {
+		if err := rows.Scan(&b.ID, &b.RewardUnitID, &b.Name, &b.Layer, &b.DisplayOrder, &b.EffectType, &b.RewardValue, &b.MonthlyCap, &b.StackGroup, &b.Priority, &b.QualifiedType, &b.ActionRequired, &b.ActionMessage, &b.PaymentMethods, &b.CategoryIDs, &b.MerchantIDs); err != nil {
 			return nil, err
 		}
 		out = append(out, b)
@@ -71,7 +161,7 @@ func (r *Repository) catalogBenefits(ctx context.Context, activityID string) ([]
 	return out, rows.Err()
 }
 func (r *Repository) RewardUnits(ctx context.Context) ([]domain.MemberRewardUnit, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id,code,name,symbol,symbol_position,twd_rate::text,precision FROM reward_units ORDER BY code`)
+	rows, err := r.pool.Query(ctx, `SELECT id,name,symbol,symbol_position,twd_rate::text,precision FROM reward_units ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +169,7 @@ func (r *Repository) RewardUnits(ctx context.Context) ([]domain.MemberRewardUnit
 	out := []domain.MemberRewardUnit{}
 	for rows.Next() {
 		var x domain.MemberRewardUnit
-		if err := rows.Scan(&x.ID, &x.Code, &x.Name, &x.Symbol, &x.SymbolPosition, &x.TWDRate, &x.Precision); err != nil {
+		if err := rows.Scan(&x.ID, &x.Name, &x.Symbol, &x.SymbolPosition, &x.TWDRate, &x.Precision); err != nil {
 			return nil, err
 		}
 		out = append(out, x)
@@ -87,7 +177,7 @@ func (r *Repository) RewardUnits(ctx context.Context) ([]domain.MemberRewardUnit
 	return out, rows.Err()
 }
 func (r *Repository) Categories(ctx context.Context) ([]domain.MemberCategory, error) {
-	rows, err := r.pool.Query(ctx, `SELECT code,name FROM categories WHERE code<>'general' AND is_active ORDER BY name`)
+	rows, err := r.pool.Query(ctx, `SELECT id,name FROM categories WHERE id<>'general' AND is_active ORDER BY name`)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +185,7 @@ func (r *Repository) Categories(ctx context.Context) ([]domain.MemberCategory, e
 	out := []domain.MemberCategory{}
 	for rows.Next() {
 		var x domain.MemberCategory
-		if err := rows.Scan(&x.Code, &x.Name); err != nil {
+		if err := rows.Scan(&x.ID, &x.Name); err != nil {
 			return nil, err
 		}
 		out = append(out, x)
@@ -103,8 +193,12 @@ func (r *Repository) Categories(ctx context.Context) ([]domain.MemberCategory, e
 	return out, rows.Err()
 }
 
-func (r *Repository) PaymentMethods(ctx context.Context) ([]domain.MemberPaymentMethod, error) {
-	rows, err := r.pool.Query(ctx, `SELECT code,name FROM payment_methods WHERE is_active ORDER BY name`)
+func (r *Repository) PaymentMethods(ctx context.Context, userID string) ([]domain.MemberPaymentMethod, error) {
+	rows, err := r.pool.Query(ctx, `SELECT p.id,p.name,p.type,
+		CASE WHEN p.type IN ('physical_card','online_card') THEN true ELSE COALESCE(up.is_available,false) END
+		FROM payment_methods p LEFT JOIN member_profile.user_payment_methods up
+		ON up.payment_method_id=p.id AND up.user_id=$1
+		WHERE p.is_active ORDER BY p.display_order,p.name`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +206,7 @@ func (r *Repository) PaymentMethods(ctx context.Context) ([]domain.MemberPayment
 	out := []domain.MemberPaymentMethod{}
 	for rows.Next() {
 		var item domain.MemberPaymentMethod
-		if err := rows.Scan(&item.Code, &item.Name); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.Type, &item.IsAvailable); err != nil {
 			return nil, err
 		}
 		out = append(out, item)
@@ -121,9 +215,9 @@ func (r *Repository) PaymentMethods(ctx context.Context) ([]domain.MemberPayment
 }
 
 func (r *Repository) Merchants(ctx context.Context, category string) ([]domain.MemberMerchant, error) {
-	rows, err := r.pool.Query(ctx, `SELECT DISTINCT m.code,m.name
-		FROM merchants m JOIN merchant_categories mc ON mc.merchant_code=m.code
-		WHERE m.is_active AND mc.category_code=$1 ORDER BY m.name`, category)
+	rows, err := r.pool.Query(ctx, `SELECT DISTINCT m.id,m.name
+		FROM merchants m JOIN merchant_categories mc ON mc.merchant_id=m.id
+		WHERE m.is_active AND mc.category_id=$1 ORDER BY m.name`, category)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +225,7 @@ func (r *Repository) Merchants(ctx context.Context, category string) ([]domain.M
 	out := []domain.MemberMerchant{}
 	for rows.Next() {
 		var item domain.MemberMerchant
-		if err := rows.Scan(&item.Code, &item.Name); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name); err != nil {
 			return nil, err
 		}
 		out = append(out, item)

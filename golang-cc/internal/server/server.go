@@ -26,8 +26,8 @@ func New(pool *pgxpool.Pool, sender email.Sender, publicBaseURL string, secureCo
 	engine := gin.New()
 	metrics := servermw.NewMetrics(actuatorrepo.NewPoolStatsRepository(pool))
 	engine.Use(
-		gin.Recovery(), 
-		servermw.RequestID(), 
+		gin.Recovery(),
+		servermw.RequestID(),
 		metrics.Handler(),
 	)
 

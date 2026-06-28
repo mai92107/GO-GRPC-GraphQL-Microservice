@@ -40,11 +40,9 @@ type invitationResponse struct {
 }
 
 type bankResponse struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Code       string `json:"code"`
-	WebsiteURL string `json:"website_url"`
-	IsActive   bool   `json:"is_active"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	IsActive bool   `json:"is_active"`
 }
 
 type cardProductActivityResponse struct {
@@ -55,17 +53,21 @@ type cardProductActivityResponse struct {
 	IsActive   bool                      `json:"is_active"`
 	SourceURL  string                    `json:"source_url"`
 	VerifiedAt *string                   `json:"verified_at"`
+	NetworkIDs []string                  `json:"network_ids"`
 	Benefits   []activityBenefitResponse `json:"benefits"`
 }
 
 type cardProductResponse struct {
-	ID           string                        `json:"id"`
-	BankID       string                        `json:"bank_id"`
-	BankName     string                        `json:"bank_name"`
-	Name         string                        `json:"name"`
-	IsActive     bool                          `json:"is_active"`
-	AccountTiers []string                      `json:"account_tiers"`
-	Activities   []cardProductActivityResponse `json:"activities"`
+	ID             string                        `json:"id"`
+	BankID         string                        `json:"bank_id"`
+	BankName       string                        `json:"bank_name"`
+	Name           string                        `json:"name"`
+	IsActive       bool                          `json:"is_active"`
+	AccountTiers   []string                      `json:"account_tiers"`
+	QualifiedType  string                        `json:"qualified_type"`
+	SelectableType string                        `json:"selectable_type"`
+	Networks       []domain.CardNetwork          `json:"networks"`
+	Activities     []cardProductActivityResponse `json:"activities"`
 }
 
 type activityResponse struct {
@@ -77,27 +79,32 @@ type activityResponse struct {
 	IsActive          bool                      `json:"is_active"`
 	SourceURL         string                    `json:"source_url"`
 	VerifiedAt        *string                   `json:"verified_at"`
+	NetworkIDs        []string                  `json:"network_ids"`
 	SharedMonthlyCaps map[string]string         `json:"shared_monthly_caps"`
 	Benefits          []activityBenefitResponse `json:"benefits"`
 }
 type activityBenefitResponse struct {
-	ID                   string   `json:"id"`
-	RewardUnitID         string   `json:"reward_unit_id"`
-	Name                 string   `json:"name"`
-	Rate                 string   `json:"rate"`
-	MonthlyCap           *string  `json:"monthly_cap"`
-	StackGroup           string   `json:"stack_group"`
-	Priority             int      `json:"priority"`
-	RequiredAccountTiers []string `json:"required_account_tiers"`
-	ActionRequired       string   `json:"action_required"`
-	ActionMessage        string   `json:"action_message"`
-	PaymentMethods       []string `json:"payment_methods"`
-	CategoryCodes        []string `json:"category_codes"`
-	MerchantCodes        []string `json:"merchant_codes"`
+	ID             string   `json:"id"`
+	RewardUnitID   string   `json:"reward_unit_id"`
+	Name           string   `json:"name"`
+	DisplayOrder   int      `json:"display_order"`
+	EffectType     string   `json:"effect_type"`
+	RewardValue    string   `json:"reward_value"`
+	MonthlyCap     *string  `json:"monthly_cap"`
+	Layer          string   `json:"layer"`
+	StackGroup     string   `json:"stack_group"`
+	Priority       int      `json:"priority"`
+	QualifiedTypes string   `json:"qualified_types"`
+	SelectableType string   `json:"selectable_type"`
+	ActionRequired string   `json:"action_required"`
+	ActionMessage  string   `json:"action_message"`
+	PaymentMethods []string `json:"payment_methods"`
+	CategoryIDs    []string `json:"category_ids"`
+	MerchantIds    []string `json:"merchant_ids"`
 }
 
 type categoryResponse struct {
-	Code     string `json:"code"`
+	ID       string `json:"id"`
 	Name     string `json:"name"`
 	IsActive bool   `json:"is_active"`
 }
@@ -141,13 +148,17 @@ func mapBanks(values []domain.Bank) []bankResponse {
 func mapCardProducts(values []domain.CardProduct) []cardProductResponse {
 	result := make([]cardProductResponse, 0, len(values))
 	for _, value := range values {
-		item := cardProductResponse{ID: value.ID, BankID: value.BankID, BankName: value.BankName, Name: value.Name, IsActive: value.IsActive, AccountTiers: value.AccountTiers, Activities: []cardProductActivityResponse{}}
-		for _, activity := range value.Activities {
-			item.Activities = append(item.Activities, mapCardActivity(activity))
-		}
-		result = append(result, item)
+		result = append(result, mapCardProduct(value))
 	}
 	return result
+}
+
+func mapCardProduct(value domain.CardProduct) cardProductResponse {
+	item := cardProductResponse{ID: value.ID, BankID: value.BankID, BankName: value.BankName, Name: value.Name, IsActive: value.IsActive, AccountTiers: value.AccountTiers, QualifiedType: value.QualifiedType, SelectableType: value.SelectableType, Networks: value.Networks, Activities: []cardProductActivityResponse{}}
+	for _, activity := range value.Activities {
+		item.Activities = append(item.Activities, mapCardActivity(activity))
+	}
+	return item
 }
 
 func mapActivities(values []domain.Activity) []activityResponse {
@@ -161,15 +172,15 @@ func mapActivities(values []domain.Activity) []activityResponse {
 func mapBenefits(values []domain.ActivityBenefit) []activityBenefitResponse {
 	out := make([]activityBenefitResponse, 0, len(values))
 	for _, b := range values {
-		out = append(out, activityBenefitResponse{ID: b.ID, RewardUnitID: b.RewardUnitID, Name: b.Name, Rate: b.Rate, MonthlyCap: b.MonthlyCap, StackGroup: b.StackGroup, Priority: b.Priority, RequiredAccountTiers: b.RequiredAccountTiers, ActionRequired: b.ActionRequired, ActionMessage: b.ActionMessage, PaymentMethods: b.PaymentMethods, CategoryCodes: b.CategoryCodes, MerchantCodes: b.MerchantCodes})
+		out = append(out, activityBenefitResponse{ID: b.ID, RewardUnitID: b.RewardUnitID, Name: b.Name, Layer: b.Layer, DisplayOrder: b.DisplayOrder, EffectType: b.EffectType, RewardValue: b.RewardValue, MonthlyCap: b.MonthlyCap, StackGroup: b.StackGroup, Priority: b.Priority, QualifiedTypes: b.QualifiedType, SelectableType: b.SelectableType, ActionRequired: b.ActionRequired, ActionMessage: b.ActionMessage, PaymentMethods: b.PaymentMethods, CategoryIDs: b.CategoryIDs, MerchantIds: b.MerchantIDs})
 	}
 	return out
 }
 func mapCardActivity(a domain.CardProductActivity) cardProductActivityResponse {
-	return cardProductActivityResponse{ID: a.ID, Name: a.Name, StartDate: a.StartDate, EndDate: a.EndDate, IsActive: a.IsActive, SourceURL: a.SourceURL, VerifiedAt: a.VerifiedAt, Benefits: mapBenefits(a.Benefits)}
+	return cardProductActivityResponse{ID: a.ID, Name: a.Name, StartDate: a.StartDate, EndDate: a.EndDate, IsActive: a.IsActive, SourceURL: a.SourceURL, VerifiedAt: a.VerifiedAt, NetworkIDs: a.NetworkIDs, Benefits: mapBenefits(a.Benefits)}
 }
 func mapActivity(a domain.Activity) activityResponse {
-	return activityResponse{ID: a.ID, CardProductID: a.CardProductID, Name: a.Name, StartDate: a.StartDate, EndDate: a.EndDate, IsActive: a.IsActive, SourceURL: a.SourceURL, VerifiedAt: a.VerifiedAt, SharedMonthlyCaps: a.SharedMonthlyCaps, Benefits: mapBenefits(a.Benefits)}
+	return activityResponse{ID: a.ID, CardProductID: a.CardProductID, Name: a.Name, StartDate: a.StartDate, EndDate: a.EndDate, IsActive: a.IsActive, SourceURL: a.SourceURL, VerifiedAt: a.VerifiedAt, NetworkIDs: a.NetworkIDs, SharedMonthlyCaps: a.SharedMonthlyCaps, Benefits: mapBenefits(a.Benefits)}
 }
 
 func mapCategories(values []domain.Category) []categoryResponse {

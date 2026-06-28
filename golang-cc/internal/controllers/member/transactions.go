@@ -7,15 +7,15 @@ import (
 )
 
 type transactionRequest struct {
-	CardID            string `json:"card_id" binding:"required"`
-	AmountMinor       int64  `json:"amount_minor" binding:"required,gt=0"`
-	CategoryCode      string `json:"category_code" binding:"required"`
-	MerchantCode      string `json:"merchant_code"`
-	MerchantName      string `json:"merchant_name"`
-	PaymentMethodCode string `json:"payment_method_code" binding:"required"`
-	TransactionDate   string `json:"transaction_date" binding:"required"`
-	Note              string `json:"note"`
-	Recommendation    []struct {
+	CardID          string `json:"card_id" binding:"required"`
+	AmountMinor     int64  `json:"amount_minor" binding:"required,gt=0"`
+	CategoryID      string `json:"category_id" binding:"required"`
+	MerchantID      string `json:"merchant_id"`
+	MerchantName    string `json:"merchant_name"`
+	PaymentMethodID string `json:"payment_method_id" binding:"required"`
+	TransactionDate string `json:"transaction_date" binding:"required"`
+	Note            string `json:"note"`
+	Recommendation  []struct {
 		RuleID          string `json:"rule_id"`
 		AllocatedReward string `json:"allocated_reward"`
 	} `json:"recommendation_summary"`
@@ -26,10 +26,10 @@ type transactionResponse struct {
 	UserID            string               `json:"user_id"`
 	CardID            string               `json:"card_id"`
 	AmountMinor       int64                `json:"amount_minor"`
-	CategoryCode      string               `json:"category_code"`
+	CategoryID        string               `json:"category_id"`
 	MerchantName      string               `json:"merchant_name"`
-	MerchantCode      string               `json:"merchant_code"`
-	PaymentMethodCode string               `json:"payment_method_code"`
+	MerchantID        string               `json:"merchant_id"`
+	PaymentMethodID   string               `json:"payment_method_id"`
 	PaymentMethodName string               `json:"payment_method_name"`
 	TransactionDate   string               `json:"transaction_date"`
 	Note              string               `json:"note"`
@@ -40,10 +40,10 @@ type transactionSummaryResponse struct {
 	ID                string `json:"id"`
 	CardID            string `json:"card_id"`
 	AmountMinor       int64  `json:"amount_minor"`
-	CategoryCode      string `json:"category_code"`
+	CategoryID        string `json:"category_id"`
 	MerchantName      string `json:"merchant_name"`
-	MerchantCode      string `json:"merchant_code"`
-	PaymentMethodCode string `json:"payment_method_code"`
+	MerchantID        string `json:"merchant_id"`
+	PaymentMethodID   string `json:"payment_method_id"`
 	PaymentMethodName string `json:"payment_method_name"`
 	TransactionDate   string `json:"transaction_date"`
 	Note              string `json:"note"`
@@ -95,6 +95,19 @@ func (c *Controller) DeleteTransaction(ctx *gin.Context) {
 func (c *Controller) ListTransactions(ctx *gin.Context) { c.transactions(ctx, "") }
 func (c *Controller) GetTransaction(ctx *gin.Context)   { c.transactions(ctx, ctx.Param("id")) }
 
+func (c *Controller) RewardCalculations(ctx *gin.Context) {
+	items, err := c.service.RewardCalculations(ctx, userID(ctx), ctx.Param("id"))
+	if notFound(err) {
+		failure(ctx, 404, "not_found", "找不到交易")
+		return
+	}
+	if err != nil {
+		failure(ctx, 500, "internal_error", "查詢回饋計算歷史失敗")
+		return
+	}
+	data(ctx, 200, items)
+}
+
 func (c *Controller) transactions(ctx *gin.Context, id string) {
 	items, err := c.service.ListTransactions(ctx, userID(ctx), id)
 	if err != nil {
@@ -104,8 +117,8 @@ func (c *Controller) transactions(ctx *gin.Context, id string) {
 	output := make([]transactionSummaryResponse, 0, len(items))
 	for _, item := range items {
 		output = append(output, transactionSummaryResponse{
-			ID: item.ID, CardID: item.CardID, AmountMinor: item.AmountMinor, CategoryCode: item.CategoryCode,
-			MerchantCode: item.MerchantCode, MerchantName: item.MerchantName, PaymentMethodCode: item.PaymentMethodCode, PaymentMethodName: item.PaymentMethodName, TransactionDate: item.TransactionDate, Note: item.Note,
+			ID: item.ID, CardID: item.CardID, AmountMinor: item.AmountMinor, CategoryID: item.CategoryID,
+			MerchantID: item.MerchantID, MerchantName: item.MerchantName, PaymentMethodID: item.PaymentMethodID, PaymentMethodName: item.PaymentMethodName, TransactionDate: item.TransactionDate, Note: item.Note,
 		})
 	}
 	if id != "" {
@@ -131,8 +144,8 @@ func parseTransaction(ctx *gin.Context) (transactionRequest, service.Transaction
 		return request, service.TransactionInput{}, false
 	}
 	return request, service.TransactionInput{
-		CardID: request.CardID, AmountMinor: request.AmountMinor, CategoryCode: request.CategoryCode,
-		MerchantCode: request.MerchantCode, MerchantName: request.MerchantName, PaymentMethodCode: request.PaymentMethodCode, TransactionDate: date, Note: request.Note,
+		CardID: request.CardID, AmountMinor: request.AmountMinor, CategoryID: request.CategoryID,
+		MerchantID: request.MerchantID, MerchantName: request.MerchantName, PaymentMethodID: request.PaymentMethodID, TransactionDate: date, Note: request.Note,
 	}, true
 }
 
@@ -143,7 +156,7 @@ func mapTransaction(item service.Transaction) transactionResponse {
 	}
 	return transactionResponse{
 		ID: item.ID, UserID: item.UserID, CardID: item.CardID, AmountMinor: item.AmountMinor,
-		CategoryCode: item.CategoryCode, MerchantCode: item.MerchantCode, MerchantName: item.MerchantName, PaymentMethodCode: item.PaymentMethodCode, PaymentMethodName: item.PaymentMethodName,
+		CategoryID: item.CategoryID, MerchantID: item.MerchantID, MerchantName: item.MerchantName, PaymentMethodID: item.PaymentMethodID, PaymentMethodName: item.PaymentMethodName,
 		TransactionDate: item.TransactionDate.String(), Note: item.Note, Allocations: allocations,
 	}
 }

@@ -1,6 +1,5 @@
 export type RewardPreference = {
   reward_unit_id: string;
-  code: string;
   name: string;
   symbol: string;
   weight: string;

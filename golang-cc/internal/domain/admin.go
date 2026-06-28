@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -38,28 +39,28 @@ type Invitation struct {
 }
 
 type Bank struct {
-	ID         string
-	Name       string
-	Code       string
-	WebsiteURL string
-	IsActive   bool
+	ID       string
+	Name     string
+	IsActive bool
 }
 
 type BankInput struct {
 	Name       string
-	Code       string
 	WebsiteURL string
 	IsActive   bool
 }
 
 type CardProduct struct {
-	ID           string
-	BankID       string
-	BankName     string
-	Name         string
-	IsActive     bool
-	AccountTiers []string
-	Activities   []CardProductActivity
+	ID             string
+	BankID         string
+	BankName       string
+	Name           string
+	IsActive       bool
+	AccountTiers   []string
+	QualifiedType  string
+	SelectableType string
+	Networks       []CardNetwork
+	Activities     []CardProductActivity
 }
 
 type CardProductActivity struct {
@@ -70,41 +71,44 @@ type CardProductActivity struct {
 	IsActive   bool              `json:"is_active"`
 	SourceURL  string            `json:"source_url"`
 	VerifiedAt *string           `json:"verified_at"`
+	NetworkIDs []string          `json:"network_ids"`
 	Benefits   []ActivityBenefit `json:"benefits"`
 }
 
 type CardProductInput struct {
-	BankID       string
-	Name         string
-	IsActive     bool
-	AccountTiers []string
+	BankID         string
+	Name           string
+	IsActive       bool
+	AccountTiers   []string
+	QualifiedType  string
+	SelectableType string
+	NetworkIDs     []string
 }
 
 type Category struct {
-	Code     string
+	ID       string
 	Name     string
 	IsActive bool
 }
 
 type PaymentMethod struct {
-	Code     string `json:"code"`
+	ID       string `json:"id"`
 	Name     string `json:"name"`
 	IsActive bool   `json:"is_active"`
 	IsSystem bool   `json:"is_system"`
 }
 
 type Merchant struct {
-	Code          string   `json:"code"`
-	Name          string   `json:"name"`
-	Aliases       []string `json:"aliases"`
-	CategoryCodes []string `json:"category_codes"`
-	IsActive      bool     `json:"is_active"`
-	IsSystem      bool     `json:"is_system"`
+	Id          string   `json:"id"`
+	Name        string   `json:"name"`
+	Aliases     []string `json:"aliases"`
+	CategoryIDs []string `json:"category_ids"`
+	IsActive    bool     `json:"is_active"`
+	IsSystem    bool     `json:"is_system"`
 }
 
 type RewardUnit struct {
 	ID             string
-	Code           string
 	Name           string
 	Symbol         string
 	SymbolPosition string
@@ -113,7 +117,6 @@ type RewardUnit struct {
 }
 
 type RewardUnitInput struct {
-	Code           string
 	Name           string
 	Symbol         string
 	SymbolPosition string
@@ -130,22 +133,57 @@ type Activity struct {
 	IsActive          bool
 	SourceURL         string
 	VerifiedAt        *string
+	NetworkIDs        []string
 	SharedMonthlyCaps map[string]string
 	Benefits          []ActivityBenefit
 }
 
 type ActivityBenefit struct {
-	ID                   string   `json:"id"`
-	RewardUnitID         string   `json:"reward_unit_id"`
-	Name                 string   `json:"name"`
-	Rate                 string   `json:"rate"`
-	MonthlyCap           *string  `json:"monthly_cap"`
-	StackGroup           string   `json:"stack_group"`
-	Priority             int      `json:"priority"`
-	RequiredAccountTiers []string `json:"required_account_tiers"`
-	ActionRequired       string   `json:"action_required"`
-	ActionMessage        string   `json:"action_message"`
-	PaymentMethods       []string `json:"payment_methods"`
-	CategoryCodes        []string `json:"category_codes"`
-	MerchantCodes        []string `json:"merchant_codes"`
+	ID             string   `json:"id"`
+	RewardUnitID   string   `json:"reward_unit_id"`
+	Name           string   `json:"name"`
+	DisplayOrder   int      `json:"display_order"`
+	EffectType     string   `json:"effect_type"`
+	RewardValue    string   `json:"reward_value"`
+	MonthlyCap     *string  `json:"monthly_cap"`
+	Layer          string   `json:"layer"`
+	StackGroup     string   `json:"stack_group"`
+	Priority       int      `json:"priority"`
+	QualifiedType  string   `json:"qualified_type"`
+	SelectableType string   `json:"selectable_type"`
+	ActionRequired string   `json:"action_required"`
+	ActionMessage  string   `json:"action_message"`
+	PaymentMethods []string `json:"payment_methods"`
+	CategoryIDs    []string `json:"category_ids"`
+	MerchantIDs    []string `json:"merchant_ids"`
+}
+
+type RewardComponentVersionInput struct {
+	RewardUnitID       string
+	Name               string
+	Description        string
+	EffectType         string
+	RewardValue        string
+	EffectiveFrom      time.Time
+	EffectiveTo        *time.Time
+	AnnouncedAt        *time.Time
+	ChangeReason       string
+	DisplayChangeUntil *time.Time
+}
+
+type RewardConditionVersionInput struct {
+	Operator      string
+	Configuration json.RawMessage
+	Description   string
+	EffectiveFrom time.Time
+	EffectiveTo   *time.Time
+}
+
+type RewardCapVersionInput struct {
+	CapType       string
+	LimitValue    string
+	RewardUnitID  *string
+	PeriodType    string
+	EffectiveFrom time.Time
+	EffectiveTo   *time.Time
 }

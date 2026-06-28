@@ -36,8 +36,9 @@ func (s *Service) DeleteActivity(ctx context.Context, id string) error {
 func prepareActivity(id string, input ActivityInput, defaultActive bool) (domain.Activity, error) {
 	start, startErr := recommendations.ParseLocalDate(input.StartDate)
 	end, endErr := recommendations.ParseLocalDate(input.EndDate)
+	input.NetworkIDs = normalizeIDs(input.NetworkIDs)
 	if startErr != nil || endErr != nil || end.Before(start.Time) || id == "" || input.CardProductID == "" ||
-		strings.TrimSpace(input.Name) == "" || len(input.Benefits) == 0 {
+		strings.TrimSpace(input.Name) == "" || len(input.NetworkIDs) == 0 || len(input.Benefits) == 0 {
 		return domain.Activity{}, domain.ErrInvalidInput
 	}
 	active := defaultActive
@@ -49,9 +50,16 @@ func prepareActivity(id string, input ActivityInput, defaultActive bool) (domain
 		input.SharedMonthlyCaps = map[string]string{}
 	}
 	for _, value := range input.Benefits {
-		rate, err := recommendations.ParseDecimal(value.Rate)
-		if err != nil || rate.Sign() <= 0 || value.RewardUnitID == "" || strings.TrimSpace(value.Name) == "" ||
-			strings.TrimSpace(value.StackGroup) == "" || len(value.CategoryCodes) == 0 {
+		rewardValue := strings.TrimSpace(value.RewardValue)
+		parsedRewardValue, rewardErr := recommendations.ParseDecimal(rewardValue)
+		effectType := normalizeEffectType(value.EffectType)
+		if rewardErr != nil || parsedRewardValue.Sign() <= 0 || effectType == "" ||
+			value.RewardUnitID == "" || strings.TrimSpace(value.Name) == "" ||
+			strings.TrimSpace(value.StackGroup) == "" || len(value.CategoryIDs) == 0 {
+			return domain.Activity{}, domain.ErrInvalidInput
+		}
+		value.Layer = strings.TrimSpace(value.Layer)
+		if value.Layer == "" {
 			return domain.Activity{}, domain.ErrInvalidInput
 		}
 		if value.ActionRequired == "" {
@@ -60,9 +68,23 @@ func prepareActivity(id string, input ActivityInput, defaultActive bool) (domain
 		if value.ActionRequired != "none" && value.ActionRequired != "registration" && value.ActionRequired != "app_switch" && value.ActionRequired != "account_setup" {
 			return domain.Activity{}, domain.ErrInvalidInput
 		}
+		value.SelectableType = strings.TrimSpace(value.SelectableType)
+		if value.ActionRequired == "app_switch" && (strings.TrimSpace(value.ActionMessage) == "" || value.SelectableType == "" || value.QualifiedType == "") {
+			return domain.Activity{}, domain.ErrInvalidInput
+		}
+		if value.ActionRequired != "app_switch" && value.SelectableType != "" {
+			return domain.Activity{}, domain.ErrInvalidInput
+		}
+		stackGroup := strings.TrimSpace(value.StackGroup)
+		stackPolicy := normalizeStackPolicy(value.StackPolicy, stackGroup)
+
+		if stackPolicy == "" {
+			return domain.Activity{}, domain.ErrInvalidInput
+		}
 		seen := map[string]bool{}
-		merchants := make([]string, 0, len(value.MerchantCodes))
-		for _, code := range value.MerchantCodes {
+
+		merchants := make([]string, 0, len(value.MerchantIds))
+		for _, code := range value.MerchantIds {
 			code = strings.TrimSpace(code)
 			normalized := "merchant:" + code
 			if code == "" || seen[normalized] {
@@ -74,7 +96,7 @@ func prepareActivity(id string, input ActivityInput, defaultActive bool) (domain
 		paymentMethods := make([]string, 0, len(value.PaymentMethods))
 		for _, method := range value.PaymentMethods {
 			method = strings.TrimSpace(method)
-			if method == "" || method == recommendations.AnyPaymentCode || seen["payment:"+method] {
+			if method == "" || method == recommendations.AnyPaymentID || seen["payment:"+method] {
 				return domain.Activity{}, domain.ErrInvalidInput
 			}
 			seen["payment:"+method] = true
@@ -85,23 +107,45 @@ func prepareActivity(id string, input ActivityInput, defaultActive bool) (domain
 			benefitID = secure.UUID()
 		}
 		benefits = append(benefits, domain.ActivityBenefit{
-			ID: benefitID, RewardUnitID: value.RewardUnitID, Name: strings.TrimSpace(value.Name), Rate: value.Rate,
-			MonthlyCap: value.MonthlyCap, StackGroup: strings.TrimSpace(value.StackGroup), Priority: value.Priority,
-			RequiredAccountTiers: nonNilStrings(value.RequiredAccountTiers), ActionRequired: value.ActionRequired,
+			ID: benefitID, RewardUnitID: value.RewardUnitID, Name: strings.TrimSpace(value.Name),
+			Layer: value.Layer, DisplayOrder: value.DisplayOrder, EffectType: effectType, RewardValue: rewardValue,
+			MonthlyCap: value.MonthlyCap, StackGroup: stackGroup, Priority: value.Priority,
+			QualifiedType: value.QualifiedType, SelectableType: value.SelectableType, ActionRequired: value.ActionRequired,
 			ActionMessage: strings.TrimSpace(value.ActionMessage), PaymentMethods: paymentMethods,
-			CategoryCodes: value.CategoryCodes, MerchantCodes: merchants,
+			CategoryIDs: value.CategoryIDs, MerchantIDs: merchants,
 		})
 	}
 	return domain.Activity{
 		ID: id, CardProductID: input.CardProductID, Name: strings.TrimSpace(input.Name),
 		StartDate: input.StartDate, EndDate: input.EndDate, IsActive: active, SourceURL: strings.TrimSpace(input.SourceURL),
-		VerifiedAt: input.VerifiedAt, SharedMonthlyCaps: input.SharedMonthlyCaps, Benefits: benefits,
+		VerifiedAt: input.VerifiedAt, NetworkIDs: input.NetworkIDs, SharedMonthlyCaps: input.SharedMonthlyCaps, Benefits: benefits,
 	}, nil
 }
 
-func nonNilStrings(values []string) []string {
-	if values == nil {
-		return []string{}
+func normalizeEffectType(value string) string {
+	switch strings.TrimSpace(value) {
+	case "", string(recommendations.EffectAddRate):
+		return string(recommendations.EffectAddRate)
+	case string(recommendations.EffectSetRate), string(recommendations.EffectMultiplyRate), string(recommendations.EffectAddCash), string(recommendations.EffectDiscount):
+		return strings.TrimSpace(value)
+	default:
+		return ""
 	}
-	return values
+}
+
+func normalizeStackPolicy(value, stackGroup string) string {
+	switch strings.TrimSpace(value) {
+	case recommendations.StackPolicyStack, recommendations.StackPolicyBestOfGroup, recommendations.StackPolicyExclusive:
+		return strings.TrimSpace(value)
+	case "":
+		if strings.HasPrefix(stackGroup, recommendations.ExclusiveStackGroupPrefix) {
+			return recommendations.StackPolicyExclusive
+		}
+		if stackGroup != "" {
+			return recommendations.StackPolicyBestOfGroup
+		}
+		return recommendations.StackPolicyStack
+	default:
+		return ""
+	}
 }

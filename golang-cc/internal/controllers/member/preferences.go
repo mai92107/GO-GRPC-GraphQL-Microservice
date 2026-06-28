@@ -7,7 +7,7 @@ import (
 
 type preferenceResponse struct {
 	RewardUnitID string `json:"reward_unit_id"`
-	Code         string `json:"code"`
+	ID           string `json:"id"`
 	Name         string `json:"name"`
 	Symbol       string `json:"symbol"`
 	Weight       string `json:"weight"`
@@ -21,7 +21,7 @@ func (c *Controller) Preferences(ctx *gin.Context) {
 	}
 	out := []preferenceResponse{}
 	for _, x := range items {
-		out = append(out, preferenceResponse{RewardUnitID: x.RewardUnitID, Code: x.Code, Name: x.Name, Symbol: x.Symbol, Weight: x.Weight})
+		out = append(out, preferenceResponse{RewardUnitID: x.RewardUnitID, ID: x.RewardUnitID, Name: x.Name, Symbol: x.Symbol, Weight: x.Weight})
 	}
 	data(ctx, 200, out)
 }

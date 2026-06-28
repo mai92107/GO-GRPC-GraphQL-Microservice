@@ -7,9 +7,12 @@ import (
 )
 
 const GeneralCategory = "general"
-const AnyPaymentCode = "any_payment"
+const AnyPaymentID = "any_payment"
 const AnyPaymentName = "不限支付方式"
 const ExclusiveStackGroupPrefix = "exclusive:"
+const StackPolicyStack = "stack"
+const StackPolicyBestOfGroup = "best_of_group"
+const StackPolicyExclusive = "exclusive"
 
 func Recommend(input RecommendationInput) (Result, error) {
 	if input.UserID == "" {
@@ -18,8 +21,8 @@ func Recommend(input RecommendationInput) (Result, error) {
 	if input.AmountMinor <= 0 {
 		return Result{}, fmt.Errorf("amount_minor must be greater than zero")
 	}
-	if input.CategoryCode == "" || input.CategoryCode == GeneralCategory {
-		return Result{}, fmt.Errorf("unsupported category_code %q", input.CategoryCode)
+	if input.CategoryID == "" || input.CategoryID == GeneralCategory {
+		return Result{}, fmt.Errorf("unsupported category_id %q", input.CategoryID)
 	}
 	if len(input.PaymentMethods) == 0 {
 		return Result{}, fmt.Errorf("payment_methods are required")
@@ -44,10 +47,10 @@ func Recommend(input RecommendationInput) (Result, error) {
 
 		methods := make([]PaymentMethod, 0, len(input.PaymentMethods)+1)
 		if len(input.PaymentMethods) != 1 {
-			methods = append(methods, PaymentMethod{Code: AnyPaymentCode, Name: AnyPaymentName})
+			methods = append(methods, PaymentMethod{ID: AnyPaymentID, Name: AnyPaymentName})
 		}
 		for _, method := range input.PaymentMethods {
-			if method.Code != AnyPaymentCode {
+			if method.ID != AnyPaymentID {
 				methods = append(methods, method)
 			}
 		}
@@ -65,6 +68,7 @@ func Recommend(input RecommendationInput) (Result, error) {
 				if !exists {
 					recommendationsByGroup[key] = CardRecommendation{
 						CardID: card.ID, CardName: card.Name, TotalScore: option.TotalScore, TotalUnweighted: option.TotalUnweighted,
+						Layers: option.Layers, ExcludedBenefits: option.ExcludedBenefits,
 						Allocations: option.Allocations, Explanation: option.Explanation, Reminders: option.Reminders,
 						PaymentOptions: []PaymentOption{option},
 					}
@@ -83,7 +87,7 @@ func Recommend(input RecommendationInput) (Result, error) {
 	for _, recommendation := range recommendationsByGroup {
 		recommendation.PaymentOptions = mergeEquivalentPaymentOptions(recommendation.PaymentOptions)
 		sort.Slice(recommendation.PaymentOptions, func(i, j int) bool {
-			return recommendation.PaymentOptions[i].PaymentMethodCode < recommendation.PaymentOptions[j].PaymentMethodCode
+			return recommendation.PaymentOptions[i].PaymentMethodID < recommendation.PaymentOptions[j].PaymentMethodID
 		})
 		recommendations = append(recommendations, recommendation)
 	}
@@ -120,7 +124,7 @@ func betterRecommendation(left, right CardRecommendation) bool {
 
 func evaluateCard(card Card, rules []RewardRule, input RecommendationInput, method PaymentMethod) PaymentOption {
 	result := PaymentOption{
-		PaymentMethodCode: method.Code,
+		PaymentMethodID:   method.ID,
 		PaymentMethodName: method.Name,
 		PaymentMethods:    []PaymentMethod{method},
 		Allocations:       []RuleEvaluation{},
@@ -129,60 +133,14 @@ func evaluateCard(card Card, rules []RewardRule, input RecommendationInput, meth
 	}
 
 	amountTWD := DecimalFromInt(input.AmountMinor).Div(DecimalFromInt(100))
-	rules = selectActivity(rules, input.Date)
-	candidates := make([]RuleEvaluation, 0, len(rules))
-	for _, rule := range rules {
-		if !ruleMatches(rule, card.AccountTier, input.CategoryCode, input.MerchantCode, method.Code, input.Date) {
-			continue
-		}
-
-		uncapped := amountTWD.Mul(rule.Rate).Round(rule.RewardUnit.Precision)
-		used := input.MonthlyUsage[rule.ID].Round(rule.RewardUnit.Precision)
-		allocated := uncapped
-		var remaining *Decimal
-		if rule.MonthlyCap != nil {
-			value := rule.MonthlyCap.Round(rule.RewardUnit.Precision).Sub(used).Max(Decimal{})
-			remaining = &value
-			allocated = uncapped.Min(value)
-		}
-
-		weight, exists := input.Preferences[rule.RewardUnit.ID]
-		if !exists {
-			weight = MustDecimal("1")
-		}
-		twdRate := rule.RewardUnit.TWDRate
-		if twdRate.Sign() <= 0 {
-			twdRate = MustDecimal("1")
-		}
-		score := allocated.Mul(twdRate).Mul(weight).Round(6)
-		evaluation := RuleEvaluation{
-			RuleID:           rule.ID,
-			RuleName:         rule.Name,
-			ActivityID:       rule.ActivityID,
-			ActivityName:     rule.ActivityName,
-			StackGroup:       rule.StackGroup,
-			ActionRequired:   rule.ActionRequired,
-			ActionMessage:    rule.ActionMessage,
-			RewardUnit:       rule.RewardUnit,
-			Rate:             rule.Rate,
-			UncappedReward:   uncapped,
-			MonthlyCap:       rule.MonthlyCap,
-			UsedBefore:       used,
-			RemainingBefore:  remaining,
-			AllocatedReward:  allocated,
-			PreferenceWeight: weight,
-			Score:            score,
-		}
-		candidates = append(candidates, evaluation)
-	}
-
-	selected := bestPerStackGroup(applyExclusiveStackGroups(candidates))
+	candidates := matchRules(card, rules, input, method.ID, amountTWD)
+	selected, excluded := resolveLayeredRules(candidates, rules)
 	sort.SliceStable(selected, func(i, j int) bool {
 		left, right := ruleByID(rules, selected[i].RuleID), ruleByID(rules, selected[j].RuleID)
-		if left.Priority != right.Priority {
-			return left.Priority < right.Priority
+		if left.DisplayOrder != right.DisplayOrder {
+			return left.DisplayOrder < right.DisplayOrder
 		}
-		return false
+		return ruleIndex(rules, selected[i].RuleID) < ruleIndex(rules, selected[j].RuleID)
 	})
 	sharedUsed := map[string]Decimal{}
 	for _, evaluation := range selected {
@@ -214,6 +172,8 @@ func evaluateCard(card Card, rules []RewardRule, input RecommendationInput, meth
 			result.Reminders = appendUnique(result.Reminders, evaluation.ActionMessage)
 		}
 	}
+	result.Layers = buildLayerResults(result.Allocations)
+	result.ExcludedBenefits = excluded
 	return result
 }
 
@@ -257,6 +217,263 @@ func sameOption(left, right PaymentOption) bool {
 	return true
 }
 
+// matchRules turns eligible catalog rules into calculation candidates for one card and payment method.
+func matchRules(card Card, rules []RewardRule, input RecommendationInput, paymentMethod string, amountTWD Decimal) []RuleEvaluation {
+	candidates := make([]RuleEvaluation, 0, len(rules))
+	for _, rule := range rules {
+		if !ruleMatches(rule, card, input.CategoryID, input.MerchantID, paymentMethod, input.Date) {
+			continue
+		}
+		candidates = append(candidates, evaluateRule(rule, input, amountTWD))
+	}
+	return candidates
+}
+
+func evaluateRule(rule RewardRule, input RecommendationInput, amountTWD Decimal) RuleEvaluation {
+	effectType := normalizedEffectType(rule)
+	rewardValue := normalizedRewardValue(rule)
+	rewardRate := effectRate(effectType, rewardValue)
+	uncapped := effectReward(amountTWD, effectType, rewardValue).Round(rule.RewardUnit.Precision)
+	used := input.MonthlyUsage[rule.ID].Round(rule.RewardUnit.Precision)
+	allocated := uncapped
+	var remaining *Decimal
+	if rule.MonthlyCap != nil {
+		value := rule.MonthlyCap.Round(rule.RewardUnit.Precision).Sub(used).Max(Decimal{})
+		remaining = &value
+		allocated = uncapped.Min(value)
+	}
+
+	weight, exists := input.Preferences[rule.RewardUnit.ID]
+	if !exists {
+		weight = MustDecimal("1")
+	}
+	twdRate := rule.RewardUnit.TWDRate
+	if twdRate.Sign() <= 0 {
+		twdRate = MustDecimal("1")
+	}
+	score := allocated.Mul(twdRate).Mul(weight).Round(6)
+	return RuleEvaluation{
+		RuleID:              rule.ID,
+		RuleName:            rule.Name,
+		ActivityID:          rule.ActivityID,
+		ActivityName:        rule.ActivityName,
+		StackGroup:          rule.StackGroup,
+		StackPolicy:         normalizedStackPolicy(rule),
+		Layer:               rule.Layer,
+		DisplayOrder:        rule.DisplayOrder,
+		EffectType:          effectType,
+		RewardValue:         rewardValue,
+		ActionRequired:      rule.ActionRequired,
+		ActionMessage:       rule.ActionMessage,
+		RewardUnit:          rule.RewardUnit,
+		RewardRate:          rewardRate,
+		UncappedReward:      uncapped,
+		MonthlyCap:          rule.MonthlyCap,
+		UsedBefore:          used,
+		RemainingBefore:     remaining,
+		AllocatedReward:     allocated,
+		PreferenceWeight:    weight,
+		Score:               score,
+		SuggestedCardPlanID: rule.SuggestedCardPlanID,
+		SuggestedPlanName:   rule.SuggestedPlanName,
+	}
+}
+
+// resolveLayeredRules applies bank-rule precedence inside each layer before recommendation scoring.
+func resolveLayeredRules(values []RuleEvaluation, rules []RewardRule) ([]RuleEvaluation, []ExcludedBenefit) {
+	layered := groupByLayer(values)
+	layers := make([]string, 0, len(layered))
+	for layer := range layered {
+		layers = append(layers, layer)
+	}
+	sortLayers(layers)
+	selected := make([]RuleEvaluation, 0, len(values))
+	excluded := make([]ExcludedBenefit, 0)
+	for _, layer := range layers {
+		layerSelected, layerExcluded := resolveStackGroups(layered[layer], rules)
+		selected = append(selected, layerSelected...)
+		excluded = append(excluded, layerExcluded...)
+	}
+	return selected, excluded
+}
+
+// groupByLayer keeps layer ordering explicit so frontend explanations match the calculation path.
+func groupByLayer(values []RuleEvaluation) map[string][]RuleEvaluation {
+	out := map[string][]RuleEvaluation{}
+	for _, value := range values {
+		out[value.Layer] = append(out[value.Layer], value)
+	}
+	return out
+}
+
+// resolveStackGroups applies stack policy after exclusivity so stack groups only compare viable rules.
+func resolveStackGroups(values []RuleEvaluation, rules []RewardRule) ([]RuleEvaluation, []ExcludedBenefit) {
+	groups := map[string][]RuleEvaluation{}
+	out := make([]RuleEvaluation, 0, len(values))
+	for _, value := range values {
+		if value.StackPolicy == StackPolicyStack {
+			out = append(out, value)
+			continue
+		}
+		group := value.StackGroup
+		if group == "" {
+			group = string(value.RuleID)
+		}
+		groups[group] = append(groups[group], value)
+	}
+
+	excluded := []ExcludedBenefit{}
+	keys := sortedKeys(groups)
+	for _, key := range keys {
+		group := groups[key]
+		winner := group[0]
+		for _, candidate := range group[1:] {
+			if betterRuleCandidate(candidate, winner, rules) {
+				winner = candidate
+			}
+		}
+		out = append(out, winner)
+		for _, candidate := range group {
+			if candidate.RuleID != winner.RuleID {
+				excluded = append(excluded, excludedBenefit(candidate, ExcludeStackGroupLost))
+			}
+		}
+	}
+	return out, excluded
+}
+
+func betterRuleCandidate(left, right RuleEvaluation, rules []RewardRule) bool {
+	leftRule, rightRule := ruleByID(rules, left.RuleID), ruleByID(rules, right.RuleID)
+	if leftRule.Priority != rightRule.Priority {
+		return leftRule.Priority > rightRule.Priority
+	}
+	if left.UncappedReward.Cmp(right.UncappedReward) != 0 {
+		return left.UncappedReward.Cmp(right.UncappedReward) > 0
+	}
+	if left.DisplayOrder != right.DisplayOrder {
+		return left.DisplayOrder < right.DisplayOrder
+	}
+	return left.RuleID < right.RuleID
+}
+
+// buildLayerResults packages applied benefits into frontend-ready layer breakdowns.
+func buildLayerResults(allocations []RuleEvaluation) []LayerResult {
+	grouped := groupByLayer(allocations)
+	layers := make([]string, 0, len(grouped))
+	for layer := range grouped {
+		layers = append(layers, layer)
+	}
+	sortLayers(layers)
+
+	results := make([]LayerResult, 0, len(layers))
+	for _, layer := range layers {
+		result := LayerResult{Layer: layer, Benefits: []BenefitResult{}}
+		for _, allocation := range grouped[layer] {
+			result.RewardRate = result.RewardRate.Add(allocation.RewardRate)
+			result.RewardAmount = result.RewardAmount.Add(allocation.AllocatedReward)
+			result.Benefits = append(result.Benefits, benefitResult(allocation))
+		}
+		results = append(results, result)
+	}
+	return results
+}
+
+func benefitResult(value RuleEvaluation) BenefitResult {
+	return BenefitResult{
+		BenefitID:       value.RuleID,
+		Name:            value.RuleName,
+		ActivityID:      value.ActivityID,
+		ActivityName:    value.ActivityName,
+		EffectType:      value.EffectType,
+		RewardValue:     value.RewardValue,
+		RewardRate:      value.RewardRate,
+		RewardAmount:    value.AllocatedReward,
+		StackGroup:      value.StackGroup,
+		MonthlyCap:      value.MonthlyCap,
+		RemainingBefore: value.RemainingBefore,
+		IsApplied:       true,
+	}
+}
+
+func excludedBenefit(value RuleEvaluation, reason ExcludeReason) ExcludedBenefit {
+	return ExcludedBenefit{
+		BenefitID:    value.RuleID,
+		Name:         value.RuleName,
+		ActivityID:   value.ActivityID,
+		ActivityName: value.ActivityName,
+		Reason:       reason,
+		StackGroup:   value.StackGroup,
+		Layer:        value.Layer,
+	}
+}
+
+func normalizedStackPolicy(rule RewardRule) string {
+	if strings.HasPrefix(rule.StackGroup, ExclusiveStackGroupPrefix) {
+		return StackPolicyExclusive
+	}
+	if rule.StackGroup != "" {
+		return StackPolicyBestOfGroup
+	}
+	return StackPolicyStack
+}
+
+func normalizedEffectType(rule RewardRule) EffectType {
+	switch rule.EffectType {
+	case EffectSetRate, EffectMultiplyRate, EffectAddCash, EffectDiscount:
+		return rule.EffectType
+	default:
+		return EffectAddRate
+	}
+}
+
+func normalizedRewardValue(rule RewardRule) Decimal {
+	return rule.RewardValue
+}
+
+func effectRate(effectType EffectType, rewardValue Decimal) Decimal {
+	switch effectType {
+	case EffectAddRate, EffectSetRate:
+		return rewardValue
+	default:
+		return Decimal{}
+	}
+}
+
+func effectReward(amount Decimal, effectType EffectType, rewardValue Decimal) Decimal {
+	switch effectType {
+	case EffectAddRate, EffectSetRate:
+		return amount.Mul(rewardValue)
+	case EffectAddCash:
+		return rewardValue
+	case EffectDiscount:
+		return rewardValue
+	default:
+		return Decimal{}
+	}
+}
+
+func sortedKeys(values map[string][]RuleEvaluation) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortLayers(layers []string) {
+	sort.Slice(layers, func(i, j int) bool {
+		left, right := strings.TrimSpace(layers[i]), strings.TrimSpace(layers[j])
+		if left == "" || right == "" {
+			return left < right
+		}
+		if len(left) != len(right) {
+			return len(left) < len(right)
+		}
+		return left < right
+	})
+}
+
 func FormatDecimal(value Decimal, precision int) string {
 	return strings.TrimRight(strings.TrimRight(value.StringFixed(precision), "0"), ".")
 }
@@ -272,13 +489,13 @@ func FormatReward(value Decimal, unit RewardUnit) string {
 func SumRates(option PaymentOption) Decimal {
 	total := Decimal{}
 	for _, allocation := range option.Allocations {
-		total = total.Add(allocation.Rate)
+		total = total.Add(allocation.RewardRate)
 	}
 	return total
 }
 
-func ruleMatches(rule RewardRule, accountTier, category, merchantCode, paymentMethod string, date LocalDate) bool {
-	if !rule.IsActive || rule.Rate.Sign() <= 0 {
+func ruleMatches(rule RewardRule, card Card, category, merchantID, paymentMethod string, date LocalDate) bool {
+	if !rule.IsActive || normalizedRewardValue(rule).Sign() <= 0 {
 		return false
 	}
 	if rule.StartDate != nil && date.Before(rule.StartDate.Time) {
@@ -287,10 +504,14 @@ func ruleMatches(rule RewardRule, accountTier, category, merchantCode, paymentMe
 	if rule.EndDate != nil && date.After(rule.EndDate.Time) {
 		return false
 	}
-	if len(rule.RequiredAccountTiers) > 0 {
+	if rule.QualifiedType != card.AccountTier {
+		return false
+	}
+
+	if len(rule.CardNetworkIDs) > 0 {
 		matched := false
-		for _, tier := range rule.RequiredAccountTiers {
-			if tier == accountTier {
+		for _, networkID := range rule.CardNetworkIDs {
+			if networkID == card.NetworkID {
 				matched = true
 				break
 			}
@@ -299,8 +520,22 @@ func ruleMatches(rule RewardRule, accountTier, category, merchantCode, paymentMe
 			return false
 		}
 	}
+	if len(rule.QualifiedCardPlanIDs) > 0 {
+		matched := false
+		for _, required := range rule.QualifiedCardPlanIDs {
+			for _, qualified := range card.QualifiedCardPlanIDs {
+				if required == qualified {
+					matched = true
+					break
+				}
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
 	if len(rule.PaymentMethods) > 0 {
-		if paymentMethod == AnyPaymentCode {
+		if paymentMethod == AnyPaymentID {
 			return false
 		}
 		matched := false
@@ -315,7 +550,7 @@ func ruleMatches(rule RewardRule, accountTier, category, merchantCode, paymentMe
 		}
 	}
 	categoryMatches := false
-	for _, candidate := range rule.CategoryCode {
+	for _, candidate := range rule.CategoryID {
 		if candidate == GeneralCategory || candidate == category {
 			categoryMatches = true
 			break
@@ -324,11 +559,11 @@ func ruleMatches(rule RewardRule, accountTier, category, merchantCode, paymentMe
 	if !categoryMatches {
 		return false
 	}
-	if len(rule.MerchantCodes) == 0 {
+	if len(rule.MerchantIDs) == 0 {
 		return true
 	}
-	for _, code := range rule.MerchantCodes {
-		if code == merchantCode {
+	for _, id := range rule.MerchantIDs {
+		if id == merchantID {
 			return true
 		}
 	}
@@ -400,6 +635,15 @@ func ruleByID(rules []RewardRule, id ID) RewardRule {
 		}
 	}
 	return RewardRule{}
+}
+
+func ruleIndex(rules []RewardRule, id ID) int {
+	for index, rule := range rules {
+		if rule.ID == id {
+			return index
+		}
+	}
+	return len(rules)
 }
 
 func sharedUsageKey(activityID, unitID ID) string {

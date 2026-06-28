@@ -21,6 +21,7 @@ func (c *Controller) AcceptInvitation(ctx *gin.Context) {
 	}
 	user, err := c.service.AcceptInvitation(ctx.Request.Context(), input.Token, strings.TrimSpace(input.DisplayName), input.Password)
 	if err != nil {
+		println("AcceptInvitation error:", err.Error())
 		writeError(ctx, http.StatusBadRequest, "invalid_invitation", "邀請連結無效或已過期")
 		return
 	}

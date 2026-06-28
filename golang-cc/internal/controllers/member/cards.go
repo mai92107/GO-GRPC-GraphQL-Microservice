@@ -2,6 +2,7 @@ package member
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/rafa/golang-cc/internal/domain"
 	service "github.com/rafa/golang-cc/internal/services/member"
 )
 
@@ -13,17 +14,37 @@ type cardRequest struct {
 	StatementDay  *int   `json:"statement_day"`
 	PaymentDueDay *int   `json:"payment_due_day"`
 	AccountTier   string `json:"account_tier"`
+	CardNetworkID string `json:"card_network_id"`
 }
 type cardResponse struct {
-	ID            string `json:"id"`
-	CardProductID string `json:"card_product_id"`
-	Name          string `json:"name"`
-	Issuer        string `json:"issuer"`
-	LastFour      string `json:"last_four"`
-	IsActive      bool   `json:"is_active"`
-	StatementDay  *int   `json:"statement_day"`
-	PaymentDueDay *int   `json:"payment_due_day"`
-	AccountTier   string `json:"account_tier"`
+	ID             string           `json:"id"`
+	CardProductID  string           `json:"card_product_id"`
+	Name           string           `json:"name"`
+	Issuer         string           `json:"issuer"`
+	LastFour       string           `json:"last_four"`
+	IsActive       bool             `json:"is_active"`
+	StatementDay   *int             `json:"statement_day"`
+	PaymentDueDay  *int             `json:"payment_due_day"`
+	AccountTier    string           `json:"account_tier"`
+	CardImageURL   string           `json:"card_image_url"`
+	PrimaryColor   string           `json:"primary_color"`
+	QualifiedType  string           `json:"qualified_type"`
+	SelectableType string           `json:"selectable_type"`
+	Network        *networkResponse `json:"network"`
+}
+
+type networkResponse struct {
+	ID   string `json:"id"`
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
+func mapCard(x domain.MemberCard) cardResponse {
+	var network *networkResponse
+	if x.NetworkID != "" {
+		network = &networkResponse{ID: x.NetworkID, Code: x.NetworkCode, Name: x.NetworkName}
+	}
+	return cardResponse{ID: x.ID, CardProductID: x.CardProductID, Name: x.Name, Issuer: x.Issuer, LastFour: x.LastFour, IsActive: x.IsActive, StatementDay: x.StatementDay, PaymentDueDay: x.PaymentDueDay, AccountTier: x.AccountTier, CardImageURL: x.CardImageURL, PrimaryColor: x.PrimaryColor, QualifiedType: x.QualifiedType, SelectableType: x.SelectableType, Network: network}
 }
 
 func (c *Controller) ListCards(ctx *gin.Context) {
@@ -34,7 +55,7 @@ func (c *Controller) ListCards(ctx *gin.Context) {
 	}
 	out := make([]cardResponse, 0, len(items))
 	for _, x := range items {
-		out = append(out, cardResponse{ID: x.ID, CardProductID: x.CardProductID, Name: x.Name, Issuer: x.Issuer, LastFour: x.LastFour, IsActive: x.IsActive, StatementDay: x.StatementDay, PaymentDueDay: x.PaymentDueDay, AccountTier: x.AccountTier})
+		out = append(out, mapCard(x))
 	}
 	data(ctx, 200, out)
 }
@@ -44,7 +65,7 @@ func (c *Controller) GetCard(ctx *gin.Context) {
 		failure(ctx, 404, "not_found", "找不到卡片")
 		return
 	}
-	data(ctx, 200, cardResponse{ID: x.ID, CardProductID: x.CardProductID, Name: x.Name, Issuer: x.Issuer, LastFour: x.LastFour, IsActive: x.IsActive, StatementDay: x.StatementDay, PaymentDueDay: x.PaymentDueDay, AccountTier: x.AccountTier})
+	data(ctx, 200, mapCard(x))
 }
 func (c *Controller) CreateCard(ctx *gin.Context) {
 	var r cardRequest
@@ -56,7 +77,7 @@ func (c *Controller) CreateCard(ctx *gin.Context) {
 	if r.IsActive != nil {
 		active = *r.IsActive
 	}
-	id, err := c.service.CreateCard(ctx, userID(ctx), service.CardInput{CardProductID: r.CardProductID, Nickname: r.Nickname, LastFour: r.LastFour, IsActive: active, StatementDay: r.StatementDay, PaymentDueDay: r.PaymentDueDay, AccountTier: r.AccountTier})
+	id, err := c.service.CreateCard(ctx, userID(ctx), service.CardInput{CardProductID: r.CardProductID, CardNetworkID: r.CardNetworkID, Nickname: r.Nickname, LastFour: r.LastFour, IsActive: active, StatementDay: r.StatementDay, PaymentDueDay: r.PaymentDueDay, AccountTier: r.AccountTier})
 	if err != nil {
 		failure(ctx, 409, "card_conflict", "卡片已在卡片夾中或資料無效")
 		return
@@ -69,7 +90,7 @@ func (c *Controller) UpdateCard(ctx *gin.Context) {
 		failure(ctx, 400, "validation_failed", "PATCH 需提供完整卡片資料")
 		return
 	}
-	err := c.service.UpdateCard(ctx, userID(ctx), ctx.Param("id"), service.CardInput{Nickname: r.Nickname, LastFour: r.LastFour, IsActive: *r.IsActive, StatementDay: r.StatementDay, PaymentDueDay: r.PaymentDueDay, AccountTier: r.AccountTier})
+	err := c.service.UpdateCard(ctx, userID(ctx), ctx.Param("id"), service.CardInput{CardNetworkID: r.CardNetworkID, Nickname: r.Nickname, LastFour: r.LastFour, IsActive: *r.IsActive, StatementDay: r.StatementDay, PaymentDueDay: r.PaymentDueDay, AccountTier: r.AccountTier})
 	if err != nil {
 		failure(ctx, 404, "not_found", "找不到卡片或資料無效")
 		return

@@ -31,7 +31,7 @@ func (s *Service) DeleteRewardUnit(ctx context.Context, id string) error {
 }
 func validRewardUnit(input RewardUnitInput) bool {
 	rate, err := recommendations.ParseDecimal(input.TWDRate)
-	return strings.TrimSpace(input.Code) != "" && strings.TrimSpace(input.Name) != "" &&
+	return strings.TrimSpace(input.Name) != "" &&
 		strings.TrimSpace(input.Symbol) != "" && (input.SymbolPosition == "prefix" || input.SymbolPosition == "suffix") &&
 		err == nil && rate.Sign() > 0 && input.Precision >= 0 && input.Precision <= 6
 }

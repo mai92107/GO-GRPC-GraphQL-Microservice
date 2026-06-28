@@ -18,13 +18,18 @@ export function formatPercent(rate: string): string {
 
 export function formatBenefitTitle(
   name: string,
-  rate: string,
-  paymentMethodCodes: string[],
-  paymentMethods: { code: string; name: string }[],
+  rewardValue: string,
+  paymentMethodIDs: string[],
+  paymentMethods: { id: string; name: string }[],
+  effectType = "ADD_RATE",
 ): string {
-  if (paymentMethodCodes.length === 0) return `${name} (${formatPercent(rate)})`;
-  const names = paymentMethodCodes.map(code => paymentMethods.find(method => method.code === code)?.name ?? code);
-  return `指定行動支付 (${names.join(", ")}) (${formatPercent(rate)})`;
+  const value =
+    effectType === "ADD_CASH" || effectType === "DISCOUNT"
+      ? `NT$${formatDecimal(rewardValue, 2)}`
+      : formatPercent(rewardValue);
+  if (paymentMethodIDs.length === 0) return `${name} (${value})`;
+  const names = paymentMethodIDs.map((id) => paymentMethods.find((method) => method.id === id)?.name ?? id);
+  return `指定行動支付 (${names.join(", ")}) (${value})`;
 }
 
 export function formatScore(value: string): string {

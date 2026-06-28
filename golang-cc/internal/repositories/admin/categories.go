@@ -7,7 +7,7 @@ import (
 )
 
 func (r *Repository) ListCategories(ctx context.Context) ([]domain.Category, error) {
-	rows, err := r.pool.Query(ctx, `SELECT code,name,is_active FROM categories ORDER BY code`)
+	rows, err := r.pool.Query(ctx, `SELECT id,name,is_active FROM categories ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -15,7 +15,7 @@ func (r *Repository) ListCategories(ctx context.Context) ([]domain.Category, err
 	result := []domain.Category{}
 	for rows.Next() {
 		var item domain.Category
-		if err := rows.Scan(&item.Code, &item.Name, &item.IsActive); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.IsActive); err != nil {
 			return nil, err
 		}
 		result = append(result, item)
@@ -23,13 +23,13 @@ func (r *Repository) ListCategories(ctx context.Context) ([]domain.Category, err
 	return result, rows.Err()
 }
 
-func (r *Repository) CreateCategory(ctx context.Context, code, name string) error {
-	_, err := r.pool.Exec(ctx, `INSERT INTO categories(code,name) VALUES($1,$2)`, code, name)
+func (r *Repository) CreateCategory(ctx context.Context, id, name string) error {
+	_, err := r.pool.Exec(ctx, `INSERT INTO categories(id,name) VALUES($1,$2)`, id, name)
 	return err
 }
 
-func (r *Repository) UpdateCategory(ctx context.Context, code, name string, active bool) error {
-	tag, err := r.pool.Exec(ctx, `UPDATE categories SET name=$2,is_active=$3 WHERE code=$1`, code, name, active)
+func (r *Repository) UpdateCategory(ctx context.Context, id, name string, active bool) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE categories SET name=$2,is_active=$3 WHERE id=$1`, id, name, active)
 	if err != nil {
 		return err
 	}
@@ -39,8 +39,8 @@ func (r *Repository) UpdateCategory(ctx context.Context, code, name string, acti
 	return nil
 }
 
-func (r *Repository) DeleteCategory(ctx context.Context, code string) error {
-	tag, err := r.pool.Exec(ctx, `DELETE FROM categories WHERE code=$1 AND code<>'general'`, code)
+func (r *Repository) DeleteCategory(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM categories WHERE id=$1 AND id<>'general'`, id)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,6 @@
-import { Trash2 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Field } from "../../../components";
+import { Coins, Plus } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Dialog, Empty, Field, SearchField } from "../../../components";
 import type { Unit } from "../../../models";
 import {
   createRewardUnit,
@@ -9,254 +9,169 @@ import {
   updateRewardUnit,
 } from "../../AdminApi";
 
-const emptyForm = {
-  code: "",
+type UnitForm = {
+  name: string;
+  symbol: string;
+  symbol_position: "prefix" | "suffix";
+  twd_rate: string;
+  precision: number;
+};
+
+const emptyForm: UnitForm = {
   name: "",
   symbol: "",
-  symbol_position: "suffix" as const,
+  symbol_position: "suffix",
   twd_rate: "1",
   precision: 2,
 };
 
+const toForm = (unit: Unit): UnitForm => ({
+  name: unit.name,
+  symbol: unit.symbol,
+  symbol_position: unit.symbol_position,
+  twd_rate: unit.twd_rate,
+  precision: unit.precision,
+});
+
 export default function Units() {
   const [items, setItems] = useState<Unit[]>([]);
-  const [form, setForm] = useState<{
-    code: string;
-    name: string;
-    symbol: string;
-    symbol_position: "prefix" | "suffix";
-    twd_rate: string;
-    precision: number;
-  }>(emptyForm);
-  const [editingID, setEditingID] = useState<string | null>(null);
-  const [editingRate, setEditingRate] = useState("");
+  const [form, setForm] = useState<UnitForm>(emptyForm);
+  const [editing, setEditing] = useState<Unit | null>(null);
+  const [editForm, setEditForm] = useState<UnitForm>(emptyForm);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [processingID, setProcessingID] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
 
   const load = useCallback(async () => {
-    try {
-      setItems(await getRewardUnits());
-    } catch (requestError) {
-      setError((requestError as Error).message);
-    } finally {
-      setLoading(false);
-    }
+    try { setItems(await getRewardUnits()); }
+    catch (requestError) { setError((requestError as Error).message); }
+    finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => void load(), [load]);
 
   async function create(event: FormEvent) {
     event.preventDefault();
-    setCreating(true);
-    setError("");
+    setProcessing(true); setError("");
     try {
       await createRewardUnit(form);
-      setForm(emptyForm);
-      await load();
-    } catch (requestError) {
-      setError((requestError as Error).message);
-    } finally {
-      setCreating(false);
-    }
+      setForm(emptyForm); setShowCreate(false); await load();
+    } catch (requestError) { setError((requestError as Error).message); }
+    finally { setProcessing(false); }
   }
 
-  function startEdit(unit: Unit) {
-    setEditingID(unit.id);
-    setEditingRate(unit.twd_rate);
+  function openEditor(unit: Unit) {
+    setError(""); setEditing(unit); setEditForm(toForm(unit));
   }
 
-  async function saveRate(unit: Unit) {
-    setProcessingID(unit.id);
-    setError("");
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (!editing) return;
+    setProcessing(true); setError("");
     try {
-      await updateRewardUnit(unit.id, {
-        code: unit.code,
-        name: unit.name,
-        symbol: unit.symbol,
-        symbol_position: unit.symbol_position,
-        precision: unit.precision,
-        twd_rate: editingRate,
-      });
-      setEditingID(null);
-      await load();
-    } catch (requestError) {
-      setError((requestError as Error).message);
-    } finally {
-      setProcessingID(null);
-    }
+      await updateRewardUnit(editing.id, editForm);
+      setEditing(null); await load();
+    } catch (requestError) { setError((requestError as Error).message); }
+    finally { setProcessing(false); }
   }
 
-  async function remove(unit: Unit) {
-    if (!confirm(`確定刪除「${unit.name}」？`)) return;
-    setProcessingID(unit.id);
-    setError("");
-    try {
-      await deleteRewardUnit(unit.id);
-      await load();
-    } catch (requestError) {
-      setError((requestError as Error).message);
-    } finally {
-      setProcessingID(null);
-    }
+  async function remove() {
+    if (!editing || !confirm(`確定要刪除「${editing.name}」嗎？此操作無法復原。`)) return;
+    setProcessing(true); setError("");
+    try { await deleteRewardUnit(editing.id); setEditing(null); await load(); }
+    catch (requestError) { setError((requestError as Error).message); }
+    finally { setProcessing(false); }
   }
+
+  const filtered = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    return items.filter((item) => !keyword || `${item.name} ${item.symbol}`.toLowerCase().includes(keyword));
+  }, [items, query]);
+
+  const unitFields = (value: UnitForm, update: (next: UnitForm) => void) => (
+    <>
+      <div className="two-col">
+        <Field label="顯示名稱">
+          <input required value={value.name} disabled={processing} placeholder="例如：航空里程" onChange={(e) => update({ ...value, name: e.target.value })} />
+        </Field>
+        <Field label="顯示符號">
+          <input required value={value.symbol} disabled={processing} placeholder="例如：哩" onChange={(e) => update({ ...value, symbol: e.target.value })} />
+        </Field>
+      </div>
+      <div className="two-col">
+        <Field label="符號位置">
+          <select value={value.symbol_position} disabled={processing} onChange={(e) => update({ ...value, symbol_position: e.target.value as UnitForm["symbol_position"] })}>
+            <option value="prefix">置前，例如 $100</option>
+            <option value="suffix">置後，例如 100 點</option>
+          </select>
+        </Field>
+        <Field label="每單位約當台幣">
+          <input type="number" min="0.000001" step="0.000001" required value={value.twd_rate} disabled={processing} onChange={(e) => update({ ...value, twd_rate: e.target.value })} />
+        </Field>
+      </div>
+      <Field label="小數精度" hint="回饋結果最多顯示的小數位數。">
+        <input type="number" min="0" max="6" value={value.precision} disabled={processing} onChange={(e) => update({ ...value, precision: Number(e.target.value) })} />
+      </Field>
+    </>
+  );
 
   return (
-    <section className="panel">
-      <h2>回饋單位</h2>
-      {error && <div className="error">{error}</div>}
-      <form className="stack" onSubmit={create}>
-        <input
-          className="inputBlock"
-          placeholder="代碼"
-          value={form.code}
-          disabled={creating}
-          required
-          onChange={(event) => setForm({ ...form, code: event.target.value })}
-        />
-        <input
-          className="inputBlock"
-          placeholder="名稱"
-          value={form.name}
-          disabled={creating}
-          required
-          onChange={(event) => setForm({ ...form, name: event.target.value })}
-        />
-        <input
-          className="inputBlock"
-          placeholder="符號"
-          value={form.symbol}
-          disabled={creating}
-          required
-          onChange={(event) =>
-            setForm({ ...form, symbol: event.target.value })
-          }
-        />
-        <div className="two-col">
-          <Field label="符號位置">
-            <select
-              value={form.symbol_position}
-              disabled={creating}
-              onChange={(event) =>
-                setForm({
-                  ...form,
-                  symbol_position: event.target.value as "prefix" | "suffix",
-                })
-              }
-            >
-              <option value="prefix">置前</option>
-              <option value="suffix">置後</option>
-            </select>
-          </Field>
-          <Field label="每單位約當台幣">
-            <input
-              type="number"
-              min="0.000001"
-              step="0.000001"
-              value={form.twd_rate}
-              disabled={creating}
-              required
-              onChange={(event) =>
-                setForm({ ...form, twd_rate: event.target.value })
-              }
-            />
-          </Field>
+    <>
+      <section className="panel setting-collection">
+        <div className="section-title">
+          <div><h2>回饋單位</h2><p className="muted">管理現金、點數與里程的顯示及價值換算。</p></div>
+          <button className="button" onClick={() => setShowCreate(true)}><Plus size={16} /> 新增單位</button>
         </div>
-        <Field label="小數精度">
-          <input
-            type="number"
-            min="0"
-            max="6"
-            value={form.precision}
-            disabled={creating}
-            onChange={(event) =>
-              setForm({ ...form, precision: Number(event.target.value) })
-            }
-          />
-        </Field>
-        <button className="button secondary" disabled={creating}>
-          {creating ? "新增中…" : "新增單位"}
-        </button>
-      </form>
-
-      {loading ? (
-        <p className="muted">載入回饋單位中…</p>
-      ) : (
-        <div className="list">
-          {items.map((unit) => {
-            const processing = processingID === unit.id;
-            const editing = editingID === unit.id;
-            return (
-              <div className="list-row" key={unit.id}>
-                <div>
+        {error && <div className="error preference-message">{error}</div>}
+        <div className="collection-toolbar">
+          <SearchField value={query} onChange={setQuery} placeholder="搜尋單位名稱或符號" />
+          <span className="collection-count">{filtered.length} 種回饋單位</span>
+        </div>
+        {loading ? <p className="muted">載入回饋單位中…</p> : !filtered.length ? (
+          <Empty title="找不到回饋單位" text={items.length ? "請調整搜尋條件。" : "建立第一種回饋單位。"} />
+        ) : (
+          <div className="entity-grid">
+            {filtered.map((unit) => (
+              <article className="entity-card" key={unit.id}>
+                <div className="entity-icon"><Coins size={20} /></div>
+                <div className="entity-copy">
+                  <span className="entity-kicker">1 單位 ≈ NT${unit.twd_rate}</span>
                   <h3>{unit.name}</h3>
-                  <p>
-                    {unit.code} ·{" "}
-                    {unit.symbol_position === "prefix"
-                      ? `${unit.symbol}數值`
-                      : `數值${unit.symbol}`}{" "}
-                    · 1 單位 = NT${unit.twd_rate}
-                  </p>
-                  {editing && (
-                    <input
-                      type="number"
-                      min="0.000001"
-                      step="0.000001"
-                      aria-label={`${unit.name} 每單位約當台幣`}
-                      value={editingRate}
-                      disabled={processing}
-                      onChange={(event) => setEditingRate(event.target.value)}
-                    />
-                  )}
+                  <p>{unit.symbol_position === "prefix" ? `${unit.symbol}100` : `100${unit.symbol}`} · 小數 {unit.precision} 位</p>
                 </div>
-                <div className="toolbar">
-                  {editing ? (
-                    <>
-                      <button
-                        type="button"
-                        className="button"
-                        disabled={processing || !editingRate}
-                        onClick={() => void saveRate(unit)}
-                      >
-                        儲存換算
-                      </button>
-                      <button
-                        type="button"
-                        className="button ghost"
-                        disabled={processing}
-                        onClick={() => setEditingID(null)}
-                      >
-                        取消
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      className="button ghost"
-                      disabled={processing}
-                      onClick={() => startEdit(unit)}
-                    >
-                      修改換算
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="icon-button"
-                    aria-label={`刪除 ${unit.name}`}
-                    disabled={processing}
-                    onClick={() => void remove(unit)}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                <button className="button ghost" onClick={() => openEditor(unit)}>修改</button>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {showCreate && (
+        <Dialog title="新增回饋單位" onClose={() => !processing && setShowCreate(false)}>
+          <form className="stack" onSubmit={create}>
+            {unitFields(form, setForm)}
+            <div className="dialog-actions">
+              <button type="button" className="button ghost" onClick={() => setShowCreate(false)}>取消</button>
+              <button className="button" disabled={processing || !form.name.trim() || !form.symbol.trim()}>{processing ? "新增中…" : "新增單位"}</button>
+            </div>
+          </form>
+        </Dialog>
       )}
-    </section>
+
+      {editing && (
+        <Dialog title="修改回饋單位" onClose={() => !processing && setEditing(null)}>
+          <form className="stack" onSubmit={save}>
+            {unitFields(editForm, setEditForm)}
+            <div className="dialog-actions split-actions">
+              <button type="button" className="button danger" disabled={processing} onClick={() => void remove()}>刪除單位</button>
+              <span />
+              <button className="button" disabled={processing || !editForm.name.trim() || !editForm.symbol.trim()}>{processing ? "處理中…" : "儲存"}</button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+    </>
   );
 }

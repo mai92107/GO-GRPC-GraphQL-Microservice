@@ -9,7 +9,6 @@ import (
 
 type bankRequest struct {
 	Name       string `json:"name" binding:"required"`
-	Code       string `json:"code"`
 	WebsiteURL string `json:"website_url"`
 	IsActive   *bool  `json:"is_active"`
 }
@@ -17,6 +16,7 @@ type bankRequest struct {
 func (c *Controller) ListBanks(ctx *gin.Context) {
 	result, err := c.service.ListBanks(ctx.Request.Context())
 	if err != nil {
+		println("Error listing banks:", err.Error())
 		failure(ctx, http.StatusInternalServerError, "internal_error", "查詢失敗")
 		return
 	}
@@ -32,7 +32,7 @@ func (c *Controller) CreateBank(ctx *gin.Context) {
 	if input.IsActive != nil {
 		active = *input.IsActive
 	}
-	id, err := c.service.CreateBank(ctx.Request.Context(), service.BankInput{Name: input.Name, Code: input.Code, WebsiteURL: input.WebsiteURL, IsActive: active})
+	id, err := c.service.CreateBank(ctx.Request.Context(), service.BankInput{Name: input.Name, WebsiteURL: input.WebsiteURL, IsActive: active})
 	if err != nil {
 		failure(ctx, http.StatusConflict, "conflict", "銀行重複或資料無效")
 		return
@@ -45,7 +45,7 @@ func (c *Controller) UpdateBank(ctx *gin.Context) {
 		failure(ctx, http.StatusBadRequest, "validation_failed", "資料無效")
 		return
 	}
-	err := c.service.UpdateBank(ctx.Request.Context(), ctx.Param("id"), service.BankInput{Name: input.Name, Code: input.Code, WebsiteURL: input.WebsiteURL, IsActive: *input.IsActive})
+	err := c.service.UpdateBank(ctx.Request.Context(), ctx.Param("id"), service.BankInput{Name: input.Name, WebsiteURL: input.WebsiteURL, IsActive: *input.IsActive})
 	if err != nil {
 		failure(ctx, http.StatusNotFound, "not_found", "找不到銀行")
 		return

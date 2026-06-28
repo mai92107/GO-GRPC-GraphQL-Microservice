@@ -2,43 +2,41 @@ package admin
 
 import (
 	"context"
-	"regexp"
 	"strings"
 
 	"github.com/rafa/golang-cc/internal/domain"
 )
 
-var merchantCodePattern = regexp.MustCompile(`^[a-z0-9_]+$`)
-
 func (s *Service) ListMerchants(ctx context.Context) ([]domain.Merchant, error) {
 	return s.repository.ListMerchants(ctx)
 }
 
-func (s *Service) CreateMerchant(ctx context.Context, code, name string, aliases, categories []string) error {
-	item, ok := validMerchant(code, name, aliases, categories, true)
+func (s *Service) CreateMerchant(ctx context.Context, name string, aliases, categories []string) (string, error) {
+	item, ok := validMerchant(name, aliases, categories, true)
 	if !ok {
-		return domain.ErrInvalidInput
+		return "", domain.ErrInvalidInput
 	}
 	return s.repository.CreateMerchant(ctx, item)
 }
 
-func (s *Service) UpdateMerchant(ctx context.Context, code, name string, aliases, categories []string, active bool) error {
-	item, ok := validMerchant(code, name, aliases, categories, active)
+func (s *Service) UpdateMerchant(ctx context.Context, id, name string, aliases, categories []string, active bool) error {
+	item, ok := validMerchant(name, aliases, categories, active)
 	if !ok {
+		return domain.ErrInvalidInput
+	}
+	item.Id = strings.TrimSpace(id)
+	if item.Id == "" {
 		return domain.ErrInvalidInput
 	}
 	return s.repository.UpdateMerchant(ctx, item)
 }
 
-func (s *Service) DeleteMerchant(ctx context.Context, code string) error {
-	return s.repository.DeleteMerchant(ctx, code)
+func (s *Service) DeleteMerchant(ctx context.Context, id string) error {
+	return s.repository.DeleteMerchant(ctx, id)
 }
 
-func validMerchant(code, name string, aliases, categories []string, active bool) (domain.Merchant, bool) {
-	code, name = strings.TrimSpace(code), strings.TrimSpace(name)
-	if !merchantCodePattern.MatchString(code) || name == "" {
-		return domain.Merchant{}, false
-	}
+func validMerchant(name string, aliases, categories []string, active bool) (domain.Merchant, bool) {
+	name = strings.TrimSpace(name)
 	seen, clean := map[string]bool{}, []string{}
 	for _, alias := range aliases {
 		alias = strings.TrimSpace(alias)
@@ -61,5 +59,5 @@ func validMerchant(code, name string, aliases, categories []string, active bool)
 	if len(categoryClean) == 0 {
 		return domain.Merchant{}, false
 	}
-	return domain.Merchant{Code: code, Name: name, Aliases: clean, CategoryCodes: categoryClean, IsActive: active}, true
+	return domain.Merchant{Name: name, Aliases: clean, CategoryIDs: categoryClean, IsActive: active}, true
 }

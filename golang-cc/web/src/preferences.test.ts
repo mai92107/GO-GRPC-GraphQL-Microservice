@@ -3,7 +3,6 @@ import { groupPreferences, movePreference, tierLabel, toPreferenceWrites, type R
 
 const preference = (id: string, weight: string): RewardPreference => ({
   reward_unit_id: id,
-  code: id,
   name: id,
   symbol: id,
   weight,

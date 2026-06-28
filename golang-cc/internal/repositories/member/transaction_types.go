@@ -11,10 +11,10 @@ type Transaction struct {
 	UserID            recommendations.ID
 	CardID            recommendations.ID
 	AmountMinor       int64
-	CategoryCode      string
+	CategoryID        string
 	MerchantName      string
-	MerchantCode      string
-	PaymentMethodCode string
+	MerchantID        string
+	PaymentMethodID   string
 	PaymentMethodName string
 	TransactionDate   recommendations.LocalDate
 	Note              string
@@ -22,14 +22,14 @@ type Transaction struct {
 }
 
 type WriteInput struct {
-	CardID            recommendations.ID
-	AmountMinor       int64
-	CategoryCode      string
-	MerchantName      string
-	MerchantCode      string
-	PaymentMethodCode string
-	TransactionDate   recommendations.LocalDate
-	Note              string
+	CardID          recommendations.ID
+	AmountMinor     int64
+	CategoryID      string
+	MerchantName    string
+	MerchantID      string
+	PaymentMethodID string
+	TransactionDate recommendations.LocalDate
+	Note            string
 }
 
 var ErrNotFound = fmt.Errorf("transaction not found")

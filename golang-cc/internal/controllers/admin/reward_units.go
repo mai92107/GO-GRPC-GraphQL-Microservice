@@ -8,7 +8,6 @@ import (
 )
 
 type rewardUnitRequest struct {
-	Code           string `json:"code" binding:"required"`
 	Name           string `json:"name" binding:"required"`
 	Symbol         string `json:"symbol" binding:"required"`
 	SymbolPosition string `json:"symbol_position" binding:"required,oneof=prefix suffix"`
@@ -18,7 +17,6 @@ type rewardUnitRequest struct {
 
 type rewardUnitResponse struct {
 	ID             string `json:"id"`
-	Code           string `json:"code"`
 	Name           string `json:"name"`
 	Symbol         string `json:"symbol"`
 	SymbolPosition string `json:"symbol_position"`
@@ -35,7 +33,7 @@ func (c *Controller) ListRewardUnits(ctx *gin.Context) {
 	output := make([]rewardUnitResponse, 0, len(items))
 	for _, item := range items {
 		output = append(output, rewardUnitResponse{
-			ID: item.ID, Code: item.Code, Name: item.Name, Symbol: item.Symbol,
+			ID: item.ID, Name: item.Name, Symbol: item.Symbol,
 			SymbolPosition: item.SymbolPosition, TWDRate: item.TWDRate, Precision: item.Precision,
 		})
 	}
@@ -43,7 +41,7 @@ func (c *Controller) ListRewardUnits(ctx *gin.Context) {
 }
 
 func (r rewardUnitRequest) serviceInput() service.RewardUnitInput {
-	return service.RewardUnitInput{Code: r.Code, Name: r.Name, Symbol: r.Symbol, SymbolPosition: r.SymbolPosition, TWDRate: r.TWDRate, Precision: r.Precision}
+	return service.RewardUnitInput{Name: r.Name, Symbol: r.Symbol, SymbolPosition: r.SymbolPosition, TWDRate: r.TWDRate, Precision: r.Precision}
 }
 
 func (c *Controller) CreateRewardUnit(ctx *gin.Context) {

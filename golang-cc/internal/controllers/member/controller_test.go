@@ -29,7 +29,7 @@ func TestCreateTransactionRejectsInvalidDateBeforeService(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := gin.New()
 	engine.POST("/transactions", New(&service.Service{}).CreateTransaction)
-	body := `{"card_id":"card-id","amount_minor":100,"category_code":"dining","merchant_name":"store","transaction_date":"bad"}`
+	body := `{"card_id":"card-id","amount_minor":100,"category_id":"dining","merchant_name":"store","transaction_date":"bad"}`
 	request := httptest.NewRequest(http.MethodPost, "/transactions", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()

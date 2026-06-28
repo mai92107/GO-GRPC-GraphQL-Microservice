@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { CalendarDays, ReceiptText, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Empty } from "../../components";
 import {
@@ -47,30 +47,25 @@ export default function Transactions() {
     <>
       <div className="page-head">
         <div>
+          <span className="page-eyebrow">ACTIVITY</span>
           <h1>交易紀錄</h1>
-          <p>刪除或修改交易後，月度 cap 會重新計算。</p>
+          <p>查看已記錄的刷卡消費與使用方式。</p>
         </div>
       </div>
 
       {error && <div className="error">{error}</div>}
 
       {!loading && items.length > 0 && (
-        <div className="list">
+        <div className="transaction-list">
           {items.map((transaction) => (
-            <article className="list-row" key={transaction.id}>
-              <div>
-                <h3>
-                  NT$
-                  {(transaction.amount_minor / 100).toLocaleString()} ·{" "}
-                  {transaction.merchant_name || "其他店家"}
-                </h3>
-                <p>
-                  {transaction.category_code} ·{" "}
-                  {transaction.payment_method_name} ·{" "}
-                  {transaction.transaction_date}
-                  {transaction.note && ` · ${transaction.note}`}
-                </p>
+            <article className="transaction-row" key={transaction.id}>
+              <span className="transaction-icon"><ReceiptText size={19} /></span>
+              <div className="transaction-copy">
+                <strong>{transaction.merchant_name || "其他店家"}</strong>
+                <span>{transaction.payment_method_name} · {transaction.category_id}</span>
+                <small><CalendarDays size={13} />{transaction.transaction_date}{transaction.note && ` · ${transaction.note}`}</small>
               </div>
+              <strong className="transaction-amount">NT${(transaction.amount_minor / 100).toLocaleString()}</strong>
               <button
                 type="button"
                 className="icon-button"

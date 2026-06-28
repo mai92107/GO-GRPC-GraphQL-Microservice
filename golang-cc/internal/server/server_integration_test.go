@@ -62,14 +62,15 @@ func TestAuthCSRFEmailAndHorizontalIsolation(t *testing.T) {
 	assertStatus(t, response, 404)
 
 	adminCookie, adminCSRF := loginRequest(t, handler, "admin@example.test", adminPassword)
-	response = request(t, handler, "POST", "/api/admin/payment-methods", map[string]any{"code": "test_wallet", "name": "測試錢包"}, adminCookie, adminCSRF)
+	response = request(t, handler, "POST", "/api/admin/payment-methods", map[string]any{"name": "測試錢包"}, adminCookie, adminCSRF)
 	assertStatus(t, response, 201)
+	paymentMethodID := responseDataString(t, response, "id")
 	response = request(t, handler, "GET", "/api/admin/payment-methods", nil, adminCookie, "")
 	assertStatus(t, response, 200)
-	response = request(t, handler, "DELETE", "/api/admin/payment-methods/test_wallet", nil, adminCookie, adminCSRF)
+	response = request(t, handler, "DELETE", "/api/admin/payment-methods/"+paymentMethodID, nil, adminCookie, adminCSRF)
 	assertStatus(t, response, 200)
 	response = request(t, handler, "POST", "/api/admin/merchants", map[string]any{
-		"code": "px_mart", "name": "全聯", "aliases": []string{"全聯福利中心"}, "category_codes": []string{"grocery"},
+		"name": "全聯", "aliases": []string{"全聯福利中心"}, "category_ids": []string{"grocery"},
 	}, adminCookie, adminCSRF)
 	assertStatus(t, response, 201)
 	response = request(t, handler, "GET", "/api/admin/merchants", nil, adminCookie, "")
@@ -102,17 +103,39 @@ func TestAuthCSRFEmailAndHorizontalIsolation(t *testing.T) {
 	response = request(t, handler, "POST", "/api/admin/banks", map[string]any{"name": "虛構銀行", "is_active": true}, adminCookie, adminCSRF)
 	assertStatus(t, response, 201)
 	bankID := responseDataString(t, response, "id")
-	response = request(t, handler, "POST", "/api/admin/card-products", map[string]any{"bank_id": bankID, "name": "森活卡", "is_active": true}, adminCookie, adminCSRF)
+	response = request(t, handler, "POST", "/api/admin/card-products", map[string]any{
+		"bank_id": bankID, "name": "森活卡", "is_active": true, "account_tiers": []string{"尊榮會員"},
+	}, adminCookie, adminCSRF)
 	assertStatus(t, response, 201)
 	productID := responseDataString(t, response, "id")
 	response = request(t, handler, "POST", "/api/admin/activities", map[string]any{
 		"card_product_id": productID, "name": "2026 核心權益", "start_date": "2026-01-01", "end_date": "2026-12-31", "is_active": true,
-		"benefits": []map[string]any{{"reward_unit_id": "00000000-0000-0000-0000-000000000101", "name": "餐飲 10%", "rate": "0.1", "monthly_cap": "10", "stack_group": "base", "category_codes": []string{"dining"}, "merchant_codes": []string{"px_mart"}}},
+		"benefits": []map[string]any{
+			{"reward_unit_id": "00000000-0000-0000-0000-000000000101", "name": "餐飲 10%", "layer": 3, "effect_type": "ADD_RATE", "reward_value": "0.1", "monthly_cap": "10", "stack_group": "base", "category_ids": []string{"dining"}, "merchant_ids": []string{"px_mart"}},
+			{"reward_unit_id": "00000000-0000-0000-0000-000000000101", "name": "玩旅刷 5%", "layer": 3, "effect_type": "ADD_RATE", "reward_value": "0.05", "stack_group": "travel", "category_ids": []string{"travel"}, "action_required": "app_switch", "action_message": "請先切換為玩旅刷"},
+			{"reward_unit_id": "00000000-0000-0000-0000-000000000101", "name": "尊榮加碼 2%", "layer": 2, "effect_type": "ADD_RATE", "reward_value": "0.02", "stack_group": "vip", "category_ids": []string{"general"}, "required_account_tiers": []string{"尊榮會員"}},
+		},
 	}, adminCookie, adminCSRF)
 	assertStatus(t, response, 201)
-	response = request(t, handler, "POST", "/api/member/cards", map[string]any{"card_product_id": productID, "nickname": "我的森活卡", "last_four": "8899", "statement_day": 5, "payment_due_day": 20, "is_active": true}, memberCookie, "")
+	activityID := responseDataString(t, response, "id")
+	var selectableRequirements, qualifiedRequirements int
+	if err := pool.QueryRow(context.Background(), `SELECT
+		count(*) FILTER (WHERE p.plan_type='selectable'),
+		count(*) FILTER (WHERE p.plan_type='qualified')
+		FROM reward.requirements r
+		JOIN reward.condition_versions cv ON cv.reward_condition_id=r.reward_condition_id
+		CROSS JOIN LATERAL jsonb_array_elements_text(cv.configuration_json->'card_plan_ids') plan_id
+		JOIN catalog.card_plans p ON p.id=plan_id::uuid
+		JOIN reward.components c ON c.id=r.reward_component_id
+		WHERE c.reward_program_id=$1`, activityID).Scan(&selectableRequirements, &qualifiedRequirements); err != nil {
+		t.Fatal(err)
+	}
+	if selectableRequirements != 1 || qualifiedRequirements != 1 {
+		t.Fatalf("plan requirements selectable=%d qualified=%d", selectableRequirements, qualifiedRequirements)
+	}
+	response = request(t, handler, "POST", "/api/member/cards", map[string]any{"card_product_id": productID, "nickname": "我的森活卡", "last_four": "8899", "statement_day": 5, "payment_due_day": 20, "account_tier": "尊榮會員", "is_active": true}, memberCookie, "")
 	assertStatus(t, response, 403)
-	response = request(t, handler, "POST", "/api/member/cards", map[string]any{"card_product_id": productID, "nickname": "我的森活卡", "last_four": "8899", "statement_day": 5, "payment_due_day": 20, "is_active": true}, memberCookie, memberCSRF)
+	response = request(t, handler, "POST", "/api/member/cards", map[string]any{"card_product_id": productID, "nickname": "我的森活卡", "last_four": "8899", "statement_day": 5, "payment_due_day": 20, "account_tier": "尊榮會員", "is_active": true}, memberCookie, memberCSRF)
 	assertStatus(t, response, 201)
 	cardID := responseDataString(t, response, "id")
 	response = request(t, handler, "GET", "/api/member/cards/"+cardID, nil, nil, "")
@@ -124,11 +147,11 @@ func TestAuthCSRFEmailAndHorizontalIsolation(t *testing.T) {
 
 	response = request(t, handler, "POST", "/api/admin/activities", map[string]any{}, memberCookie, memberCSRF)
 	assertStatus(t, response, 403)
-	recommendation := map[string]any{"amount_minor": 10000, "category_code": "dining", "merchant_code": "px_mart", "date": "2026-06-10"}
+	recommendation := map[string]any{"amount_minor": 10000, "category_id": "dining", "merchant_id": "px_mart", "date": "2026-06-10"}
 	response = request(t, handler, "POST", "/api/member/recommendations", recommendation, memberCookie, memberCSRF)
 	assertStatus(t, response, 200)
 	response = request(t, handler, "POST", "/api/member/transactions", map[string]any{
-		"card_id": cardID, "amount_minor": 10000, "category_code": "dining", "merchant_code": "px_mart", "payment_method_code": "physical_card", "transaction_date": "2026-06-10",
+		"card_id": cardID, "amount_minor": 10000, "category_id": "dining", "merchant_id": "px_mart", "payment_method_id": "physical_card", "transaction_date": "2026-06-10",
 	}, memberCookie, memberCSRF)
 	assertStatus(t, response, 201)
 	response = request(t, handler, "POST", "/api/member/recommendations", recommendation, memberCookie, memberCSRF)
@@ -161,6 +184,9 @@ func apiPool(t *testing.T) *pgxpool.Pool {
 	t.Cleanup(pool.Close)
 	if err = pool.Ping(context.Background()); err != nil {
 		t.Skipf("database unavailable: %v", err)
+	}
+	if _, err = pool.Exec(context.Background(), `DROP SCHEMA IF EXISTS identity,catalog,merchant,reward,member_profile,recommendation,"transaction",integration CASCADE`); err != nil {
+		t.Fatal(err)
 	}
 	if _, err = pool.Exec(context.Background(), `DROP SCHEMA public CASCADE`); err != nil {
 		t.Fatal(err)

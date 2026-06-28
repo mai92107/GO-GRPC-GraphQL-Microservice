@@ -12,7 +12,7 @@ func (r *Repository) Dashboard(ctx context.Context) (domain.Dashboard, error) {
 		(SELECT count(*) FROM users WHERE role='member'),
 		(SELECT count(*) FROM banks),
 		(SELECT count(*) FROM card_products),
-		(SELECT count(*) FROM card_activities WHERE is_active)`).
+		(SELECT count(*) FROM reward.programs WHERE status='published')`).
 		Scan(&result.Members, &result.Banks, &result.Cards, &result.ActiveActivities)
 	return result, err
 }

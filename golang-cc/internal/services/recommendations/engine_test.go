@@ -3,8 +3,8 @@ package recommendations
 import "testing"
 
 var (
-	cash   = RewardUnit{ID: "cash", Code: "cash_twd", Name: "現金", Symbol: "NT$", Precision: 2}
-	points = RewardUnit{ID: "points", Code: "points", Name: "點數", Symbol: "點", Precision: 2}
+	cash   = RewardUnit{ID: "cash", Name: "現金", Symbol: "NT$", Precision: 2}
+	points = RewardUnit{ID: "points", Name: "點數", Symbol: "點", Precision: 2}
 )
 
 func TestAcceptanceCaseStacksRulesAndAppliesCap(t *testing.T) {
@@ -53,6 +53,45 @@ func TestDateBoundariesAndInactiveEntries(t *testing.T) {
 	input.Cards[0].IsActive = false
 	if result := recommendOK(t, input); result.EmptyReason == "" {
 		t.Fatal("expected no recommendation for inactive card")
+	}
+}
+
+func TestCardNetworkAndQualifiedPlanConditions(t *testing.T) {
+	input := baseInput()
+	input.Cards[0].NetworkID = "visa"
+	qualified := rule("qualified", "card-a", cash, "0.05", nil, "general")
+	qualified.CardNetworkIDs = []ID{"visa", "mastercard"}
+	qualified.QualifiedCardPlanIDs = []ID{"dawho"}
+	input.Rules = []RewardRule{qualified}
+
+	if got := len(recommendOK(t, input).Recommendations); got != 0 {
+		t.Fatalf("unqualified recommendations = %d, want 0", got)
+	}
+	input.Cards[0].QualifiedCardPlanIDs = []ID{"dawho"}
+	if got := len(recommendOK(t, input).Recommendations); got != 1 {
+		t.Fatalf("qualified Visa recommendations = %d, want 1", got)
+	}
+	input.Cards[0].NetworkID = "jcb"
+	if got := len(recommendOK(t, input).Recommendations); got != 0 {
+		t.Fatalf("JCB recommendations = %d, want 0", got)
+	}
+}
+
+func TestSelectablePlanAddsSnapshotMetadataWithoutBlocking(t *testing.T) {
+	input := baseInput()
+	selectable := rule("travel", "card-a", cash, "0.03", nil, "general")
+	selectable.ActionRequired = "app_switch"
+	selectable.ActionMessage = "請切換為玩旅刷"
+	selectable.SuggestedCardPlanID = "travel-plan"
+	selectable.SuggestedPlanName = "玩旅刷"
+	input.Rules = []RewardRule{selectable}
+
+	card := recommendOK(t, input).Recommendations[0]
+	if len(card.Reminders) != 1 || card.Reminders[0] != selectable.ActionMessage {
+		t.Fatalf("reminders = %v", card.Reminders)
+	}
+	if card.Allocations[0].SuggestedCardPlanID != "travel-plan" {
+		t.Fatalf("suggested plan = %s", card.Allocations[0].SuggestedCardPlanID)
 	}
 }
 
@@ -148,11 +187,11 @@ func TestValidationAndNoEffectiveRules(t *testing.T) {
 		t.Fatal("expected amount validation error")
 	}
 	input.AmountMinor = 100
-	input.CategoryCode = "general"
+	input.CategoryID = "general"
 	if _, err := Recommend(input); err == nil {
 		t.Fatal("expected category validation error")
 	}
-	input.CategoryCode = "dining"
+	input.CategoryID = "dining"
 	input.Rules = nil
 	result := recommendOK(t, input)
 	if len(result.Recommendations) != 0 || result.EmptyReason == "" {
@@ -163,23 +202,23 @@ func TestValidationAndNoEffectiveRules(t *testing.T) {
 func TestActivityRequiresMatchingCategoryAndMerchantKeyword(t *testing.T) {
 	input := baseInput()
 	activity := rule("pxmart", "card-a", cash, "0.1", nil, "dining")
-	activity.MerchantCodes = []string{"px_mart"}
+	activity.MerchantIDs = []string{"px_mart"}
 	input.Rules = []RewardRule{activity}
 
-	input.MerchantCode = "px_mart"
+	input.MerchantID = "px_mart"
 	if got := len(recommendOK(t, input).Recommendations); got != 1 {
 		t.Fatalf("matching merchant recommendations = %d, want 1", got)
 	}
-	input.MerchantCode = "px_mart"
+	input.MerchantID = "px_mart"
 	if got := len(recommendOK(t, input).Recommendations); got != 1 {
 		t.Fatalf("case-insensitive merchant recommendations = %d, want 1", got)
 	}
-	input.MerchantCode = "carrefour"
+	input.MerchantID = "carrefour"
 	if got := len(recommendOK(t, input).Recommendations); got != 0 {
 		t.Fatalf("non-matching merchant recommendations = %d, want 0", got)
 	}
-	input.MerchantCode = "px_mart"
-	input.CategoryCode = "online"
+	input.MerchantID = "px_mart"
+	input.CategoryID = "online"
 	if got := len(recommendOK(t, input).Recommendations); got != 0 {
 		t.Fatalf("non-matching category recommendations = %d, want 0", got)
 	}
@@ -200,11 +239,11 @@ func TestPaymentMethodRestrictions(t *testing.T) {
 	restricted.PaymentMethods = []string{"apple_pay", "samsung_pay"}
 	input.Rules = []RewardRule{restricted}
 
-	input.PaymentMethods = []PaymentMethod{{Code: "apple_pay", Name: "Apple Pay"}}
+	input.PaymentMethods = []PaymentMethod{{ID: "apple_pay", Name: "Apple Pay"}}
 	if got := len(recommendOK(t, input).Recommendations); got != 1 {
 		t.Fatalf("matching payment recommendations = %d, want 1", got)
 	}
-	input.PaymentMethods = []PaymentMethod{{Code: "line_pay", Name: "LINE Pay"}}
+	input.PaymentMethods = []PaymentMethod{{ID: "line_pay", Name: "LINE Pay"}}
 	if got := len(recommendOK(t, input).Recommendations); got != 0 {
 		t.Fatalf("non-matching payment recommendations = %d, want 0", got)
 	}
@@ -219,9 +258,9 @@ func TestPaymentMethodRestrictions(t *testing.T) {
 func TestPaymentMethodsGroupSameScoreAndSplitDifferentScore(t *testing.T) {
 	input := baseInput()
 	input.PaymentMethods = []PaymentMethod{
-		{Code: "physical_card", Name: "實體信用卡"},
-		{Code: "apple_pay", Name: "Apple Pay"},
-		{Code: "line_pay", Name: "LINE Pay"},
+		{ID: "physical_card", Name: "實體信用卡"},
+		{ID: "apple_pay", Name: "Apple Pay"},
+		{ID: "line_pay", Name: "LINE Pay"},
 	}
 	base := rule("base", "card-a", cash, "0.01", nil, "general")
 	base.StackGroup = "base"
@@ -240,47 +279,173 @@ func TestPaymentMethodsGroupSameScoreAndSplitDifferentScore(t *testing.T) {
 	if got[0].PaymentOptions[0].PaymentMethodName != "Apple Pay、LINE Pay" {
 		t.Fatalf("merged payment name=%q", got[0].PaymentOptions[0].PaymentMethodName)
 	}
-	if got[1].Rank != 2 || len(got[1].PaymentOptions) != 1 || got[1].PaymentOptions[0].PaymentMethodCode != AnyPaymentCode {
+	if got[1].Rank != 2 || len(got[1].PaymentOptions) != 1 || got[1].PaymentOptions[0].PaymentMethodID != AnyPaymentID {
 		t.Fatalf("second group=%+v", got[1])
 	}
 }
 
 func TestUnrestrictedRuleProducesOnlyAnyPayment(t *testing.T) {
 	input := baseInput()
-	input.PaymentMethods = []PaymentMethod{{Code: "physical_card", Name: "實體信用卡"}, {Code: "apple_pay", Name: "Apple Pay"}}
+	input.PaymentMethods = []PaymentMethod{{ID: "physical_card", Name: "實體信用卡"}, {ID: "apple_pay", Name: "Apple Pay"}}
 	input.Rules = []RewardRule{rule("base", "card-a", cash, "0.01", nil, "general")}
 
 	got := recommendOK(t, input).Recommendations
-	if len(got) != 1 || len(got[0].PaymentOptions) != 1 || got[0].PaymentOptions[0].PaymentMethodCode != AnyPaymentCode {
+	if len(got) != 1 || len(got[0].PaymentOptions) != 1 || got[0].PaymentOptions[0].PaymentMethodID != AnyPaymentID {
 		t.Fatalf("unexpected unrestricted options: %+v", got)
 	}
 }
 
-func TestExclusivePaymentRuleSuppressesGeneralStacks(t *testing.T) {
+func TestExclusivePaymentRuleStacksWithDifferentGroups(t *testing.T) {
 	input := baseInput()
-	input.PaymentMethods = []PaymentMethod{{Code: "easycard", Name: "悠遊卡功能"}}
+	input.PaymentMethods = []PaymentMethod{{ID: "easycard", Name: "悠遊卡功能"}}
 	base := rule("base", "card-a", cash, "0.01", nil, "general")
 	base.StackGroup = "base"
+	base.Layer = "1"
 	bonus := rule("bonus", "card-a", cash, "0.025", nil, "general")
 	bonus.StackGroup = "tier_bonus"
+	bonus.Layer = "2"
 	easycard := rule("easycard", "card-a", cash, "0.03", decimalPointer("100"), "general")
 	easycard.PaymentMethods = []string{"easycard"}
 	easycard.StackGroup = ExclusiveStackGroupPrefix + "easycard_autoload"
+	easycard.Layer = "4"
 	input.Rules = []RewardRule{base, bonus, easycard}
 
 	got := recommendOK(t, input).Recommendations[0]
-	if len(got.Allocations) != 1 || got.Allocations[0].RuleID != "easycard" {
-		t.Fatalf("allocations=%+v,want only easycard exclusive rule", got.Allocations)
+	if len(got.Allocations) != 3 {
+		t.Fatalf("allocations=%+v,want base, bonus, and easycard", got.Allocations)
 	}
-	assertDecimal(t, got.TotalUnweighted, "30.00")
+	assertDecimal(t, got.TotalUnweighted, "65.00")
+	if len(got.PaymentOptions[0].Layers) != 3 {
+		t.Fatalf("layers=%+v,want base, bonus, and payment layers", got.PaymentOptions[0].Layers)
+	}
+}
+
+func TestLayerBreakdownBuildsBaseAndChannelBonus(t *testing.T) {
+	input := baseInput()
+	base := rule("一般回饋", "card-a", cash, "0.01", nil, "general")
+	base.StackGroup = "base"
+	base.Layer = "1"
+	channel := rule("指定通路加碼", "card-a", cash, "0.03", decimalPointer("30"), "general")
+	channel.StackGroup = "channel"
+	channel.Layer = "3"
+	channel.MerchantIDs = []string{"px_mart"}
+	input.MerchantID = "px_mart"
+	input.Rules = []RewardRule{base, channel}
+
+	option := recommendOK(t, input).Recommendations[0].PaymentOptions[0]
+	if len(option.Layers) != 2 {
+		t.Fatalf("layers=%d,want 2", len(option.Layers))
+	}
+	channelLayer := option.Layers[1]
+	assertDecimal(t, channelLayer.RewardRate, "0.03")
+	assertDecimal(t, channelLayer.Benefits[0].RewardAmount, "30.00")
+}
+
+func TestSameExclusiveGroupKeepsBestRule(t *testing.T) {
+	input := baseInput()
+	low := rule("low-channel", "card-a", cash, "0.02", nil, "general")
+	low.Layer = "3"
+	low.StackGroup = "channel"
+	high := rule("high-channel", "card-a", cash, "0.03", nil, "general")
+	high.Layer = "3"
+	high.StackGroup = "channel"
+	input.Rules = []RewardRule{low, high}
+
+	got := recommendOK(t, input).Recommendations[0]
+	if len(got.Allocations) != 1 || got.Allocations[0].RuleID != "high-channel" {
+		t.Fatalf("allocations=%+v,want only high-channel", got.Allocations)
+	}
+	assertDecimal(t, got.PaymentOptions[0].Layers[0].RewardRate, "0.03")
+}
+
+func TestLayerBreakdownStacksAppliedBenefits(t *testing.T) {
+	input := baseInput()
+	base := rule("base", "card-a", cash, "0.01", nil, "general")
+	base.Layer = "1"
+	account := rule("account", "card-a", cash, "0.02", nil, "general")
+	account.Layer = "2"
+	linePay := rule("line-pay", "card-a", cash, "0.02", nil, "general")
+	linePay.Layer = "4"
+	linePay.PaymentMethods = []string{"line_pay"}
+	input.PaymentMethods = []PaymentMethod{{ID: "line_pay", Name: "LINE Pay"}}
+	input.Rules = []RewardRule{base, account, linePay}
+
+	option := recommendOK(t, input).Recommendations[0].PaymentOptions[0]
+	if len(option.Layers) != 3 {
+		t.Fatalf("layers=%+v,want 3 layer breakdowns", option.Layers)
+	}
+	assertDecimal(t, option.TotalUnweighted, "50.00")
+	assertDecimal(t, option.Layers[0].RewardRate, "0.01")
+	assertDecimal(t, option.Layers[1].RewardRate, "0.02")
+	assertDecimal(t, option.Layers[2].RewardRate, "0.02")
+}
+
+func TestExclusiveGroupUsesPriorityBeforeRewardAmount(t *testing.T) {
+	input := baseInput()
+	lowRewardHighPriority := rule("priority-wins", "card-a", cash, "0.03", nil, "general")
+	lowRewardHighPriority.Priority = 10
+	lowRewardHighPriority.StackGroup = "bonus"
+	highRewardLowPriority := rule("reward-loses", "card-a", cash, "0.05", nil, "general")
+	highRewardLowPriority.Priority = 5
+	highRewardLowPriority.StackGroup = "bonus"
+	input.Rules = []RewardRule{lowRewardHighPriority, highRewardLowPriority}
+
+	option := recommendOK(t, input).Recommendations[0].PaymentOptions[0]
+	if len(option.Allocations) != 1 || option.Allocations[0].RuleID != "priority-wins" {
+		t.Fatalf("allocations=%+v,want priority-wins", option.Allocations)
+	}
+	if len(option.ExcludedBenefits) != 1 {
+		t.Fatalf("excluded=%+v,want exclusive loser", option.ExcludedBenefits)
+	}
+}
+
+func TestExclusiveGroupFallsBackToRewardThenDisplayOrder(t *testing.T) {
+	input := baseInput()
+	low := rule("low", "card-a", cash, "0.03", nil, "general")
+	low.StackGroup = "bonus"
+	high := rule("high", "card-a", cash, "0.05", nil, "general")
+	high.StackGroup = "bonus"
+	input.Rules = []RewardRule{low, high}
+	option := recommendOK(t, input).Recommendations[0].PaymentOptions[0]
+	if option.Allocations[0].RuleID != "high" {
+		t.Fatalf("allocation=%+v,want high reward", option.Allocations[0])
+	}
+	first := rule("first", "card-a", cash, "0.03", nil, "general")
+	first.DisplayOrder = 1
+	first.StackGroup = "bonus"
+	second := rule("second", "card-a", cash, "0.03", nil, "general")
+	second.DisplayOrder = 2
+	second.StackGroup = "bonus"
+	input.Rules = []RewardRule{second, first}
+	option = recommendOK(t, input).Recommendations[0].PaymentOptions[0]
+	if option.Allocations[0].RuleID != "first" {
+		t.Fatalf("allocation=%+v,want first display order", option.Allocations[0])
+	}
+}
+
+func TestBestOfStackGroupReturnsExcludedLoser(t *testing.T) {
+	input := baseInput()
+	low := rule("low-stack", "card-a", cash, "0.02", nil, "general")
+	low.StackGroup = "wallet"
+	high := rule("high-stack", "card-a", cash, "0.04", nil, "general")
+	high.StackGroup = "wallet"
+	input.Rules = []RewardRule{low, high}
+
+	option := recommendOK(t, input).Recommendations[0].PaymentOptions[0]
+	if len(option.Allocations) != 1 || option.Allocations[0].RuleID != "high-stack" {
+		t.Fatalf("allocations=%+v,want high-stack", option.Allocations)
+	}
+	if len(option.ExcludedBenefits) != 1 || option.ExcludedBenefits[0].Reason != ExcludeStackGroupLost {
+		t.Fatalf("excluded=%+v,want stack loser", option.ExcludedBenefits)
+	}
 }
 
 func TestOtherMerchantNameDoesNotMatchRestrictedMerchant(t *testing.T) {
 	input := baseInput()
-	input.MerchantCode = ""
+	input.MerchantID = ""
 	input.MerchantName = "全聯福利中心"
 	restricted := rule("px", "card-a", cash, "0.1", nil, "general")
-	restricted.MerchantCodes = []string{"px_mart"}
+	restricted.MerchantIDs = []string{"px_mart"}
 	input.Rules = []RewardRule{restricted}
 
 	if got := len(recommendOK(t, input).Recommendations); got != 0 {
@@ -341,11 +506,11 @@ func TestAccountTierSharedCapAndReminder(t *testing.T) {
 	base := rule("base", "card-a", cash, "0.01", nil, "general")
 	base.ActivityID = "act"
 	base.StackGroup = "base"
-	base.RequiredAccountTiers = []string{"大戶"}
+	base.QualifiedType = "大戶"
 	bonus := rule("bonus", "card-a", cash, "0.05", nil, "general")
 	bonus.ActivityID = "act"
 	bonus.StackGroup = "bonus"
-	bonus.RequiredAccountTiers = []string{"大戶Plus"}
+	bonus.QualifiedType = "大戶Plus"
 	bonus.ActionRequired = "registration"
 	bonus.ActionMessage = "請先登錄"
 	bonus.SharedMonthlyCap = decimalPointer("30")
@@ -362,9 +527,9 @@ func baseInput() RecommendationInput {
 	return RecommendationInput{
 		UserID:         "user-a",
 		AmountMinor:    100000,
-		CategoryCode:   "dining",
+		CategoryID:     "dining",
 		MerchantName:   "測試餐廳",
-		PaymentMethods: []PaymentMethod{{Code: "physical_card", Name: "實體信用卡"}},
+		PaymentMethods: []PaymentMethod{{ID: "physical_card", Name: "實體信用卡"}},
 		Date:           MustLocalDate("2026-06-10"),
 		Cards:          []Card{{ID: "card-a", UserID: "user-a", Name: "A Card", IsActive: true}},
 		Preferences: map[ID]Decimal{
@@ -378,7 +543,7 @@ func baseInput() RecommendationInput {
 func rule(id, cardID ID, unit RewardUnit, rate string, cap *Decimal, categories ...string) RewardRule {
 	return RewardRule{
 		ID: id, UserID: "user-a", CardID: cardID, Name: string(id), RewardUnit: unit,
-		Rate: MustDecimal(rate), MonthlyCap: cap, IsActive: true, CategoryCode: categories,
+		EffectType: EffectAddRate, RewardValue: MustDecimal(rate), MonthlyCap: cap, IsActive: true, CategoryID: categories,
 	}
 }
 

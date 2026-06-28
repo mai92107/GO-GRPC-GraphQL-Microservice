@@ -49,10 +49,10 @@ type Response struct {
 
 type conversation struct {
 	Step         string
-	CategoryCode string
+	CategoryID   string
 	CategoryName string
 	AmountMinor  int64
-	MerchantCode string
+	MerchantID   string
 	MerchantName string
 	UpdatedAt    time.Time
 }
@@ -139,17 +139,17 @@ func (c *Controller) HandleCallback(ctx context.Context, chatID int64, data stri
 			return Response{Text: "店家選單已失效，請重新輸入 /recommand。"}
 		}
 		if data == otherMerchantCallback {
-			state.Step, state.MerchantCode, state.MerchantName, state.UpdatedAt = "other_merchant", "", "", c.now()
+			state.Step, state.MerchantID, state.MerchantName, state.UpdatedAt = "other_merchant", "", "", c.now()
 			c.set(chatID, state)
 			return Response{Text: "可輸入其他店家名稱，或輸入 /skip 略過。"}
 		}
-		merchants, err := c.members.Merchants(ctx, state.CategoryCode)
+		merchants, err := c.members.Merchants(ctx, state.CategoryID)
 		if err != nil {
 			return Response{Text: "目前無法讀取店家，請稍後再試。"}
 		}
 		for _, merchant := range merchants {
-			if merchant.Code == code {
-				state.MerchantCode, state.MerchantName = merchant.Code, merchant.Name
+			if merchant.ID == code {
+				state.MerchantID, state.MerchantName = merchant.ID, merchant.Name
 				return c.recommend(ctx, chatID, state, merchant.Name)
 			}
 		}
@@ -167,8 +167,8 @@ func (c *Controller) HandleCallback(ctx context.Context, chatID int64, data stri
 		return Response{Text: "目前無法讀取分類，請稍後再試。"}
 	}
 	for _, category := range categories {
-		if category.Code == code {
-			state.Step, state.CategoryCode, state.CategoryName, state.UpdatedAt = "amount", category.Code, category.Name, c.now()
+		if category.ID == code {
+			state.Step, state.CategoryID, state.CategoryName, state.UpdatedAt = "amount", category.ID, category.Name, c.now()
 			c.set(chatID, state)
 			return Response{Text: fmt.Sprintf("已選擇「%s」。請輸入消費金額，例如：1000", category.Name)}
 		}
@@ -188,7 +188,7 @@ func (c *Controller) start(ctx context.Context, chatID int64) Response {
 	}
 	keyboard := make([][]Button, 0, (len(categories)+1)/2)
 	for _, category := range categories {
-		button := Button{Text: category.Name, Data: categoryCallbackPrefix + category.Code}
+		button := Button{Text: category.Name, Data: categoryCallbackPrefix + category.ID}
 		if len(keyboard) == 0 || len(keyboard[len(keyboard)-1]) == 2 {
 			keyboard = append(keyboard, []Button{button})
 		} else {
@@ -207,7 +207,7 @@ func (c *Controller) merchantKeyboard(ctx context.Context, chatID int64, state c
 }
 
 func (c *Controller) merchantKeyboardPage(ctx context.Context, chatID int64, state conversation, page int) Response {
-	merchants, err := c.members.Merchants(ctx, state.CategoryCode)
+	merchants, err := c.members.Merchants(ctx, state.CategoryID)
 	if err != nil {
 		return Response{Text: "目前無法讀取店家，請稍後再試。"}
 	}
@@ -221,7 +221,7 @@ func (c *Controller) merchantKeyboardPage(ctx context.Context, chatID int64, sta
 	end := min(start+merchantPageSize, len(merchants))
 	keyboard := make([][]Button, 0, merchantPageSize/2+2)
 	for _, merchant := range merchants[start:end] {
-		button := Button{Text: merchant.Name, Data: merchantCallbackPrefix + merchant.Code}
+		button := Button{Text: merchant.Name, Data: merchantCallbackPrefix + merchant.ID}
 		if len(keyboard) == 0 || len(keyboard[len(keyboard)-1]) == 2 {
 			keyboard = append(keyboard, []Button{button})
 		} else {
@@ -253,7 +253,7 @@ func (c *Controller) recommend(ctx context.Context, chatID int64, state conversa
 	now := c.now().In(taipeiLocation)
 	date, _ := recommendations.ParseLocalDate(now.Format("2006-01-02"))
 	result, err := c.members.Recommend(ctx, userID, memberservice.RecommendationInput{
-		AmountMinor: state.AmountMinor, CategoryCode: state.CategoryCode, MerchantCode: state.MerchantCode, MerchantName: merchant, Date: date,
+		AmountMinor: state.AmountMinor, CategoryID: state.CategoryID, MerchantID: state.MerchantID, MerchantName: merchant, Date: date,
 	})
 	if err != nil {
 		return Response{Text: "推薦計算失敗，請稍後重新輸入 /recommand。"}

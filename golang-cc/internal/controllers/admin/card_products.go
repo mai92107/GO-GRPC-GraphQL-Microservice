@@ -8,10 +8,13 @@ import (
 )
 
 type cardProductRequest struct {
-	BankID       string   `json:"bank_id" binding:"required"`
-	Name         string   `json:"name" binding:"required"`
-	IsActive     *bool    `json:"is_active"`
-	AccountTiers []string `json:"account_tiers"`
+	BankID         string   `json:"bank_id" binding:"required"`
+	Name           string   `json:"name" binding:"required"`
+	IsActive       *bool    `json:"is_active"`
+	AccountTiers   []string `json:"account_tiers"`
+	QualifiedType  string   `json:"qualified_type"`
+	SelectableType string   `json:"selectable_type"`
+	NetworkIDs     []string `json:"network_ids" binding:"required,min=1"`
 }
 
 func (c *Controller) ListCardProducts(ctx *gin.Context) {
@@ -22,6 +25,27 @@ func (c *Controller) ListCardProducts(ctx *gin.Context) {
 	}
 	data(ctx, http.StatusOK, mapCardProducts(result))
 }
+
+func (c *Controller) GetCardProduct(ctx *gin.Context) {
+	includeActivities := ctx.Query("include_activities") == "1"
+	result, err := c.service.GetCardProduct(ctx.Request.Context(), ctx.Param("id"), includeActivities)
+	if err != nil {
+		println("取得卡片資訊失敗:", err.Error())
+		failure(ctx, http.StatusNotFound, "not_found", "找不到卡片")
+		return
+	}
+	data(ctx, http.StatusOK, mapCardProduct(result))
+}
+
+func (c *Controller) ListCardNetworks(ctx *gin.Context) {
+	result, err := c.service.ListCardNetworks(ctx.Request.Context())
+	if err != nil {
+		failure(ctx, http.StatusInternalServerError, "internal_error", "查詢失敗")
+		return
+	}
+	data(ctx, http.StatusOK, result)
+}
+
 func (c *Controller) CreateCardProduct(ctx *gin.Context) {
 	var input cardProductRequest
 	if ctx.ShouldBindJSON(&input) != nil {
@@ -32,7 +56,7 @@ func (c *Controller) CreateCardProduct(ctx *gin.Context) {
 	if input.IsActive != nil {
 		active = *input.IsActive
 	}
-	id, err := c.service.CreateCardProduct(ctx.Request.Context(), service.CardProductInput{BankID: input.BankID, Name: input.Name, IsActive: active, AccountTiers: input.AccountTiers})
+	id, err := c.service.CreateCardProduct(ctx.Request.Context(), service.CardProductInput{BankID: input.BankID, Name: input.Name, IsActive: active, AccountTiers: input.AccountTiers, QualifiedType: input.QualifiedType, SelectableType: input.SelectableType, NetworkIDs: input.NetworkIDs})
 	if err != nil {
 		failure(ctx, http.StatusConflict, "conflict", "卡片重複或資料無效")
 		return
@@ -45,7 +69,7 @@ func (c *Controller) UpdateCardProduct(ctx *gin.Context) {
 		failure(ctx, http.StatusBadRequest, "validation_failed", "資料無效")
 		return
 	}
-	err := c.service.UpdateCardProduct(ctx.Request.Context(), ctx.Param("id"), service.CardProductInput{BankID: input.BankID, Name: input.Name, IsActive: *input.IsActive, AccountTiers: input.AccountTiers})
+	err := c.service.UpdateCardProduct(ctx.Request.Context(), ctx.Param("id"), service.CardProductInput{BankID: input.BankID, Name: input.Name, IsActive: *input.IsActive, AccountTiers: input.AccountTiers, QualifiedType: input.QualifiedType, SelectableType: input.SelectableType, NetworkIDs: input.NetworkIDs})
 	if err != nil {
 		failure(ctx, http.StatusNotFound, "not_found", "找不到卡片")
 		return

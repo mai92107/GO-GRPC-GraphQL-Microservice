@@ -17,14 +17,18 @@ func (c *Controller) ListPaymentMethods(ctx *gin.Context) {
 
 func (c *Controller) CreatePaymentMethod(ctx *gin.Context) {
 	var input struct {
-		Code string `json:"code" binding:"required"`
 		Name string `json:"name" binding:"required"`
 	}
-	if ctx.ShouldBindJSON(&input) != nil || c.service.CreatePaymentMethod(ctx, input.Code, input.Name) != nil {
+	if ctx.ShouldBindJSON(&input) != nil {
 		failure(ctx, http.StatusConflict, "conflict", "支付方式資料無效或重複")
 		return
 	}
-	data(ctx, http.StatusCreated, gin.H{"code": input.Code})
+	id, err := c.service.CreatePaymentMethod(ctx, input.Name)
+	if err != nil {
+		failure(ctx, http.StatusConflict, "conflict", "支付方式資料無效或重複")
+		return
+	}
+	data(ctx, http.StatusCreated, gin.H{"id": id})
 }
 
 func (c *Controller) UpdatePaymentMethod(ctx *gin.Context) {
@@ -36,7 +40,7 @@ func (c *Controller) UpdatePaymentMethod(ctx *gin.Context) {
 		failure(ctx, http.StatusBadRequest, "validation_failed", "資料無效")
 		return
 	}
-	if err := c.service.UpdatePaymentMethod(ctx, ctx.Param("code"), input.Name, *input.IsActive); err != nil {
+	if err := c.service.UpdatePaymentMethod(ctx, ctx.Param("id"), input.Name, *input.IsActive); err != nil {
 		failure(ctx, http.StatusNotFound, "not_found", "找不到支付方式")
 		return
 	}
@@ -44,7 +48,7 @@ func (c *Controller) UpdatePaymentMethod(ctx *gin.Context) {
 }
 
 func (c *Controller) DeletePaymentMethod(ctx *gin.Context) {
-	err := c.service.DeletePaymentMethod(ctx, ctx.Param("code"))
+	err := c.service.DeletePaymentMethod(ctx, ctx.Param("id"))
 	if isNotFound(err) {
 		failure(ctx, http.StatusNotFound, "not_found", "找不到可刪除支付方式")
 		return

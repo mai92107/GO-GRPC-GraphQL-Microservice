@@ -9,7 +9,7 @@ import (
 type PreferenceWrite struct{ RewardUnitID, Weight string }
 
 func (r *Repository) Preferences(ctx context.Context, userID string) ([]domain.RewardPreference, error) {
-	rows, err := r.pool.Query(ctx, `SELECT u.id,u.code,u.name,u.symbol,COALESCE(p.weight,1)::text FROM reward_units u LEFT JOIN reward_preferences p ON p.reward_unit_id=u.id AND p.user_id=$1 ORDER BY u.code`, userID)
+	rows, err := r.pool.Query(ctx, `SELECT u.id,u.name,u.symbol,COALESCE(p.weight,1)::text FROM reward_units u LEFT JOIN reward_preferences p ON p.reward_unit_id=u.id AND p.user_id=$1 ORDER BY u.name`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -17,7 +17,7 @@ func (r *Repository) Preferences(ctx context.Context, userID string) ([]domain.R
 	result := []domain.RewardPreference{}
 	for rows.Next() {
 		var x domain.RewardPreference
-		if err := rows.Scan(&x.RewardUnitID, &x.Code, &x.Name, &x.Symbol, &x.Weight); err != nil {
+		if err := rows.Scan(&x.RewardUnitID, &x.Name, &x.Symbol, &x.Weight); err != nil {
 			return nil, err
 		}
 		result = append(result, x)
