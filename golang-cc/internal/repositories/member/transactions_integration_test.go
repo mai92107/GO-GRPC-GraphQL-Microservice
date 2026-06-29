@@ -13,6 +13,8 @@ import (
 	"github.com/rafa/golang-cc/internal/platform/config"
 	"github.com/rafa/golang-cc/internal/services/recommendations"
 	"github.com/rafa/golang-cc/migrations"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 const (
@@ -26,7 +28,7 @@ const (
 )
 
 func TestTransactionLifecycleRestoresCapAndIsolatesUsers(t *testing.T) {
-	pool := integrationPool(t)
+	pool, gormDB := integrationPool(t)
 	service := NewTransactionRepository(pool)
 	ctx := context.Background()
 
@@ -39,7 +41,7 @@ func TestTransactionLifecycleRestoresCapAndIsolatesUsers(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertAllocation(t, created, "10")
-	calculations, err := New(pool).RewardCalculations(ctx, string(userA), string(created.ID))
+	calculations, err := New(pool, gormDB).RewardCalculations(ctx, string(userA), string(created.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +66,7 @@ func TestTransactionLifecycleRestoresCapAndIsolatesUsers(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertAllocation(t, updated, "10")
-	calculations, err = New(pool).RewardCalculations(ctx, string(userA), string(created.ID))
+	calculations, err = New(pool, gormDB).RewardCalculations(ctx, string(userA), string(created.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +98,7 @@ func TestTransactionLifecycleRestoresCapAndIsolatesUsers(t *testing.T) {
 }
 
 func TestConcurrentCreatesDoNotExceedCap(t *testing.T) {
-	pool := integrationPool(t)
+	pool, _ := integrationPool(t)
 	service := NewTransactionRepository(pool)
 	input := WriteInput{
 		CardID: cardA, AmountMinor: 10000, CategoryID: "dining",
@@ -134,7 +136,7 @@ func TestConcurrentCreatesDoNotExceedCap(t *testing.T) {
 }
 
 func TestNormalizedCatalogConstraints(t *testing.T) {
-	pool := integrationPool(t)
+	pool, gormDB := integrationPool(t)
 	ctx := context.Background()
 	var cards, benefits int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM card_products WHERE id::text LIKE '51000000-%'`).Scan(&cards); err != nil {
@@ -152,13 +154,13 @@ func TestNormalizedCatalogConstraints(t *testing.T) {
 		t.Fatal("expected overlapping activity to be rejected")
 	}
 
-	if err := New(pool).CreateCard(ctx, "22000000-0000-0000-0000-000000000001", string(userA), "51000000-0000-0000-0000-000000000001", CardWrite{}); err == nil {
+	if err := New(pool, gormDB).CreateCard(ctx, "22000000-0000-0000-0000-000000000001", string(userA), "51000000-0000-0000-0000-000000000001", CardWrite{}); err == nil {
 		t.Fatal("expected DAWHO account tier to be required")
 	}
 }
 
 func TestRewardVersionAndQualificationHistoryConstraints(t *testing.T) {
-	pool := integrationPool(t)
+	pool, gormDB := integrationPool(t)
 	ctx := context.Background()
 	if _, err := pool.Exec(ctx, `INSERT INTO reward.component_versions(
 		id,reward_component_id,reward_unit_id,name,rate,effective_from,effective_to)
@@ -170,7 +172,7 @@ func TestRewardVersionAndQualificationHistoryConstraints(t *testing.T) {
 		t.Fatal("expected overlapping reward component version to be rejected")
 	}
 
-	repo := New(pool)
+	repo := New(pool, gormDB)
 	cardID := "25000000-0000-0000-0000-000000000001"
 	if err := repo.CreateCard(ctx, cardID, string(userA), "51000000-0000-0000-0000-000000000001", CardWrite{
 		IsActive: true, AccountTier: "大戶",
@@ -205,9 +207,9 @@ func TestRewardVersionAndQualificationHistoryConstraints(t *testing.T) {
 }
 
 func TestCoreCardRepresentativeRewards(t *testing.T) {
-	pool := integrationPool(t)
+	pool, gormDB := integrationPool(t)
 	ctx := context.Background()
-	repo := New(pool)
+	repo := New(pool, gormDB)
 	cards := []struct{ id, product, tier string }{
 		{"23000000-0000-0000-0000-000000000001", "51000000-0000-0000-0000-000000000001", "大戶Plus"},
 		{"23000000-0000-0000-0000-000000000002", "51000000-0000-0000-0000-000000000002", ""},
@@ -254,9 +256,9 @@ func TestCoreCardRepresentativeRewards(t *testing.T) {
 }
 
 func TestDAWHO2026AccountTierRewards(t *testing.T) {
-	pool := integrationPool(t)
+	pool, gormDB := integrationPool(t)
 	ctx := context.Background()
-	repo := New(pool)
+	repo := New(pool, gormDB)
 	txRepo := NewTransactionRepository(pool)
 	date := recommendations.MustLocalDate("2026-06-10")
 	tiers := []struct {
@@ -312,9 +314,9 @@ func TestDAWHO2026AccountTierRewards(t *testing.T) {
 }
 
 func TestRecommendationDisambiguatesSameNicknameAndRanksEachCardOnce(t *testing.T) {
-	pool := integrationPool(t)
+	pool, gormDB := integrationPool(t)
 	ctx := context.Background()
-	repo := New(pool)
+	repo := New(pool, gormDB)
 	for _, card := range []struct {
 		id      string
 		product string
@@ -350,7 +352,7 @@ func TestRecommendationDisambiguatesSameNicknameAndRanksEachCardOnce(t *testing.
 }
 
 func TestLatestCardActivitiesRespectPaymentMethodsAndStacking(t *testing.T) {
-	pool := integrationPool(t)
+	pool, _ := integrationPool(t)
 	ctx := context.Background()
 	for _, card := range []struct{ id, product string }{
 		{"91000000-0000-0000-0000-000000000005", "51000000-0000-0000-0000-000000000005"},
@@ -426,7 +428,7 @@ func paymentOptionIncludes(option recommendations.PaymentOption, method string) 
 	return false
 }
 
-func integrationPool(t *testing.T) *pgxpool.Pool {
+func integrationPool(t *testing.T) (*pgxpool.Pool, *gorm.DB) {
 	t.Helper()
 	cfg, err := config.LoadFromProject("configs/test.json")
 	if err != nil {
@@ -434,6 +436,10 @@ func integrationPool(t *testing.T) *pgxpool.Pool {
 	}
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, cfg.Database.ConnectionString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	gormDB, err := gorm.Open(postgres.Open(cfg.Database.ConnectionString()), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,7 +467,7 @@ func integrationPool(t *testing.T) *pgxpool.Pool {
 	}
 	connection.Release()
 	seedIntegrationData(t, pool)
-	return pool
+	return pool, gormDB
 }
 
 func seedIntegrationData(t *testing.T, pool *pgxpool.Pool) {

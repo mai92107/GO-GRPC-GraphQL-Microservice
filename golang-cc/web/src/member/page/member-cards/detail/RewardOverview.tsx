@@ -1,19 +1,20 @@
 import { ChevronDown, Layers3 } from "lucide-react";
-import { formatPercent } from "../../../format";
-import { zhDate } from "../../../utils/dateText";
-import type { RewardOverview } from "../../MemberApi";
-import { rewardLayers } from "./rewardLayers";
+import { formatPercent } from "../../../../format";
+import { zhDate } from "../../../../utils/dateText";
+import type { RewardOverview as RewardOverviewData } from "../../../MemberApi";
+import { rewardLayers } from "../../cards/rewardLayers";
 
 type Props = {
   expanded: Record<string, boolean>;
-  overview: RewardOverview;
+  overview?: RewardOverviewData;
+  loading: boolean;
   onToggle: (key: string, nextValue: boolean) => void;
 };
 
 function RewardGroupDetail({
   group,
 }: {
-  group: RewardOverview["reward_groups"][number];
+  group: RewardOverviewData["reward_groups"][number];
 }) {
   return (
     <div className="reward-group-detail">
@@ -27,17 +28,28 @@ function RewardGroupDetail({
           </p>
         ))}
         {group.change_effective_at && (
-          <p>
-            ・{zhDate(group.change_effective_at)} 生效
-          </p>
+          <p>・{zhDate(group.change_effective_at)} 生效</p>
         )}
       </div>
     </div>
   );
 }
 
-export function RewardLayerList({ expanded, overview, onToggle }: Props) {
-  if (!overview.reward_groups.length) return null;
+export function RewardOverview({
+  expanded,
+  overview,
+  loading,
+  onToggle,
+}: Props) {
+  if (loading) {
+    return (
+      <section className="wallet-card-section">
+        <p className="muted">載入卡片回饋中…</p>
+      </section>
+    );
+  }
+
+  if (!overview?.reward_groups.length) return null;
 
   return (
     <section className="wallet-card-section reward-section">
@@ -58,7 +70,7 @@ export function RewardLayerList({ expanded, overview, onToggle }: Props) {
               <strong>{formatPercent(layer.total_rate)}</strong>
             </div>
             {layer.groups.map((group, index) => {
-              const key = `${overview.card.id}:${group.component_id}`;
+              const key = `${overview.card.member_card_id}:${group.component_id}`;
               const isOpen = expanded[key] ?? index === 0;
               const summary =
                 group.cap?.spendable && Number(group.cap.spendable) > 0

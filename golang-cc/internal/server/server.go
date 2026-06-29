@@ -18,9 +18,10 @@ import (
 	memberservice "github.com/rafa/golang-cc/internal/services/member"
 	publicservice "github.com/rafa/golang-cc/internal/services/public"
 	"github.com/rafa/golang-cc/internal/utils/email"
+	"gorm.io/gorm"
 )
 
-func New(pool *pgxpool.Pool, sender email.Sender, publicBaseURL string, secureCookie bool, monitoringToken string, frontend http.Handler) http.Handler {
+func New(pool *pgxpool.Pool, gormDB *gorm.DB, sender email.Sender, publicBaseURL string, secureCookie bool, monitoringToken string, frontend http.Handler) http.Handler {
 	// 設置 Gin
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
@@ -34,8 +35,8 @@ func New(pool *pgxpool.Pool, sender email.Sender, publicBaseURL string, secureCo
 	// 註冊路由和控制器
 	authService := publicservice.New(publicrepo.New(pool), sender, publicBaseURL)
 	publicController := publiccontroller.New(authService, secureCookie)
-	adminController := admincontroller.New(adminservice.New(adminrepo.New(pool), authService))
-	memberController := membercontroller.New(memberservice.New(memberrepo.New(pool), memberrepo.NewTransactionRepository(pool)))
+	adminController := admincontroller.New(adminservice.New(adminrepo.New(pool, gormDB), authService))
+	memberController := membercontroller.New(memberservice.New(memberrepo.New(pool, gormDB), memberrepo.NewTransactionRepository(pool)))
 	routes.RegisterActuator(engine, actuatorrepo.NewHealthRepository(pool), metrics, servermw.ActuatorAuthorization(authService, monitoringToken))
 	routes.RegisterPublic(engine, publicController, authService)
 	routes.RegisterAdmin(engine, adminController, authService)

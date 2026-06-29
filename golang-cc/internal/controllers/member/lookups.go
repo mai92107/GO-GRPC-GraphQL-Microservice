@@ -17,7 +17,7 @@ type catalogResponse struct {
 	QualifiedType  string                       `json:"qualified_type"`
 	SelectableType string                       `json:"selectable_type"`
 	Activities     []domain.CardProductActivity `json:"activities"`
-	Networks       []domain.CardNetwork         `json:"networks"`
+	Networks       []string                     `json:"networks"`
 }
 type unitResponse struct {
 	ID             string `json:"id"`
@@ -41,6 +41,7 @@ type paymentMethodResponse struct {
 func (c *Controller) Catalog(ctx *gin.Context) {
 	items, err := c.service.Catalog(ctx)
 	if err != nil {
+		println("getting cards error, error: " + err.Error())
 		failure(ctx, 500, "internal_error", "查詢失敗")
 		return
 	}

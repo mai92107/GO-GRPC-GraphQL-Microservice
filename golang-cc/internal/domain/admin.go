@@ -59,7 +59,7 @@ type CardProduct struct {
 	AccountTiers   []string
 	QualifiedType  string
 	SelectableType string
-	Networks       []CardNetwork
+	Networks       []string
 	Activities     []CardProductActivity
 }
 

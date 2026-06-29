@@ -68,40 +68,40 @@ func (r *Repository) GetCardProduct(ctx context.Context, id string, includeActiv
 	return x, nil
 }
 
-func (r *Repository) ListCardNetworks(ctx context.Context) ([]domain.CardNetwork, error) {
-	rows, err := r.pool.Query(ctx, `SELECT id,id,name FROM catalog.card_networks WHERE is_active ORDER BY name`)
+func (r *Repository) ListCardNetworks(ctx context.Context) ([]string, error) {
+	rows, err := r.pool.Query(ctx, `SELECT name FROM catalog.card_networks WHERE is_active ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []domain.CardNetwork{}
+	networks := []string{}
 	for rows.Next() {
-		var network domain.CardNetwork
-		if err := rows.Scan(&network.ID, &network.Code, &network.Name); err != nil {
+		var network string
+		if err := rows.Scan(&network); err != nil {
 			return nil, err
 		}
-		out = append(out, network)
+		networks = append(networks, network)
 	}
-	return out, rows.Err()
+	return networks, rows.Err()
 }
 
-func (r *Repository) cardProductNetworks(ctx context.Context, cardProductID string) ([]domain.CardNetwork, error) {
-	rows, err := r.pool.Query(ctx, `SELECT n.id,n.id,n.name FROM catalog.card_product_networks pn
+func (r *Repository) cardProductNetworks(ctx context.Context, cardProductID string) ([]string, error) {
+	rows, err := r.pool.Query(ctx, `SELECT n.name FROM catalog.card_product_networks pn
 		JOIN catalog.card_networks n ON n.id=pn.card_network_id
 		WHERE pn.card_product_id=$1 AND n.is_active ORDER BY n.name`, cardProductID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []domain.CardNetwork{}
+	networks := []string{}
 	for rows.Next() {
-		var network domain.CardNetwork
-		if err := rows.Scan(&network.ID, &network.Code, &network.Name); err != nil {
+		var network string
+		if err := rows.Scan(&network); err != nil {
 			return nil, err
 		}
-		out = append(out, network)
+		networks = append(networks, network)
 	}
-	return out, rows.Err()
+	return networks, rows.Err()
 }
 
 func (r *Repository) CreateCardProduct(ctx context.Context, id string, input domain.CardProductInput) error {

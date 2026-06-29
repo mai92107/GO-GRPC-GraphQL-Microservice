@@ -2,9 +2,7 @@ package member
 
 import (
 	"context"
-	"errors"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/rafa/golang-cc/internal/domain"
 )
 
@@ -19,43 +17,60 @@ type CardWrite struct {
 }
 
 func (r *Repository) ListCards(ctx context.Context, userID string) ([]domain.MemberCard, error) {
-	rows, err := r.pool.Query(ctx, `SELECT mc.id,mc.card_product_id,COALESCE(NULLIF(mc.nickname,''),cp.name),b.name,
-		COALESCE(mc.last_four,''),mc.is_active,mc.statement_day,mc.payment_due_day,COALESCE(mc.account_tier,''),
-		COALESCE(cp.card_image_url,''),COALESCE(cp.primary_color,''),COALESCE(cp.qualified_type,''),COALESCE(cp.selectable_type,''),
-		COALESCE(n.id::text,''),COALESCE(n.id,''),COALESCE(n.name,'')
-		FROM member_cards mc JOIN card_products cp ON cp.id=mc.card_product_id JOIN banks b ON b.id=cp.bank_id
-		LEFT JOIN catalog.card_networks n ON n.id=mc.card_network_id
-		WHERE mc.user_id=$1 ORDER BY cp.name,mc.id`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	result := []domain.MemberCard{}
-	for rows.Next() {
-		var item domain.MemberCard
-		if err := rows.Scan(&item.ID, &item.CardProductID, &item.Name, &item.Issuer, &item.LastFour, &item.IsActive, &item.StatementDay, &item.PaymentDueDay, &item.AccountTier, &item.CardImageURL, &item.PrimaryColor, &item.QualifiedType, &item.SelectableType, &item.NetworkID, &item.NetworkCode, &item.NetworkName); err != nil {
-			return nil, err
-		}
-		result = append(result, item)
-	}
-	return result, rows.Err()
+	var result []domain.MemberCard
+
+	err := r.db.WithContext(ctx).
+		Table("member_cards AS mc").
+		Select(`
+			mc.id AS member_card_id,
+			COALESCE(mc.nickname, cp.name) AS name,
+			b.name AS issuer,
+			COALESCE(mc.last_four, '') AS last_four,
+			mc.is_active AS is_active,
+			COALESCE(cp.card_image_url, '') AS card_image_url,
+			COALESCE(cp.primary_color, '') AS primary_color,
+			COALESCE(cp.qualified_type, '') AS qualified_type,
+			COALESCE(cp.selectable_type, '') AS selectable_type,
+			COALESCE(n.name, '') AS network
+		`).
+		Joins("JOIN card_products AS cp ON cp.id = mc.card_product_id").
+		Joins("JOIN banks AS b ON b.id = cp.bank_id").
+		Joins("LEFT JOIN catalog.card_networks AS n ON n.id = mc.card_network_id").
+		Where("mc.user_id = ?", userID).
+		Order("cp.name, mc.id").
+		Scan(&result).Error
+
+	return result, err
+}
+func (r *Repository) GetCard(ctx context.Context, userID, id string) (domain.MemberCardInfo, error) {
+	var result domain.MemberCardInfo
+	err := r.db.WithContext(ctx).
+		Table("member_cards mc").
+		Select(`
+			mc.id AS memberCardID,
+			COALESCE(NULLIF(mc.nickname, ''), cp.name) AS name,
+			b.name AS issuer,
+			COALESCE(mc.last_four, '') AS last_four,
+			mc.is_active AS is_active,
+			mc.statement_day AS statement_day,
+			mc.payment_due_day AS payment_due_day,
+			COALESCE(mc.account_tier, '') AS account_tier,
+			COALESCE(cp.card_image_url, '') AS card_image_url,
+			COALESCE(cp.primary_color, '') AS primary_color,
+			COALESCE(cp.qualified_type, '') AS qualified_type,
+			COALESCE(cp.selectable_type, '') AS selectable_type,
+			COALESCE(n.name, '') AS network
+		`).
+		Joins("JOIN card_products cp ON cp.id = mc.card_product_id").
+		Joins("JOIN banks b ON b.id = cp.bank_id").
+		Joins("LEFT JOIN catalog.card_networks n ON n.id = mc.card_network_id").
+		Where("mc.id = ? AND mc.user_id = ?", id, userID).
+		Scan(&result).Error
+
+	return result, err
 }
 
-func (r *Repository) GetCard(ctx context.Context, userID, id string) (domain.MemberCard, error) {
-	var item domain.MemberCard
-	err := r.pool.QueryRow(ctx, `SELECT mc.id,mc.card_product_id,COALESCE(NULLIF(mc.nickname,''),cp.name),b.name,COALESCE(mc.last_four,''),mc.is_active,mc.statement_day,mc.payment_due_day,COALESCE(mc.account_tier,''),
-		COALESCE(cp.card_image_url,''),COALESCE(cp.primary_color,''),COALESCE(cp.qualified_type,''),COALESCE(cp.selectable_type,''),
-		COALESCE(n.id::text,''),COALESCE(n.id,''),COALESCE(n.name,'')
-		FROM member_cards mc JOIN card_products cp ON cp.id=mc.card_product_id JOIN banks b ON b.id=cp.bank_id
-		LEFT JOIN catalog.card_networks n ON n.id=mc.card_network_id WHERE mc.id=$1 AND mc.user_id=$2`, id, userID).
-		Scan(&item.ID, &item.CardProductID, &item.Name, &item.Issuer, &item.LastFour, &item.IsActive, &item.StatementDay, &item.PaymentDueDay, &item.AccountTier, &item.CardImageURL, &item.PrimaryColor, &item.QualifiedType, &item.SelectableType, &item.NetworkID, &item.NetworkCode, &item.NetworkName)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return item, domain.ErrNotFound
-	}
-	return item, err
-}
-
-func (r *Repository) CreateCard(ctx context.Context, id, userID, productID string, input CardWrite) error {
+func (r *Repository) CreateCard(ctx context.Context, id, userID, cardID string, input CardWrite) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -63,7 +78,7 @@ func (r *Repository) CreateCard(ctx context.Context, id, userID, productID strin
 	defer tx.Rollback(ctx)
 	tag, err := tx.Exec(ctx, `INSERT INTO member_cards(id,user_id,card_product_id,card_network_id,nickname,last_four,is_active,statement_day,payment_due_day,account_tier)
 		SELECT $1,$2,cp.id,NULLIF($4,'')::uuid,NULLIF($5,''),NULLIF($6,''),$7,$8,$9,NULLIF($10,'') FROM card_products cp WHERE cp.id=$3
-		AND ($10='' OR cardinality(cp.account_tiers)=0 OR $10=ANY(cp.account_tiers))`, id, userID, productID, input.CardNetworkID, input.Nickname, input.LastFour, input.IsActive, input.StatementDay, input.PaymentDueDay, input.AccountTier)
+		AND ($10='' OR cardinality(cp.account_tiers)=0 OR $10=ANY(cp.account_tiers))`, id, userID, cardID, input.CardNetworkID, input.Nickname, input.LastFour, input.IsActive, input.StatementDay, input.PaymentDueDay, input.AccountTier)
 	if err != nil {
 		return err
 	}
@@ -75,7 +90,7 @@ func (r *Repository) CreateCard(ctx context.Context, id, userID, productID strin
 			(id,member_card_id,card_plan_id,is_qualified,effective_from)
 			SELECT md5('member-qualification:'||$1::text||':'||p.id::text)::uuid,$1::uuid,p.id,(pv.name=$2),'2000-01-01 00:00:00+00'
 			FROM catalog.card_plans p JOIN catalog.card_plan_versions pv ON pv.card_plan_id=p.id
-			WHERE p.card_product_id=$3 AND p.plan_type='qualified'`, id, input.AccountTier, productID); err != nil {
+			WHERE p.card_product_id=$3 AND p.plan_type='qualified'`, id, input.AccountTier, cardID); err != nil {
 			return err
 		}
 	}

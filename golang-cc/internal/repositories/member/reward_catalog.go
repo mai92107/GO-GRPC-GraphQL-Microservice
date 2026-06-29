@@ -77,69 +77,70 @@ func (r *Repository) SetQualificationStatus(ctx context.Context, userID, memberC
 
 func (r *Repository) RewardOverview(ctx context.Context, userID, memberCardID string, at time.Time) (domain.MemberCardRewardOverview, error) {
 
-	// 取得指定卡片資訊
-	card, err := r.getMemberCardForOverview(ctx, userID, memberCardID)
-	if err != nil {
-		return domain.MemberCardRewardOverview{}, err
-	}
+	// // 取得指定卡片資訊
+	// card, err := r.getMemberCardForOverview(ctx, userID, memberCardID)
+	// if err != nil {
+	// 	return domain.MemberCardRewardOverview{}, err
+	// }
 
-	// 取得卡片當下的資格方案類型
-	qualifiedTypes := domain.SplitCardType(card.QualifiedType)
+	// // 取得卡片當下的資格方案類型
+	// qualifiedTypes := domain.SplitCardType(card.QualifiedType)
 
-	// 取得指定資格的方案
-	qualifiedPlans, err := r.listQualifiedPlans(ctx, memberCardID, card.CardProductID, qualifiedTypes, at)
-	if err != nil {
-		return domain.MemberCardRewardOverview{}, err
-	}
+	// // 取得指定資格的方案
+	// qualifiedPlans, err := r.listQualifiedPlans(ctx, memberCardID, card.CardProductID, qualifiedTypes, at)
+	// if err != nil {
+	// 	return domain.MemberCardRewardOverview{}, err
+	// }
 
-	// 取得卡片回饋內容
-	components, err := r.listRewardComponents(ctx, card.CardProductID, memberCardID, qualifiedTypes, at)
-	if err != nil {
-		return domain.MemberCardRewardOverview{}, err
-	}
+	// // 取得卡片回饋內容
+	// components, err := r.listRewardComponents(ctx, card.CardProductID, memberCardID, qualifiedTypes, at)
+	// if err != nil {
+	// 	return domain.MemberCardRewardOverview{}, err
+	// }
 
-	componentIDs := make([]string, 0, len(components))
-	for _, c := range components {
-		componentIDs = append(componentIDs, c.ComponentID)
-	}
+	// componentIDs := make([]string, 0, len(components))
+	// for _, c := range components {
+	// 	componentIDs = append(componentIDs, c.ComponentID)
+	// }
 
-	// 取得回饋條件與提醒文字
-	requirements, reminders, err := r.listRewardRequirementTexts(ctx, componentIDs, at)
-	if err != nil {
-		return domain.MemberCardRewardOverview{}, err
-	}
+	// // 取得回饋條件與提醒文字
+	// requirements, reminders, err := r.listRewardRequirementTexts(ctx, componentIDs, at)
+	// if err != nil {
+	// 	return domain.MemberCardRewardOverview{}, err
+	// }
 
-	// 取得回饋上限資訊
-	caps, err := r.listRewardCaps(ctx, componentIDs, at)
-	if err != nil {
-		return domain.MemberCardRewardOverview{}, err
-	}
+	// // 取得回饋上限資訊
+	// caps, err := r.listRewardCaps(ctx, componentIDs, at)
+	// if err != nil {
+	// 	return domain.MemberCardRewardOverview{}, err
+	// }
 
-	// 組合回饋資訊
-	for i := range components {
-		id := components[i].ComponentID
+	// // 組合回饋資訊
+	// for i := range components {
+	// 	id := components[i].ComponentID
 
-		components[i].Layer = components[i].Layer
-		components[i].Requirements = requirements[id]
-		components[i].Reminders = reminders[id]
+	// 	components[i].Layer = components[i].Layer
+	// 	components[i].Requirements = requirements[id]
+	// 	components[i].Reminders = reminders[id]
 
-		if components[i].Requirements == nil {
-			components[i].Requirements = []string{}
-		}
-		if components[i].Reminders == nil {
-			components[i].Reminders = []string{}
-		}
+	// 	if components[i].Requirements == nil {
+	// 		components[i].Requirements = []string{}
+	// 	}
+	// 	if components[i].Reminders == nil {
+	// 		components[i].Reminders = []string{}
+	// 	}
 
-		if cap, ok := caps[id]; ok {
-			components[i].Cap = &cap
-		}
-	}
+	// 	if cap, ok := caps[id]; ok {
+	// 		components[i].Cap = &cap
+	// 	}
+	// }
 
-	return domain.MemberCardRewardOverview{
-		Card:           card,
-		QualifiedPlans: qualifiedPlans,
-		RewardGroups:   components,
-	}, nil
+	// return domain.MemberCardRewardOverview{
+	// 	Card:           card,
+	// 	QualifiedPlans: qualifiedPlans,
+	// 	RewardGroups:   components,
+	// }, nil
+	return domain.MemberCardRewardOverview{}, nil
 }
 
 func (r *Repository) getMemberCardForOverview(
@@ -147,19 +148,19 @@ func (r *Repository) getMemberCardForOverview(
 	userID string,
 	memberCardID string,
 ) (domain.MemberCard, error) {
-	card, err := r.GetCard(ctx, userID, memberCardID)
-	if err != nil {
-		return domain.MemberCard{}, err
-	}
-	if card.NetworkID != "" {
-		card.Network = &domain.CardNetwork{
-			ID:   card.NetworkID,
-			Code: card.NetworkCode,
-			Name: card.NetworkName,
-		}
-	}
+	// card, err := r.GetCard(ctx, userID, memberCardID)
+	// if err != nil {
+	// 	return domain.MemberCard{}, err
+	// }
+	// if card.NetworkID != "" {
+	// 	card.Network = &domain.CardNetwork{
+	// 		ID:   card.NetworkID,
+	// 		Code: card.NetworkCode,
+	// 		Name: card.NetworkName,
+	// 	}
+	// }
 
-	return card, nil
+	return domain.MemberCard{}, nil
 }
 func (r *Repository) listRewardComponents(
 	ctx context.Context,

@@ -17,8 +17,7 @@ export type TelegramBinding = {
   updated_at: string;
 };
 export type Card = {
-  id: string;
-  card_product_id: string;
+  member_card_id: string;
   name: string;
   issuer: string;
   last_four: string;
@@ -30,19 +29,20 @@ export type Card = {
   primary_color: string;
   qualified_type: string;
   selectable_type: string;
-  network: CardNetwork | null;
+  network: string;
 };
-export type CardNetwork = {
-  id: string;
-  code: string;
-  name: string;
-};
+
 export type Benefit = {
   id: string;
   reward_unit_id: string;
   name: string;
   display_order: number;
-  effect_type: "ADD_RATE" | "SET_RATE" | "MULTIPLY_RATE" | "ADD_CASH" | "DISCOUNT";
+  effect_type:
+    | "ADD_RATE"
+    | "SET_RATE"
+    | "MULTIPLY_RATE"
+    | "ADD_CASH"
+    | "DISCOUNT";
   reward_value: string;
   monthly_cap: string | null;
   layer: string;
@@ -67,7 +67,7 @@ export type CatalogCard = {
   account_tiers: string[];
   qualified_type: string;
   selectable_type: string;
-  networks: CardNetwork[];
+  networks: string[];
   activities: {
     id: string;
     name: string;
@@ -93,7 +93,11 @@ export type PaymentMethod = {
   name: string;
   is_active?: boolean;
   is_system?: boolean;
-  type?: "physical_card" | "online_card" | "mobile_payment" | "electronic_ticket";
+  type?:
+    | "physical_card"
+    | "online_card"
+    | "mobile_payment"
+    | "electronic_ticket";
   is_available?: boolean;
 };
 export type Merchant = {
@@ -112,7 +116,12 @@ export type Allocation = {
   layer: string;
   stack_group: string;
   display_order: number;
-  effect_type: "ADD_RATE" | "SET_RATE" | "MULTIPLY_RATE" | "ADD_CASH" | "DISCOUNT";
+  effect_type:
+    | "ADD_RATE"
+    | "SET_RATE"
+    | "MULTIPLY_RATE"
+    | "ADD_CASH"
+    | "DISCOUNT";
   reward_value: string;
   action_required: string;
   action_message: string;
@@ -132,7 +141,12 @@ export type LayerBenefit = {
   name: string;
   activity_id: string;
   activity_name: string;
-  effect_type: "ADD_RATE" | "SET_RATE" | "MULTIPLY_RATE" | "ADD_CASH" | "DISCOUNT";
+  effect_type:
+    | "ADD_RATE"
+    | "SET_RATE"
+    | "MULTIPLY_RATE"
+    | "ADD_CASH"
+    | "DISCOUNT";
   reward_value: string;
   reward_rate: string;
   reward_amount: string;

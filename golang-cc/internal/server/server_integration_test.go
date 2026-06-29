@@ -16,6 +16,8 @@ import (
 	publicservice "github.com/rafa/golang-cc/internal/services/public"
 	"github.com/rafa/golang-cc/internal/utils/secure"
 	"github.com/rafa/golang-cc/migrations"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type fakeEmail struct {
@@ -38,9 +40,9 @@ func (f *fakeEmail) SendPasswordReset(_ context.Context, _, link string) error {
 }
 
 func TestAuthCSRFEmailAndHorizontalIsolation(t *testing.T) {
-	pool := apiPool(t)
+	pool, gormDB := apiPool(t)
 	mailer := &fakeEmail{}
-	handler := New(pool, mailer, "http://localhost:8080", false, "test-monitoring-token", nil)
+	handler := New(pool, gormDB, mailer, "http://localhost:8080", false, "test-monitoring-token", nil)
 	adminPassword := "admin-password-123"
 	hash, _ := publicservice.HashPassword(adminPassword)
 	adminID := secure.UUID()
@@ -171,13 +173,17 @@ func TestAuthCSRFEmailAndHorizontalIsolation(t *testing.T) {
 	assertStatus(t, response, 200)
 }
 
-func apiPool(t *testing.T) *pgxpool.Pool {
+func apiPool(t *testing.T) (*pgxpool.Pool, *gorm.DB) {
 	t.Helper()
 	cfg, err := config.LoadFromProject("configs/test.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	pool, err := pgxpool.New(context.Background(), cfg.Database.ConnectionString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	gormDB, err := gorm.Open(postgres.Open(cfg.Database.ConnectionString()), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +208,7 @@ func apiPool(t *testing.T) *pgxpool.Pool {
 	if err = migrations.Apply(context.Background(), conn.Conn()); err != nil {
 		t.Fatal(err)
 	}
-	return pool
+	return pool, gormDB
 }
 
 func loginRequest(t *testing.T, handler http.Handler, email, password string) (*http.Cookie, string) {

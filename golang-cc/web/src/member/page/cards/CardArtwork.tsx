@@ -17,7 +17,7 @@ export function CardArtwork({ card }: { card: Card }) {
       ) : (
         <>
           <span>{card.issuer}</span>
-          <small>{card.network?.name || "Credit Card"}</small>
+          <small>{card.network || "Credit Card"}</small>
           <Leaf aria-hidden="true" />
         </>
       )}

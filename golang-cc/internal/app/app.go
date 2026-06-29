@@ -17,6 +17,8 @@ import (
 	memberservice "github.com/rafa/golang-cc/internal/services/member"
 	"github.com/rafa/golang-cc/internal/utils/email"
 	"github.com/rafa/golang-cc/web"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 func RunServer() error {
@@ -35,18 +37,22 @@ func RunServer() error {
 	if err != nil {
 		return err
 	}
+	gormDB, err := gorm.Open(postgres.Open(cfg.Database.ConnectionString()), &gorm.Config{})
+	if err != nil {
+		return err
+	}
 	defer pool.Close()
 
 	// 初始化服務和伺服器
 	sender := email.SMTP{Addr: cfg.Mail.SMTPAddress, From: cfg.Mail.From}
-	handler := server.New(pool, sender, cfg.Server.PublicBaseURL, cfg.Server.SecureCookie, cfg.Monitoring.Token, web.Handler())
+	handler := server.New(pool, gormDB, sender, cfg.Server.PublicBaseURL, cfg.Server.SecureCookie, cfg.Monitoring.Token, web.Handler())
 
 	if cfg.Telegram.Enabled {
 		// 啟動 Telegram Bot
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		memberService := memberservice.New(memberrepo.New(pool), memberrepo.NewTransactionRepository(pool))
+		memberService := memberservice.New(memberrepo.New(pool, gormDB), memberrepo.NewTransactionRepository(pool))
 		tgcontroller := telegramcontroller.New(telegramrepo.New(pool), memberService)
 		go telegramserver.NewPoller(cfg.Telegram.BotToken, tgcontroller).Run(ctx)
 	}

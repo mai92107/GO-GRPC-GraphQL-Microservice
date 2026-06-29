@@ -66,7 +66,7 @@ type cardProductResponse struct {
 	AccountTiers   []string                      `json:"account_tiers"`
 	QualifiedType  string                        `json:"qualified_type"`
 	SelectableType string                        `json:"selectable_type"`
-	Networks       []domain.CardNetwork          `json:"networks"`
+	Networks       []string                      `json:"networks"`
 	Activities     []cardProductActivityResponse `json:"activities"`
 }
 

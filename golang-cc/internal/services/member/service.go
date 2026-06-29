@@ -21,7 +21,7 @@ func New(repository *memberrepo.Repository, transactions *memberrepo.Transaction
 }
 
 type CardInput struct {
-	CardProductID string
+	CardID        string
 	Nickname      string
 	LastFour      string
 	IsActive      bool
@@ -84,16 +84,16 @@ func (s *Service) ListCards(ctx context.Context, userID string) ([]domain.Member
 	return s.repository.ListCards(ctx, userID)
 }
 
-func (s *Service) GetCard(ctx context.Context, userID, id string) (domain.MemberCard, error) {
+func (s *Service) GetCard(ctx context.Context, userID, id string) (domain.MemberCardInfo, error) {
 	return s.repository.GetCard(ctx, userID, id)
 }
 
 func (s *Service) CreateCard(ctx context.Context, userID string, input CardInput) (string, error) {
-	if input.CardProductID == "" {
+	if input.CardID == "" {
 		return "", domain.ErrInvalidInput
 	}
 	id := newID()
-	err := s.repository.CreateCard(ctx, id, userID, input.CardProductID, memberrepo.CardWrite{
+	err := s.repository.CreateCard(ctx, id, userID, input.CardID, memberrepo.CardWrite{
 		Nickname: input.Nickname, LastFour: input.LastFour, IsActive: input.IsActive,
 		StatementDay: input.StatementDay, PaymentDueDay: input.PaymentDueDay,
 		AccountTier:   input.AccountTier,

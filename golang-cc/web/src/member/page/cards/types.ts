@@ -1,5 +1,5 @@
 export type CardForm = {
-  card_product_id: string;
+  card_id: string;
   nickname: string;
   last_four: string;
   statement_day: string;
@@ -9,8 +9,8 @@ export type CardForm = {
   card_network_id: string;
 };
 
-export const emptyForm = (cardProductID = ""): CardForm => ({
-  card_product_id: cardProductID,
+export const emptyForm = (cardID = ""): CardForm => ({
+  card_id: cardID,
   nickname: "",
   last_four: "",
   statement_day: "",

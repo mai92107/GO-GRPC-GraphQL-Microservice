@@ -1,17 +1,17 @@
 import { Trash2 } from "lucide-react";
-import type { Card } from "../../../models";
-import { activeStatusText, lastFourText } from "../../../utils/cardText";
-import type { RewardOverview } from "../../MemberApi";
-import { CardArtwork } from "./CardArtwork";
-import { QualificationList } from "./QualificationList";
-import { RewardLayerList } from "./RewardLayerList";
+import type { Card } from "../../../../models";
+import { activeStatusText, lastFourText } from "../../../../utils/cardText";
+import type { RewardOverview as RewardOverviewData } from "../../../MemberApi";
+import { CardArtwork } from "../../cards/CardArtwork";
+import { Qualification } from "./Qualification";
+import { RewardOverview } from "./RewardOverview";
 
 type Props = {
   card: Card;
   deletingID: string | null;
   expanded: Record<string, boolean>;
-  overview?: RewardOverview;
-  overviewLoadingID: string;
+  overview?: RewardOverviewData;
+  overviewLoading: boolean;
   qualificationSaving: string;
   onDelete: (id: string) => void;
   onToggleGroup: (key: string, nextValue: boolean) => void;
@@ -27,7 +27,7 @@ export function CardDetail({
   deletingID,
   expanded,
   overview,
-  overviewLoadingID,
+  overviewLoading,
   qualificationSaving,
   onDelete,
   onToggleGroup,
@@ -49,36 +49,30 @@ export function CardDetail({
         </div>
       </div>
 
-      {overviewLoadingID === card.id && (
-        <section className="wallet-card-section">
-          <p className="muted">載入卡片回饋中…</p>
-        </section>
-      )}
       {overview && (
-        <>
-          <QualificationList
-            cardID={card.id}
-            plans={overview.qualified_plans}
-            savingKey={qualificationSaving}
-            onToggle={onToggleQualification}
-          />
-          <RewardLayerList
-            expanded={expanded}
-            overview={overview}
-            onToggle={onToggleGroup}
-          />
-        </>
+        <Qualification
+          cardID={card.member_card_id}
+          plans={overview.qualified_plans || []}
+          savingKey={qualificationSaving}
+          onToggle={onToggleQualification}
+        />
       )}
+      <RewardOverview
+        expanded={expanded}
+        loading={overviewLoading}
+        overview={overview}
+        onToggle={onToggleGroup}
+      />
 
       <footer className="wallet-card-actions">
         <button
           type="button"
           className="button danger"
-          disabled={deletingID === card.id}
-          onClick={() => onDelete(card.id)}
+          disabled={deletingID === card.member_card_id}
+          onClick={() => onDelete(card.member_card_id)}
         >
           <Trash2 size={15} />
-          {deletingID === card.id ? "移除中…" : "移除此卡片"}
+          {deletingID === card.member_card_id ? "移除中…" : "移除此卡片"}
         </button>
       </footer>
     </article>

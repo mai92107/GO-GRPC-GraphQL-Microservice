@@ -1,11 +1,13 @@
 import { FormEvent } from "react";
-import { Dialog, Field } from "../../../components";
-import type { CatalogCard } from "../../../models";
-import type { CardForm } from "./types";
+import { Dialog, Field } from "../../../../components";
+import type { CatalogCard } from "../../../../models";
+import type { CardForm } from "../../cards/types";
 
 type Props = {
   catalog: CatalogCard[];
+  error: string;
   form: CardForm;
+  formForCard: (cardID: string) => CardForm;
   onChange: (form: CardForm) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent) => void;
@@ -13,9 +15,11 @@ type Props = {
   selectedCard?: CatalogCard;
 };
 
-export function CreateMemberCardDialog({
+export function CreateDialog({
   catalog,
+  error,
   form,
+  formForCard,
   onChange,
   onClose,
   onSubmit,
@@ -25,19 +29,21 @@ export function CreateMemberCardDialog({
   return (
     <Dialog title="加入卡片夾" onClose={onClose}>
       <form className="stack" onSubmit={onSubmit}>
+        {error && <div className="error">{error}</div>}
         <Field label="銀行卡片">
           <select
-            value={form.card_product_id}
+            value={form.card_id}
             disabled={saving}
-            onChange={(event) => {
-              const card = catalog.find((item) => item.id === event.target.value);
+            onChange={(event) =>
               onChange({
-                ...form,
-                card_product_id: event.target.value,
-                card_network_id: card?.networks[0]?.id || "",
-                account_tier: "",
-              });
-            }}
+                ...formForCard(event.target.value),
+                nickname: form.nickname,
+                last_four: form.last_four,
+                statement_day: form.statement_day,
+                payment_due_day: form.payment_due_day,
+                is_active: form.is_active,
+              })
+            }
           >
             {catalog.map((card) => (
               <option value={card.id} key={card.id}>
@@ -57,8 +63,8 @@ export function CreateMemberCardDialog({
               }
             >
               {selectedCard.networks.map((network) => (
-                <option value={network.id} key={network.id}>
-                  {network.name}
+                <option value={network} key={network}>
+                  {network}
                 </option>
               ))}
             </select>
@@ -68,7 +74,9 @@ export function CreateMemberCardDialog({
           <input
             value={form.nickname}
             disabled={saving}
-            onChange={(event) => onChange({ ...form, nickname: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...form, nickname: event.target.value })
+            }
           />
         </Field>
         <Field label="卡號末四碼">
@@ -77,7 +85,9 @@ export function CreateMemberCardDialog({
             pattern="[0-9]{4}"
             value={form.last_four}
             disabled={saving}
-            onChange={(event) => onChange({ ...form, last_four: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...form, last_four: event.target.value })
+            }
           />
         </Field>
         <div className="two-col">
@@ -117,7 +127,7 @@ export function CreateMemberCardDialog({
           />
           <span>啟用卡片</span>
         </label>
-        <button className="button" disabled={saving}>
+        <button className="button" disabled={saving || !form.card_id}>
           {saving ? "加入中…" : "加入卡片夾"}
         </button>
       </form>

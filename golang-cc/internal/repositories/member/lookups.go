@@ -2,6 +2,7 @@ package member
 
 import (
 	"context"
+
 	"github.com/rafa/golang-cc/internal/domain"
 )
 
@@ -19,25 +20,7 @@ func (r *Repository) Catalog(ctx context.Context) ([]domain.CatalogCard, error) 
 		if err := rows.Scan(&x.ID, &x.BankID, &x.BankName, &x.Name, &x.CardImageURL, &x.PrimaryColor, &x.IsActive, &x.AccountTiers, &x.QualifiedType, &x.SelectableType); err != nil {
 			return nil, err
 		}
-		x.Activities = []domain.CardProductActivity{}
 		out = append(out, x)
-	}
-	for i := range out {
-		networkRows, err := r.pool.Query(ctx, `SELECT n.id,n.id,n.name FROM catalog.card_product_networks pn
-			JOIN catalog.card_networks n ON n.id=pn.card_network_id
-			WHERE pn.card_product_id=$1 AND n.is_active ORDER BY n.name`, out[i].ID)
-		if err != nil {
-			return nil, err
-		}
-		for networkRows.Next() {
-			var network domain.CardNetwork
-			if err := networkRows.Scan(&network.ID, &network.Code, &network.Name); err != nil {
-				networkRows.Close()
-				return nil, err
-			}
-			out[i].Networks = append(out[i].Networks, network)
-		}
-		networkRows.Close()
 	}
 	return out, rows.Err()
 }
@@ -58,8 +41,8 @@ func (r *Repository) CatalogCard(ctx context.Context, id string) (domain.Catalog
 		return x, err
 	}
 	for networkRows.Next() {
-		var network domain.CardNetwork
-		if err := networkRows.Scan(&network.ID, &network.Code, &network.Name); err != nil {
+		var network string
+		if err := networkRows.Scan(&network); err != nil {
 			networkRows.Close()
 			return x, err
 		}

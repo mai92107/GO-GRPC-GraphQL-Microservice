@@ -1,4 +1,4 @@
-import type { QualificationStatus } from "../../MemberApi";
+import type { QualificationStatus } from "../../../MemberApi";
 
 type Props = {
   cardID: string;
@@ -7,7 +7,7 @@ type Props = {
   onToggle: (cardID: string, planID: string, nextValue: boolean) => void;
 };
 
-export function QualificationList({
+export function Qualification({
   cardID,
   plans,
   savingKey,

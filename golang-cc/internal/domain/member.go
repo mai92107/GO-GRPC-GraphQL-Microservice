@@ -3,23 +3,32 @@ package domain
 import "encoding/json"
 
 type MemberCard struct {
-	ID             string       `json:"id"`
-	CardProductID  string       `json:"card_product_id"`
-	Name           string       `json:"name"`
-	Issuer         string       `json:"issuer"`
-	LastFour       string       `json:"last_four"`
-	IsActive       bool         `json:"is_active"`
-	StatementDay   *int         `json:"statement_day"`
-	PaymentDueDay  *int         `json:"payment_due_day"`
-	AccountTier    string       `json:"account_tier"`
-	CardImageURL   string       `json:"card_image_url"`
-	PrimaryColor   string       `json:"primary_color"`
-	QualifiedType  string       `json:"qualified_type"`
-	SelectableType string       `json:"selectable_type"`
-	NetworkID      string       `json:"-"`
-	NetworkCode    string       `json:"-"`
-	NetworkName    string       `json:"-"`
-	Network        *CardNetwork `json:"network"`
+	MemberCardId   string `json:"member_card_id"`
+	Name           string `json:"name"`
+	Issuer         string `json:"issuer"`
+	LastFour       string `json:"last_four"`
+	IsActive       bool   `json:"is_active"`
+	CardImageURL   string `json:"card_image_url"`
+	PrimaryColor   string `json:"primary_color"`
+	QualifiedType  string `json:"qualified_type"`
+	SelectableType string `json:"selectable_type"`
+	Network        string `json:"network"`
+}
+
+type MemberCardInfo struct {
+	MemberCardId   string `json:"memberCardID"`
+	Name           string `json:"name"`
+	Issuer         string `json:"issuer"`
+	LastFour       string `json:"last_four"`
+	IsActive       bool   `json:"is_active"`
+	StatementDay   *int   `json:"statement_day"`
+	PaymentDueDay  *int   `json:"payment_due_day"`
+	AccountTier    string `json:"account_tier"`
+	CardImageURL   string `json:"card_image_url"`
+	PrimaryColor   string `json:"primary_color"`
+	QualifiedType  string `json:"qualified_type"`
+	SelectableType string `json:"selectable_type"`
+	Network        string `json:"network"`
 }
 
 type CatalogCard struct {
@@ -34,13 +43,7 @@ type CatalogCard struct {
 	QualifiedType  string
 	SelectableType string
 	Activities     []CardProductActivity
-	Networks       []CardNetwork
-}
-
-type CardNetwork struct {
-	ID   string `json:"id"`
-	Code string `json:"code"`
-	Name string `json:"name"`
+	Networks       []string
 }
 
 type MemberRewardUnit struct {

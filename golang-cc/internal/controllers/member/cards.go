@@ -7,7 +7,7 @@ import (
 )
 
 type cardRequest struct {
-	CardProductID string `json:"card_product_id"`
+	CardID        string `json:"card_id"`
 	Nickname      string `json:"nickname"`
 	LastFour      string `json:"last_four"`
 	IsActive      *bool  `json:"is_active"`
@@ -17,39 +17,70 @@ type cardRequest struct {
 	CardNetworkID string `json:"card_network_id"`
 }
 type cardResponse struct {
-	ID             string           `json:"id"`
-	CardProductID  string           `json:"card_product_id"`
-	Name           string           `json:"name"`
-	Issuer         string           `json:"issuer"`
-	LastFour       string           `json:"last_four"`
-	IsActive       bool             `json:"is_active"`
-	StatementDay   *int             `json:"statement_day"`
-	PaymentDueDay  *int             `json:"payment_due_day"`
-	AccountTier    string           `json:"account_tier"`
-	CardImageURL   string           `json:"card_image_url"`
-	PrimaryColor   string           `json:"primary_color"`
-	QualifiedType  string           `json:"qualified_type"`
-	SelectableType string           `json:"selectable_type"`
-	Network        *networkResponse `json:"network"`
+	MemberCardId   string `json:"member_card_id"`
+	Name           string `json:"name"`
+	Issuer         string `json:"issuer"`
+	LastFour       string `json:"last_four"`
+	IsActive       bool   `json:"is_active"`
+	CardImageURL   string `json:"card_image_url"`
+	PrimaryColor   string `json:"primary_color"`
+	QualifiedType  string `json:"qualified_type"`
+	SelectableType string `json:"selectable_type"`
+	Network        string `json:"network"`
 }
-
-type networkResponse struct {
-	ID   string `json:"id"`
-	Code string `json:"code"`
-	Name string `json:"name"`
+type cardInfoResponse struct {
+	MemberCardId   string `json:"member_card_id"`
+	Name           string `json:"name"`
+	Issuer         string `json:"issuer"`
+	LastFour       string `json:"last_four"`
+	IsActive       bool   `json:"is_active"`
+	StatementDay   *int   `json:"statement_day"`
+	PaymentDueDay  *int   `json:"payment_due_day"`
+	AccountTier    string `json:"account_tier"`
+	CardImageURL   string `json:"card_image_url"`
+	PrimaryColor   string `json:"primary_color"`
+	QualifiedType  string `json:"qualified_type"`
+	SelectableType string `json:"selectable_type"`
+	Network        string `json:"network"`
 }
 
 func mapCard(x domain.MemberCard) cardResponse {
-	var network *networkResponse
-	if x.NetworkID != "" {
-		network = &networkResponse{ID: x.NetworkID, Code: x.NetworkCode, Name: x.NetworkName}
+	return cardResponse{
+		MemberCardId:   x.MemberCardId,
+		Name:           x.Name,
+		Issuer:         x.Issuer,
+		LastFour:       x.LastFour,
+		IsActive:       x.IsActive,
+		CardImageURL:   x.CardImageURL,
+		PrimaryColor:   x.PrimaryColor,
+		QualifiedType:  x.QualifiedType,
+		SelectableType: x.SelectableType,
+		Network:        x.Network,
 	}
-	return cardResponse{ID: x.ID, CardProductID: x.CardProductID, Name: x.Name, Issuer: x.Issuer, LastFour: x.LastFour, IsActive: x.IsActive, StatementDay: x.StatementDay, PaymentDueDay: x.PaymentDueDay, AccountTier: x.AccountTier, CardImageURL: x.CardImageURL, PrimaryColor: x.PrimaryColor, QualifiedType: x.QualifiedType, SelectableType: x.SelectableType, Network: network}
+}
+
+func mapCardInfo(x domain.MemberCardInfo) cardInfoResponse {
+	return cardInfoResponse{
+		MemberCardId:   x.MemberCardId,
+		Name:           x.Name,
+		Issuer:         x.Issuer,
+		LastFour:       x.LastFour,
+		IsActive:       x.IsActive,
+		StatementDay:   x.StatementDay,
+		PaymentDueDay:  x.PaymentDueDay,
+		AccountTier:    x.AccountTier,
+		CardImageURL:   x.CardImageURL,
+		PrimaryColor:   x.PrimaryColor,
+		QualifiedType:  x.QualifiedType,
+		SelectableType: x.SelectableType,
+		Network:        x.Network,
+	}
 }
 
 func (c *Controller) ListCards(ctx *gin.Context) {
 	items, err := c.service.ListCards(ctx, userID(ctx))
 	if err != nil {
+		println("error getting member cards, error: " + err.Error())
 		failure(ctx, 500, "internal_error", "查詢卡片失敗")
 		return
 	}
@@ -62,14 +93,15 @@ func (c *Controller) ListCards(ctx *gin.Context) {
 func (c *Controller) GetCard(ctx *gin.Context) {
 	x, err := c.service.GetCard(ctx, userID(ctx), ctx.Param("id"))
 	if err != nil {
+		println("error getting card, error: " + err.Error())
 		failure(ctx, 404, "not_found", "找不到卡片")
 		return
 	}
-	data(ctx, 200, mapCard(x))
+	data(ctx, 200, mapCardInfo(x))
 }
 func (c *Controller) CreateCard(ctx *gin.Context) {
 	var r cardRequest
-	if ctx.ShouldBindJSON(&r) != nil || r.CardProductID == "" {
+	if ctx.ShouldBindJSON(&r) != nil || r.CardID == "" {
 		failure(ctx, 400, "validation_failed", "請選擇卡片目錄中的卡片")
 		return
 	}
@@ -77,12 +109,12 @@ func (c *Controller) CreateCard(ctx *gin.Context) {
 	if r.IsActive != nil {
 		active = *r.IsActive
 	}
-	id, err := c.service.CreateCard(ctx, userID(ctx), service.CardInput{CardProductID: r.CardProductID, CardNetworkID: r.CardNetworkID, Nickname: r.Nickname, LastFour: r.LastFour, IsActive: active, StatementDay: r.StatementDay, PaymentDueDay: r.PaymentDueDay, AccountTier: r.AccountTier})
+	id, err := c.service.CreateCard(ctx, userID(ctx), service.CardInput{CardID: r.CardID, CardNetworkID: r.CardNetworkID, Nickname: r.Nickname, LastFour: r.LastFour, IsActive: active, StatementDay: r.StatementDay, PaymentDueDay: r.PaymentDueDay, AccountTier: r.AccountTier})
 	if err != nil {
 		failure(ctx, 409, "card_conflict", "卡片已在卡片夾中或資料無效")
 		return
 	}
-	data(ctx, 201, gin.H{"id": id, "card_product_id": r.CardProductID})
+	data(ctx, 201, gin.H{"id": id, "card_id": r.CardID})
 }
 func (c *Controller) UpdateCard(ctx *gin.Context) {
 	var r cardRequest

@@ -9,7 +9,7 @@ BEGIN
           AND table_name = 'merchants'
           AND column_name = 'code'
     ) THEN
-        ALTER TABLE merchants ADD COLUMN IF NOT EXISTS id UUID;
+        ALTER TABLE merchants ADD COLUMN IF NOT EXISTS id UUID;        
         UPDATE merchants SET id = gen_random_uuid() WHERE id IS NULL;
         ALTER TABLE merchants ALTER COLUMN id SET DEFAULT gen_random_uuid();
         ALTER TABLE merchants ALTER COLUMN id SET NOT NULL;

@@ -16,7 +16,7 @@ func (s *Service) GetCardProduct(ctx context.Context, id string, includeActiviti
 	return s.repository.GetCardProduct(ctx, id, includeActivities)
 }
 
-func (s *Service) ListCardNetworks(ctx context.Context) ([]domain.CardNetwork, error) {
+func (s *Service) ListCardNetworks(ctx context.Context) ([]string, error) {
 	return s.repository.ListCardNetworks(ctx)
 }
 

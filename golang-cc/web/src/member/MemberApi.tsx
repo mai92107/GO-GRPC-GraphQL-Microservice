@@ -15,7 +15,7 @@ export type Category = {
 };
 
 export type MemberCardInput = {
-  card_product_id?: string;
+  card_id: string;
   nickname: string;
   last_four: string;
   statement_day: number | null;
