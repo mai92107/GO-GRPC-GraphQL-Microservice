@@ -33,7 +33,7 @@ func New(pool *pgxpool.Pool, gormDB *gorm.DB, sender email.Sender, publicBaseURL
 	)
 
 	// 註冊路由和控制器
-	authService := publicservice.New(publicrepo.New(pool), sender, publicBaseURL)
+	authService := publicservice.New(publicrepo.New(pool, gormDB), sender, publicBaseURL)
 	publicController := publiccontroller.New(authService, secureCookie)
 	adminController := admincontroller.New(adminservice.New(adminrepo.New(pool, gormDB), authService))
 	memberController := membercontroller.New(memberservice.New(memberrepo.New(pool, gormDB), memberrepo.NewTransactionRepository(pool)))

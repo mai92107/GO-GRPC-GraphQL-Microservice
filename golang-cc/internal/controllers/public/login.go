@@ -21,6 +21,7 @@ func (c *Controller) Login(ctx *gin.Context) {
 	}
 	user, token, err := c.service.Login(ctx.Request.Context(), strings.TrimSpace(input.Email), input.Password)
 	if err != nil {
+		println("error login, error: " + err.Error())
 		writeError(ctx, http.StatusUnauthorized, "invalid_credentials", "Email 或密碼錯誤")
 		return
 	}

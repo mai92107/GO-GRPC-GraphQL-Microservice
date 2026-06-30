@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Card, CatalogCard } from "../../../../models";
-import { getCards, getCatalogCards } from "../../../MemberApi";
+import type { Card } from "../../../../models";
+import { getCards } from "../../../MemberApi";
 
 export function useBrowseCards() {
   const [myCards, setMyCards] = useState<Card[]>([]);
-  const [catalogCards, setCatalogCards] = useState<CatalogCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -12,12 +11,8 @@ export function useBrowseCards() {
     setLoading(true);
     setError("");
     try {
-      const [nextMyCards, nextCatalogCards] = await Promise.all([
-        getCards(),
-        getCatalogCards(),
-      ]);
+      const nextMyCards = await getCards();
       setMyCards(nextMyCards);
-      setCatalogCards(nextCatalogCards);
     } catch (requestError) {
       setError((requestError as Error).message);
     } finally {
@@ -29,5 +24,5 @@ export function useBrowseCards() {
     void reload();
   }, [reload]);
 
-  return { catalogCards, error, loading, myCards, reload };
+  return { error, loading, myCards, reload };
 }

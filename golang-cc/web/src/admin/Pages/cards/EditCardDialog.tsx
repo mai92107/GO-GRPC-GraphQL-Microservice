@@ -1,6 +1,6 @@
 import { FormEvent } from "react";
 import { Dialog } from "../../../components";
-import type { CardNetwork, CatalogCard } from "../../../models";
+import type { CatalogCard } from "../../../models";
 import type { Bank } from "../../AdminApi";
 import { CardFormFields } from "./CardFormFields";
 import type { CardForm } from "./types";
@@ -9,7 +9,7 @@ type Props = {
   banks: Bank[];
   card: CatalogCard;
   form: CardForm;
-  networks: CardNetwork[];
+  networks: string[];
   onChange: (form: CardForm) => void;
   onClose: () => void;
   onDelete: () => void;
@@ -53,7 +53,7 @@ export function EditCardDialog({
           <span />
           <button
             className="button"
-            disabled={saving || !form.network_ids.length}
+            disabled={saving || !form.networks.length}
           >
             {saving ? "處理中…" : "儲存"}
           </button>

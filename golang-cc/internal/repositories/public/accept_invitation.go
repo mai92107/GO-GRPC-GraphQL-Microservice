@@ -7,31 +7,46 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rafa/golang-cc/internal/domain"
+	"gorm.io/gorm"
 )
 
-func (r *Repository) AcceptInvitation(ctx context.Context, tokenHash []byte, now time.Time, user domain.User, passwordHash string) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	var email string
-	err = tx.QueryRow(ctx, `SELECT email FROM invitations WHERE token_hash=$1 AND accepted_at IS NULL AND expires_at>$2 FOR UPDATE`, tokenHash, now).Scan(&email)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.ErrInvalidToken
-	}
-	if err != nil {
-		return err
-	}
-	user.Email = email
-	if _, err = tx.Exec(ctx, `INSERT INTO users(id,email,password_hash,display_name,role,status) VALUES($1,$2,$3,$4,$5,$6)`,
-		user.ID, user.Email, passwordHash, user.DisplayName, user.Role, user.Status); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(ctx, `UPDATE invitations SET accepted_at=$2 WHERE token_hash=$1`, tokenHash, now); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+func (r *Repository) AcceptInvitation(
+	ctx context.Context,
+	tokenHash []byte,
+	now time.Time,
+	user domain.User,
+	passwordHash string,
+) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var invitation domain.Invitation
+		var newUser domain.Users
+		err := tx.
+			Where("token_hash = ? AND accepted_at IS NULL AND expires_at > ?", tokenHash, now).
+			Take(&invitation).Error
+
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.ErrInvalidToken
+		}
+
+		if err != nil {
+			return err
+		}
+		newUser.User = user
+		newUser.Email = invitation.Email
+		newUser.PasswordHash = passwordHash
+
+		if err := tx.Create(&newUser).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&domain.Invitation{}).
+			Where("token_hash = ?", tokenHash).
+			Update("accepted_at", now).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 func (r *Repository) InvitationEmail(ctx context.Context, tokenHash []byte, now time.Time) (string, error) {

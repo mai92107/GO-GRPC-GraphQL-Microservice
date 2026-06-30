@@ -5,6 +5,7 @@ import type { CardForm } from "../../cards/types";
 
 type Props = {
   catalog: CatalogCard[];
+  catalogLoading: boolean;
   error: string;
   form: CardForm;
   formForCard: (cardID: string) => CardForm;
@@ -17,6 +18,7 @@ type Props = {
 
 export function CreateDialog({
   catalog,
+  catalogLoading,
   error,
   form,
   formForCard,
@@ -30,10 +32,14 @@ export function CreateDialog({
     <Dialog title="加入卡片夾" onClose={onClose}>
       <form className="stack" onSubmit={onSubmit}>
         {error && <div className="error">{error}</div>}
+        {catalogLoading && <p className="muted">載入可加入卡片中…</p>}
+        {!catalogLoading && !catalog.length && !error && (
+          <p className="muted">目前沒有可加入的卡片。</p>
+        )}
         <Field label="銀行卡片">
           <select
             value={form.card_id}
-            disabled={saving}
+            disabled={saving || catalogLoading || !catalog.length}
             onChange={(event) =>
               onChange({
                 ...formForCard(event.target.value),
@@ -57,7 +63,7 @@ export function CreateDialog({
             <select
               required
               value={form.card_network_id}
-              disabled={saving}
+              disabled={saving || catalogLoading}
               onChange={(event) =>
                 onChange({ ...form, card_network_id: event.target.value })
               }
@@ -73,7 +79,7 @@ export function CreateDialog({
         <Field label="自訂暱稱">
           <input
             value={form.nickname}
-            disabled={saving}
+            disabled={saving || catalogLoading}
             onChange={(event) =>
               onChange({ ...form, nickname: event.target.value })
             }
@@ -84,7 +90,7 @@ export function CreateDialog({
             inputMode="numeric"
             pattern="[0-9]{4}"
             value={form.last_four}
-            disabled={saving}
+            disabled={saving || catalogLoading}
             onChange={(event) =>
               onChange({ ...form, last_four: event.target.value })
             }
@@ -97,7 +103,7 @@ export function CreateDialog({
               min="1"
               max="31"
               value={form.statement_day}
-              disabled={saving}
+              disabled={saving || catalogLoading}
               onChange={(event) =>
                 onChange({ ...form, statement_day: event.target.value })
               }
@@ -109,7 +115,7 @@ export function CreateDialog({
               min="1"
               max="31"
               value={form.payment_due_day}
-              disabled={saving}
+              disabled={saving || catalogLoading}
               onChange={(event) =>
                 onChange({ ...form, payment_due_day: event.target.value })
               }
@@ -120,14 +126,17 @@ export function CreateDialog({
           <input
             type="checkbox"
             checked={form.is_active}
-            disabled={saving}
+            disabled={saving || catalogLoading}
             onChange={(event) =>
               onChange({ ...form, is_active: event.target.checked })
             }
           />
           <span>啟用卡片</span>
         </label>
-        <button className="button" disabled={saving || !form.card_id}>
+        <button
+          className="button"
+          disabled={saving || catalogLoading || !form.card_id}
+        >
           {saving ? "加入中…" : "加入卡片夾"}
         </button>
       </form>

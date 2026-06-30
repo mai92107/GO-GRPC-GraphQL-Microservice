@@ -2,73 +2,69 @@ package admin
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rafa/golang-cc/internal/domain"
+	"gorm.io/gorm"
 )
 
-func (r *Repository) ListCardProducts(ctx context.Context) ([]domain.CardProduct, error) {
-	rows, err := r.pool.Query(ctx, `SELECT cp.id,cp.bank_id,b.name,cp.name,cp.is_active,cp.account_tiers,
-		COALESCE(cp.qualified_type,''),COALESCE(cp.selectable_type,'')
-		FROM card_products cp JOIN banks b ON b.id=cp.bank_id ORDER BY b.name,cp.name`)
+func (r *Repository) ListCards(ctx context.Context) ([]domain.Card, error) {
+	var out []domain.Card
+	err := r.db.WithContext(ctx).
+		Table("catalog.card_products AS cp").
+		Select(`
+			cp.id AS id,
+			cp.bank_id AS bank_id,
+			b.name AS bank_name,
+			cp.name AS name,
+			cp.is_active AS is_active,
+			COALESCE(cp.qualified_type, '') AS qualified_type,
+			COALESCE(cp.selectable_type, '') AS selectable_type,
+			COALESCE(cp.networks, '') AS networks
+		`).
+		Joins("JOIN banks AS b ON b.id = cp.bank_id").
+		Order("b.name, cp.name").
+		Scan(&out).Error
 	if err != nil {
 		return nil, err
-	}
-	defer rows.Close()
-	out := []domain.CardProduct{}
-	for rows.Next() {
-		var x domain.CardProduct
-		if err := rows.Scan(&x.ID, &x.BankID, &x.BankName, &x.Name, &x.IsActive, &x.AccountTiers, &x.QualifiedType, &x.SelectableType); err != nil {
-			return nil, err
-		}
-		x.Activities = []domain.CardProductActivity{}
-		out = append(out, x)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	for i := range out {
-		networks, err := r.cardProductNetworks(ctx, out[i].ID)
-		if err != nil {
-			return nil, err
-		}
-		out[i].Networks = networks
 	}
 	return out, nil
 }
 
-func (r *Repository) GetCardProduct(ctx context.Context, id string, includeActivities bool) (domain.CardProduct, error) {
-	var x domain.CardProduct
-	err := r.pool.QueryRow(ctx, `SELECT cp.id,cp.bank_id,b.name,cp.name,cp.is_active,cp.account_tiers,
-		COALESCE(cp.qualified_type,''),COALESCE(cp.selectable_type,'')
-		FROM card_products cp JOIN banks b ON b.id=cp.bank_id WHERE cp.id=$1`, id).
-		Scan(&x.ID, &x.BankID, &x.BankName, &x.Name, &x.IsActive, &x.AccountTiers, &x.QualifiedType, &x.SelectableType)
+func (r *Repository) GetCardInfo(
+	ctx context.Context,
+	id string,
+) (domain.CardInfo, error) {
+
+	var x domain.CardInfo
+	err := r.db.WithContext(ctx).
+		Table("catalog.card_products AS cp").
+		Select(`
+			cp.id,
+			cp.bank_id,
+			b.name AS bank_name,
+			cp.name,
+			cp.is_active,
+			COALESCE(cp.qualified_type, '') AS qualified_type,
+			COALESCE(cp.selectable_type, '') AS selectable_type,
+			COALESCE(cp.networks, '') AS networks
+		`).
+		Joins("JOIN banks AS b ON b.id = cp.bank_id").
+		Where("cp.id = ?", id).
+		Scan(&x).Error
+
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return x, domain.ErrNotFound
-		}
 		return x, err
 	}
-	networks, err := r.cardProductNetworks(ctx, x.ID)
-	if err != nil {
-		return x, err
-	}
-	x.Networks = networks
-	x.Activities = []domain.CardProductActivity{}
-	if !includeActivities {
-		return x, nil
-	}
-	activities, err := r.listActivities(ctx, x.ID)
-	if err != nil {
-		return x, err
-	}
-	for _, a := range activities {
-		x.Activities = append(x.Activities, domain.CardProductActivity{ID: a.ID, Name: a.Name, StartDate: a.StartDate, EndDate: a.EndDate, IsActive: a.IsActive, SourceURL: a.SourceURL, VerifiedAt: a.VerifiedAt, NetworkIDs: a.NetworkIDs, Benefits: a.Benefits})
+	if x.ID == "" {
+		return x, domain.ErrNotFound
 	}
 	return x, nil
 }
 
-func (r *Repository) ListCardNetworks(ctx context.Context) ([]string, error) {
+func (r *Repository) ListNetworks(ctx context.Context) ([]string, error) {
 	rows, err := r.pool.Query(ctx, `SELECT name FROM catalog.card_networks WHERE is_active ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -85,67 +81,52 @@ func (r *Repository) ListCardNetworks(ctx context.Context) ([]string, error) {
 	return networks, rows.Err()
 }
 
-func (r *Repository) cardProductNetworks(ctx context.Context, cardProductID string) ([]string, error) {
-	rows, err := r.pool.Query(ctx, `SELECT n.name FROM catalog.card_product_networks pn
-		JOIN catalog.card_networks n ON n.id=pn.card_network_id
-		WHERE pn.card_product_id=$1 AND n.is_active ORDER BY n.name`, cardProductID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	networks := []string{}
-	for rows.Next() {
-		var network string
-		if err := rows.Scan(&network); err != nil {
-			return nil, err
+func (r *Repository) CreateCard(ctx context.Context, id string, input domain.CardInput) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		cardProduct := domain.CardProduct{
+			ID:             id,
+			BankID:         input.BankID,
+			Name:           input.Name,
+			IsActive:       input.IsActive,
+			QualifiedType:  nullString(input.QualifiedType),
+			SelectableType: nullString(input.SelectableType),
+			Networks:       strings.Join(input.Networks, ","),
 		}
-		networks = append(networks, network)
-	}
-	return networks, rows.Err()
+		if err := tx.Create(&cardProduct).Error; err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
-func (r *Repository) CreateCardProduct(ctx context.Context, id string, input domain.CardProductInput) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `INSERT INTO card_products(id,bank_id,name,is_active,account_tiers,qualified_type,selectable_type)
-		VALUES($1,$2,$3,$4,$5,NULLIF($6,''),NULLIF($7,''))`, id, input.BankID, input.Name, input.IsActive, input.AccountTiers, input.QualifiedType, input.SelectableType); err != nil {
-		return err
-	}
-	if err := syncQualifiedCardPlans(ctx, tx, id, input.QualifiedType); err != nil {
-		return err
-	}
-	if err := syncCardProductNetworks(ctx, tx, id, input.NetworkIDs); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+func (r *Repository) UpdateCard(ctx context.Context, id string, input domain.CardInput) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		updates := map[string]any{
+			"bank_id":         input.BankID,
+			"name":            input.Name,
+			"is_active":       input.IsActive,
+			"qualified_type":  nullString(input.QualifiedType),
+			"selectable_type": nullString(input.SelectableType),
+			"networks":        strings.Join(input.Networks, ","),
+			"updated_at":      time.Now(),
+		}
+
+		result := tx.
+			Model(&domain.CardProduct{}).
+			Where("id = ?", id).
+			Updates(updates)
+
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return domain.ErrNotFound
+		}
+		return nil
+	})
 }
-func (r *Repository) UpdateCardProduct(ctx context.Context, id string, input domain.CardProductInput) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-	tag, err := tx.Exec(ctx, `UPDATE card_products SET bank_id=$2,name=$3,is_active=$4,account_tiers=$5,
-		qualified_type=NULLIF($6,''),selectable_type=NULLIF($7,''),updated_at=now() WHERE id=$1`,
-		id, input.BankID, input.Name, input.IsActive, input.AccountTiers, input.QualifiedType, input.SelectableType)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return domain.ErrNotFound
-	}
-	if err := syncQualifiedCardPlans(ctx, tx, id, input.QualifiedType); err != nil {
-		return err
-	}
-	if err := syncCardProductNetworks(ctx, tx, id, input.NetworkIDs); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
-}
-func (r *Repository) DeleteCardProduct(ctx context.Context, id string) error {
+
+func (r *Repository) DeleteCard(ctx context.Context, id string) error {
 	tag, err := r.pool.Exec(ctx, `DELETE FROM card_products WHERE id=$1`, id)
 	if err != nil {
 		return err
@@ -185,16 +166,9 @@ func syncQualifiedCardPlans(ctx context.Context, tx pgx.Tx, cardProductID, quali
 	return nil
 }
 
-func syncCardProductNetworks(ctx context.Context, tx pgx.Tx, cardProductID string, networkIDs []string) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM catalog.card_product_networks WHERE card_product_id=$1 AND NOT (card_network_id=ANY($2::uuid[]))`, cardProductID, networkIDs); err != nil {
-		return err
+func nullString(value string) *string {
+	if value == "" {
+		return nil
 	}
-	for _, networkID := range networkIDs {
-		if _, err := tx.Exec(ctx, `INSERT INTO catalog.card_product_networks(card_product_id,card_network_id)
-			SELECT $1::uuid,n.id FROM catalog.card_networks n WHERE n.id=$2::uuid AND n.is_active
-			ON CONFLICT DO NOTHING`, cardProductID, networkID); err != nil {
-			return err
-		}
-	}
-	return nil
+	return &value
 }

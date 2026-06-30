@@ -3,7 +3,7 @@ export type CardForm = {
   name: string;
   qualified_type: string;
   selectable_type: string;
-  network_ids: string[];
+  networks: string[];
 };
 
 export const emptyForm = (
@@ -14,7 +14,7 @@ export const emptyForm = (
   name: "",
   qualified_type: "",
   selectable_type: "",
-  network_ids: networkIDs,
+  networks: networkIDs,
 });
 
 export const toggleNetwork = (

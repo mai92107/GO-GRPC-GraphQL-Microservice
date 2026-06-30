@@ -31,6 +31,7 @@ func Authentication(authService Authenticator) gin.HandlerFunc {
 		}
 		user, err := authService.Authenticate(c.Request.Context(), token)
 		if err != nil {
+			println("error authenticate, error: " + err.Error())
 			abort(c, http.StatusUnauthorized, "unauthorized", "登入已失效")
 			return
 		}

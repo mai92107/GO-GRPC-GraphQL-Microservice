@@ -10,10 +10,9 @@ type CardProductInput struct {
 	BankID         string
 	Name           string
 	IsActive       bool
-	AccountTiers   []string
 	QualifiedType  string
 	SelectableType string
-	NetworkIDs     []string
+	Networks       []string
 }
 
 type RewardUnitInput struct {

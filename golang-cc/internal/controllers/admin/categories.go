@@ -51,6 +51,7 @@ func (c *Controller) DeleteCategory(ctx *gin.Context) {
 		return
 	}
 	if err != nil {
+		println("error deleting category, error: " + err.Error())
 		failure(ctx, http.StatusConflict, "category_in_use", "類別使用中，請停用")
 		return
 	}

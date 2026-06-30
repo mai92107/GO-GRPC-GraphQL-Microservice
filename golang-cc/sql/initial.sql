@@ -279,21 +279,20 @@ CREATE TABLE public.banks (
 -- Name: card_products; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.card_products (
+CREATE TABLE catalog.card_products (
     id uuid NOT NULL,
     bank_id uuid NOT NULL,
     name text NOT NULL,
     is_active boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    account_tiers text[] DEFAULT '{}'::text[] NOT NULL,
     description text,
     card_image_url text,
     primary_color text,
-    is_open_for_application boolean DEFAULT true NOT NULL,
     qualified_type text,
-    selectable_type text
-);
+    selectable_type text,
+    networks    text
+    );
 
 
 --
@@ -388,7 +387,7 @@ CREATE TABLE public.merchants (
 -- Name: password_reset_tokens; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.password_reset_tokens (
+CREATE TABLE identity.password_reset_tokens (
     id uuid NOT NULL,
     user_id uuid NOT NULL,
     token_hash bytea NOT NULL,
@@ -480,7 +479,7 @@ CREATE TABLE public.schema_migrations (
 -- Name: sessions; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.sessions (
+CREATE TABLE identity.sessions (
     id uuid NOT NULL,
     user_id uuid NOT NULL,
     token_hash bytea NOT NULL,
@@ -535,7 +534,7 @@ CREATE TABLE public.transactions (
 -- Name: users; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.users (
+CREATE TABLE identity.users (
     id uuid NOT NULL,
     email public.citext NOT NULL,
     password_hash text NOT NULL,

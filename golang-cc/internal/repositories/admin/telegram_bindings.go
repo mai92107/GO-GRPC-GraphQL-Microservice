@@ -8,7 +8,7 @@ import (
 
 func (r *Repository) ListTelegramBindings(ctx context.Context) ([]domain.TelegramBinding, error) {
 	rows, err := r.pool.Query(ctx, `SELECT b.chat_id,b.user_id,u.email,u.display_name,b.created_at,b.updated_at
-		FROM telegram_chat_bindings b JOIN users u ON u.id=b.user_id ORDER BY b.created_at DESC`)
+		FROM telegram_chat_bindings b JOIN identity.users u ON u.id=b.user_id ORDER BY b.created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +26,7 @@ func (r *Repository) ListTelegramBindings(ctx context.Context) ([]domain.Telegra
 
 func (r *Repository) CreateTelegramBinding(ctx context.Context, chatID int64, userID string) error {
 	tag, err := r.pool.Exec(ctx, `INSERT INTO telegram_chat_bindings(chat_id,user_id)
-		SELECT $1,id FROM users WHERE id=$2 AND role='member' AND status='active'`, chatID, userID)
+		SELECT $1,id FROM identity.users WHERE id=$2 AND role='member' AND status='active'`, chatID, userID)
 	if err != nil {
 		return err
 	}

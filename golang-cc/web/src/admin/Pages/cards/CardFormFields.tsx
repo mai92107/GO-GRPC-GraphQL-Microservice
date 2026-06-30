@@ -1,5 +1,4 @@
 import { Field } from "../../../components";
-import type { CardNetwork } from "../../../models";
 import type { Bank } from "../../AdminApi";
 import type { CardForm } from "./types";
 import { toggleNetwork } from "./types";
@@ -8,7 +7,7 @@ type Props = {
   banks: Bank[];
   disabled: boolean;
   form: CardForm;
-  networks: CardNetwork[];
+  networks: string[];
   onChange: (form: CardForm) => void;
   autoFocus?: boolean;
 };
@@ -50,23 +49,23 @@ export function CardFormFields({
         <span>發卡別</span>
         <div className="choice-grid">
           {networks.map((network) => (
-            <label className="choice-chip" key={network.id}>
+            <label className="choice-chip" key={network}>
               <input
                 type="checkbox"
-                checked={form.network_ids.includes(network.id)}
+                checked={form.networks.includes(network)}
                 disabled={disabled}
                 onChange={(event) =>
                   onChange({
                     ...form,
-                    network_ids: toggleNetwork(
-                      form.network_ids,
-                      network.id,
+                    networks: toggleNetwork(
+                      form.networks,
+                      network,
                       event.target.checked,
                     ),
                   })
                 }
               />
-              <span>{network.name}</span>
+              <span>{network}</span>
             </label>
           ))}
         </div>

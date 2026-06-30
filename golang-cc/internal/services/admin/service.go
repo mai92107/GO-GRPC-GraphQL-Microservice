@@ -20,12 +20,12 @@ type Repository interface {
 	CreateBank(context.Context, string, domain.BankInput) error
 	UpdateBank(context.Context, string, domain.BankInput) error
 	DeleteBank(context.Context, string) error
-	ListCardNetworks(context.Context) ([]string, error)
-	ListCardProducts(context.Context) ([]domain.CardProduct, error)
-	GetCardProduct(context.Context, string, bool) (domain.CardProduct, error)
-	CreateCardProduct(context.Context, string, domain.CardProductInput) error
-	UpdateCardProduct(context.Context, string, domain.CardProductInput) error
-	DeleteCardProduct(context.Context, string) error
+	ListNetworks(context.Context) ([]string, error)
+	ListCards(context.Context) ([]domain.Card, error)
+	GetCardInfo(context.Context, string) (domain.CardInfo, error)
+	CreateCard(context.Context, string, domain.CardInput) error
+	UpdateCard(context.Context, string, domain.CardInput) error
+	DeleteCard(context.Context, string) error
 	ListActivities(context.Context) ([]domain.Activity, error)
 	CreateActivity(context.Context, domain.Activity) error
 	UpdateActivity(context.Context, domain.Activity) error

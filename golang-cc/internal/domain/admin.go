@@ -12,6 +12,30 @@ type Dashboard struct {
 	ActiveActivities int
 }
 
+type Users struct {
+	User
+	PasswordHash string    `gorm:"column:password_hash"`
+	CreatedAt    time.Time `gorm:"column:created_at"`
+	UpdateddAt   time.Time `gorm:"column:updated_at"`
+}
+
+func (Users) TableName() string {
+	return "identity.users"
+}
+
+type Session struct {
+	Id         string    `gorm:"column:id"`
+	UserID     string    `gorm:"column:user_id"`
+	TokenHash  []byte    `gorm:"column:token_hash"`
+	ExpiresAt  time.Time `gorm:"column:expires_at"`
+	CreatedAt  time.Time `gorm:"column:created_at"`
+	LastSeenAt time.Time `gorm:"column:last_seen_at"`
+}
+
+func (Session) TableName() string {
+	return "identity.sessions"
+}
+
 type AdminUser struct {
 	ID          string
 	Email       string
@@ -31,17 +55,41 @@ type TelegramBinding struct {
 }
 
 type Invitation struct {
-	ID         string
-	Email      string
-	ExpiresAt  time.Time
-	AcceptedAt *time.Time
-	CreatedAt  time.Time
+	ID         string     `gorm:"column:id;primaryKey"`
+	Email      string     `gorm:"column:email"`
+	AcceptedAt *time.Time `gorm:"column:accepted_at"`
+	ExpiresAt  time.Time  `gorm:"column:expires_at"`
+	CreatedAt  time.Time  `gorm:"column:created_at"`
+}
+
+func (Invitation) TableName() string {
+	return "invitations"
+}
+
+type PasswordResetToken struct {
+	ID        string    `gorm:"column:id;primaryKey"`
+	UserID    string    `gorm:"column:user_id"`
+	TokenHash []byte    `gorm:"column:token_hash"`
+	ExpiresAt time.Time `gorm:"column:expires_at"`
+	UsedAt    time.Time `gorm:"column:used_at"`
+	CreatedAt time.Time `gorm:"column:created_at"`
+}
+
+func (PasswordResetToken) TableName() string {
+	return "identity.password_reset_tokens"
 }
 
 type Bank struct {
-	ID       string
-	Name     string
-	IsActive bool
+	ID         string    `gorm:"column:id;primaryKey"`
+	Name       string    `gorm:"column:name"`
+	WebsiteURL *string   `gorm:"column:website_url"`
+	IsActive   bool      `gorm:"column:is_active"`
+	CreatedAt  time.Time `gorm:"column:created_at"`
+	UpdateddAt time.Time `gorm:"column:updated_at"`
+}
+
+func (Bank) TableName() string {
+	return "banks"
 }
 
 type BankInput struct {
@@ -50,17 +98,50 @@ type BankInput struct {
 	IsActive   bool
 }
 
-type CardProduct struct {
-	ID             string
+type CardInput struct {
 	BankID         string
-	BankName       string
 	Name           string
 	IsActive       bool
-	AccountTiers   []string
 	QualifiedType  string
 	SelectableType string
 	Networks       []string
-	Activities     []CardProductActivity
+}
+
+type Card struct {
+	ID             string `gorm:"column:id;primaryKey"`
+	BankID         string `gorm:"column:bank_id"`
+	BankName       string `gorm:"column:bank_name"`
+	Name           string `gorm:"column:name"`
+	IsActive       bool   `gorm:"column:is_active"`
+	QualifiedType  string `gorm:"column:qualified_type"`
+	SelectableType string `gorm:"column:selectable_type"`
+	Networks       string `gorm:"column:networks"`
+}
+
+type CardInfo struct {
+	ID             string `gorm:"column:id;primaryKey"`
+	BankID         string `gorm:"column:bank_id"`
+	BankName       string `gorm:"column:bank_name"`
+	Name           string `gorm:"column:name"`
+	IsActive       bool   `gorm:"column:is_active"`
+	QualifiedType  string `gorm:"column:qualified_type"`
+	SelectableType string `gorm:"column:selectable_type"`
+	Networks       string `gorm:"column:networks"`
+}
+
+type CardProduct struct {
+	ID             string  `gorm:"column:id;primaryKey"`
+	BankID         string  `gorm:"column:bank_id"`
+	Name           string  `gorm:"column:name"`
+	IsActive       bool    `gorm:"column:is_active"`
+	Description    string  `gorm:"column:description"`
+	QualifiedType  *string `gorm:"column:qualified_type"`
+	SelectableType *string `gorm:"column:selectable_type"`
+	Networks       string  `gorm:"column:networks"`
+}
+
+func (CardProduct) TableName() string {
+	return "catalog.card_products"
 }
 
 type CardProductActivity struct {
@@ -73,16 +154,6 @@ type CardProductActivity struct {
 	VerifiedAt *string           `json:"verified_at"`
 	NetworkIDs []string          `json:"network_ids"`
 	Benefits   []ActivityBenefit `json:"benefits"`
-}
-
-type CardProductInput struct {
-	BankID         string
-	Name           string
-	IsActive       bool
-	AccountTiers   []string
-	QualifiedType  string
-	SelectableType string
-	NetworkIDs     []string
 }
 
 type Category struct {

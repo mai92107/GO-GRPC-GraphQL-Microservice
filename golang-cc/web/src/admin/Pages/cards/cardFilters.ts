@@ -13,10 +13,9 @@ export function filterCards(
     const haystack = [
       card.bank_name,
       card.name,
-      card.account_tiers.join(" "),
       card.qualified_type,
       card.selectable_type,
-      (card.networks || []).map((network) => network.name).join(" "),
+      (card.networks || []).join(" "),
     ]
       .join(" ")
       .toLowerCase();

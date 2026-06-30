@@ -2,7 +2,6 @@ import { ArrowLeft, Plus } from "lucide-react";
 import type { Card } from "../../../models";
 
 type Props = {
-  catalogCount: number;
   detail: Card | null;
   loading: boolean;
   onBack: () => void;
@@ -10,7 +9,6 @@ type Props = {
 };
 
 export function CardPageHeader({
-  catalogCount,
   detail,
   loading,
   onBack,
@@ -39,7 +37,7 @@ export function CardPageHeader({
         <button
           type="button"
           className="button"
-          disabled={loading || !catalogCount}
+          disabled={loading}
           onClick={onCreate}
         >
           <Plus size={17} />

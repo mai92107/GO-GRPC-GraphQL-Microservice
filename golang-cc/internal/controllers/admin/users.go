@@ -36,6 +36,7 @@ func (c *Controller) SendUserPasswordReset(ctx *gin.Context) {
 			failure(ctx, http.StatusNotFound, "not_found", "找不到使用者")
 			return
 		}
+		println("error sending reset email, error: " + err.Error())
 		failure(ctx, http.StatusInternalServerError, "email_failed", "寄送失敗")
 		return
 	}

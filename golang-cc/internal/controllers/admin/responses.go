@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"strings"
 	"time"
 
 	"github.com/rafa/golang-cc/internal/domain"
@@ -56,14 +57,23 @@ type cardProductActivityResponse struct {
 	NetworkIDs []string                  `json:"network_ids"`
 	Benefits   []activityBenefitResponse `json:"benefits"`
 }
+type cardResponse struct {
+	ID             string   `json:"id"`
+	BankID         string   `json:"bank_id"`
+	BankName       string   `json:"bank_name"`
+	Name           string   `json:"name"`
+	IsActive       bool     `json:"is_active"`
+	QualifiedType  string   `json:"qualified_type"`
+	SelectableType string   `json:"selectable_type"`
+	Networks       []string `json:"networks"`
+}
 
-type cardProductResponse struct {
+type cardInfoResponse struct {
 	ID             string                        `json:"id"`
 	BankID         string                        `json:"bank_id"`
 	BankName       string                        `json:"bank_name"`
 	Name           string                        `json:"name"`
 	IsActive       bool                          `json:"is_active"`
-	AccountTiers   []string                      `json:"account_tiers"`
 	QualifiedType  string                        `json:"qualified_type"`
 	SelectableType string                        `json:"selectable_type"`
 	Networks       []string                      `json:"networks"`
@@ -132,7 +142,13 @@ func mapTelegramBindings(values []domain.TelegramBinding) []telegramBindingRespo
 func mapInvitations(values []domain.Invitation) []invitationResponse {
 	result := make([]invitationResponse, 0, len(values))
 	for _, value := range values {
-		result = append(result, invitationResponse(value))
+		result = append(result, invitationResponse{
+			ID:         value.ID,
+			Email:      value.Email,
+			ExpiresAt:  value.ExpiresAt,
+			AcceptedAt: value.AcceptedAt,
+			CreatedAt:  value.CreatedAt,
+		})
 	}
 	return result
 }
@@ -140,25 +156,55 @@ func mapInvitations(values []domain.Invitation) []invitationResponse {
 func mapBanks(values []domain.Bank) []bankResponse {
 	result := make([]bankResponse, 0, len(values))
 	for _, value := range values {
-		result = append(result, bankResponse(value))
+		result = append(result, bankResponse{
+			ID:       value.ID,
+			Name:     value.Name,
+			IsActive: value.IsActive,
+		})
 	}
 	return result
 }
 
-func mapCardProducts(values []domain.CardProduct) []cardProductResponse {
-	result := make([]cardProductResponse, 0, len(values))
+func mapCards(values []domain.Card) []cardResponse {
+	result := make([]cardResponse, 0, len(values))
 	for _, value := range values {
-		result = append(result, mapCardProduct(value))
+		result = append(result, cardResponse{
+			ID:             value.ID,
+			BankID:         value.BankID,
+			BankName:       value.BankName,
+			Name:           value.Name,
+			IsActive:       value.IsActive,
+			QualifiedType:  value.QualifiedType,
+			SelectableType: value.SelectableType,
+			Networks:       splitNetworkNames(value.Networks),
+		})
 	}
 	return result
 }
 
-func mapCardProduct(value domain.CardProduct) cardProductResponse {
-	item := cardProductResponse{ID: value.ID, BankID: value.BankID, BankName: value.BankName, Name: value.Name, IsActive: value.IsActive, AccountTiers: value.AccountTiers, QualifiedType: value.QualifiedType, SelectableType: value.SelectableType, Networks: value.Networks, Activities: []cardProductActivityResponse{}}
-	for _, activity := range value.Activities {
-		item.Activities = append(item.Activities, mapCardActivity(activity))
+func mapCardProduct(value domain.CardInfo) cardInfoResponse {
+	item := cardInfoResponse{
+		ID:             value.ID,
+		BankID:         value.BankID,
+		BankName:       value.BankName,
+		Name:           value.Name,
+		IsActive:       value.IsActive,
+		QualifiedType:  value.QualifiedType,
+		SelectableType: value.SelectableType,
+		Networks:       splitNetworkNames(value.Networks),
+		Activities:     []cardProductActivityResponse{},
 	}
+	// for _, activity := range value.Activities {
+	// 	item.Activities = append(item.Activities, mapCardActivity(activity))
+	// }
 	return item
+}
+
+func splitNetworkNames(value string) []string {
+	if value == "" {
+		return []string{}
+	}
+	return strings.Split(value, ",")
 }
 
 func mapActivities(values []domain.Activity) []activityResponse {

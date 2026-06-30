@@ -1,16 +1,17 @@
 import { FormEvent, useMemo, useState } from "react";
 import type { CatalogCard } from "../../../../models";
-import { createCard, MemberCardInput } from "../../../MemberApi";
+import { createCard, getCatalogCards, MemberCardInput } from "../../../MemberApi";
 import { CardForm, emptyForm } from "../../cards/types";
 
 type Options = {
-  catalogCards: CatalogCard[];
   onCreated: () => Promise<void> | void;
 };
 
-export function useCreateCard({ catalogCards, onCreated }: Options) {
+export function useCreateCard({ onCreated }: Options) {
+  const [catalogCards, setCatalogCards] = useState<CatalogCard[]>([]);
   const [form, setForm] = useState<CardForm>(emptyForm());
   const [showCreate, setShowCreate] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -19,18 +20,29 @@ export function useCreateCard({ catalogCards, onCreated }: Options) {
     [catalogCards, form.card_id],
   );
 
-  function formForCard(cardID = catalogCards[0]?.id || "") {
-    const card = catalogCards.find((item) => item.id === cardID);
+  function formForCard(cardID = catalogCards[0]?.id || "", cards = catalogCards) {
+    const card = cards.find((item) => item.id === cardID);
     return {
       ...emptyForm(cardID),
       card_network_id: card?.networks[0] || "",
     };
   }
 
-  function open() {
+  async function open() {
     setError("");
-    setForm((current) => (current.card_id ? current : formForCard()));
     setShowCreate(true);
+    setCatalogLoading(true);
+    try {
+      const nextCatalogCards = await getCatalogCards();
+      setCatalogCards(nextCatalogCards);
+      setForm(formForCard(nextCatalogCards[0]?.id || "", nextCatalogCards));
+    } catch (requestError) {
+      setCatalogCards([]);
+      setForm(emptyForm());
+      setError((requestError as Error).message);
+    } finally {
+      setCatalogLoading(false);
+    }
   }
 
   function close() {
@@ -67,6 +79,8 @@ export function useCreateCard({ catalogCards, onCreated }: Options) {
     error,
     form,
     open,
+    catalogCards,
+    catalogLoading,
     saving,
     selectedCard,
     formForCard,

@@ -101,7 +101,7 @@ export type PaymentMethod = {
   is_available?: boolean;
 };
 export type Merchant = {
-  id?: string;
+  id: string;
   name: string;
   aliases?: string[];
   category_ids?: string[];

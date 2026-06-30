@@ -1,22 +1,25 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import type { CardNetwork, CatalogCard } from "../../../models";
+import type { CatalogCard } from "../../../models";
 import {
-  Bank,
-  createCard,
-  deleteCard,
-  getBanks,
-  getCard,
-  getCardNetworks,
-  getCards,
-  updateCard,
-} from "../../AdminApi";
+  type Bank,
+  createCardFromForm,
+  deleteCardByID,
+  loadCardForEdit,
+  loadCardPageData,
+  updateCardFromForm,
+} from "./cardRequests";
+import {
+  cardFormFromCatalogCard,
+  requestMessage,
+  selectedNetworksOrDefault,
+} from "./cardForm";
 import { filterCards } from "./cardFilters";
 import { CardForm, emptyForm } from "./types";
 
 export function useAdminCards() {
   const [items, setItems] = useState<CatalogCard[]>([]);
   const [banks, setBanks] = useState<Bank[]>([]);
-  const [networks, setNetworks] = useState<CardNetwork[]>([]);
+  const [networks, setNetworks] = useState<string[]>([]);
   const [form, setForm] = useState<CardForm>(emptyForm());
   const [editing, setEditing] = useState<CatalogCard | null>(null);
   const [editForm, setEditForm] = useState<CardForm>(emptyForm());
@@ -31,25 +34,17 @@ export function useAdminCards() {
 
   const load = useCallback(async () => {
     try {
-      const [cards, nextBanks, nextNetworks] = await Promise.all([
-        getCards(),
-        getBanks(),
-        getCardNetworks(),
-      ]);
-      const bankItems = Array.isArray(nextBanks) ? nextBanks : [];
-      const networkItems = Array.isArray(nextNetworks) ? nextNetworks : [];
-      setItems(Array.isArray(cards) ? cards : []);
-      setBanks(bankItems);
-      setNetworks(networkItems);
+      const data = await loadCardPageData();
+      setItems(data.cards);
+      setBanks(data.banks);
+      setNetworks(data.networks);
       setForm((current) => ({
         ...current,
-        bank_id: current.bank_id || bankItems[0]?.id || "",
-        network_ids: current.network_ids.length
-          ? current.network_ids
-          : networkItems.map((network) => network.id),
+        bank_id: current.bank_id || data.banks[0]?.id || "",
+        networks: selectedNetworksOrDefault(current.networks, data.networks),
       }));
     } catch (requestError) {
-      setError((requestError as Error).message);
+      setError(requestMessage(requestError));
     } finally {
       setLoading(false);
     }
@@ -64,18 +59,12 @@ export function useAdminCards() {
     setCreating(true);
     setError("");
     try {
-      await createCard(
-        form.bank_id,
-        form.name.trim(),
-        form.qualified_type,
-        form.selectable_type,
-        form.network_ids,
-      );
-      setForm(emptyForm(form.bank_id, networks.map((network) => network.id)));
+      await createCardFromForm(form);
+      setForm(emptyForm(form.bank_id, networks));
       setShowCreate(false);
       await load();
     } catch (requestError) {
-      setError((requestError as Error).message);
+      setError(requestMessage(requestError));
     } finally {
       setCreating(false);
     }
@@ -85,17 +74,11 @@ export function useAdminCards() {
     setError("");
     setEditLoadingID(card.id);
     try {
-      const loadedCard = await getCard(card.id);
+      const loadedCard = await loadCardForEdit(card.id);
       setEditing(loadedCard);
-      setEditForm({
-        bank_id: loadedCard.bank_id,
-        name: loadedCard.name,
-        qualified_type: loadedCard.qualified_type || "",
-        selectable_type: loadedCard.selectable_type || "",
-        network_ids: (loadedCard.networks || []).map((network) => network.id),
-      });
+      setEditForm(cardFormFromCatalogCard(loadedCard));
     } catch (requestError) {
-      setError((requestError as Error).message);
+      setError(requestMessage(requestError));
     } finally {
       setEditLoadingID("");
     }
@@ -106,19 +89,11 @@ export function useAdminCards() {
     setSaving(true);
     setError("");
     try {
-      await updateCard(
-        editing.id,
-        editForm.bank_id,
-        editForm.name.trim(),
-        editForm.qualified_type,
-        editForm.selectable_type,
-        editForm.network_ids,
-        active,
-      );
+      await updateCardFromForm(editing.id, editForm, active);
       setEditing(null);
       await load();
     } catch (requestError) {
-      setError((requestError as Error).message);
+      setError(requestMessage(requestError));
     } finally {
       setSaving(false);
     }
@@ -129,11 +104,11 @@ export function useAdminCards() {
     setSaving(true);
     setError("");
     try {
-      await deleteCard(editing.id);
+      await deleteCardByID(editing.id);
       setEditing(null);
       await load();
     } catch (requestError) {
-      setError((requestError as Error).message);
+      setError(requestMessage(requestError));
     } finally {
       setSaving(false);
     }

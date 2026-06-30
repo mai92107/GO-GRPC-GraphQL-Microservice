@@ -1,6 +1,5 @@
 import { FormEvent } from "react";
 import { Dialog } from "../../../components";
-import type { CardNetwork } from "../../../models";
 import type { Bank } from "../../AdminApi";
 import { CardFormFields } from "./CardFormFields";
 import type { CardForm } from "./types";
@@ -9,7 +8,7 @@ type Props = {
   banks: Bank[];
   creating: boolean;
   form: CardForm;
-  networks: CardNetwork[];
+  networks: string[];
   onChange: (form: CardForm) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent) => void;
@@ -25,7 +24,7 @@ export function CreateCardDialog({
   onSubmit,
 }: Props) {
   const disabled =
-    creating || !form.bank_id || !form.name.trim() || !form.network_ids.length;
+    creating || !form.bank_id || !form.name.trim() || !form.networks.length;
 
   return (
     <Dialog title="新增卡片" onClose={onClose}>

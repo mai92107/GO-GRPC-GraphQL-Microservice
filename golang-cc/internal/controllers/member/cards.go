@@ -24,8 +24,6 @@ type cardResponse struct {
 	IsActive       bool   `json:"is_active"`
 	CardImageURL   string `json:"card_image_url"`
 	PrimaryColor   string `json:"primary_color"`
-	QualifiedType  string `json:"qualified_type"`
-	SelectableType string `json:"selectable_type"`
 	Network        string `json:"network"`
 }
 type cardInfoResponse struct {
@@ -53,8 +51,6 @@ func mapCard(x domain.MemberCard) cardResponse {
 		IsActive:       x.IsActive,
 		CardImageURL:   x.CardImageURL,
 		PrimaryColor:   x.PrimaryColor,
-		QualifiedType:  x.QualifiedType,
-		SelectableType: x.SelectableType,
 		Network:        x.Network,
 	}
 }

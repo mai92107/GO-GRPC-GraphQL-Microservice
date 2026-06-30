@@ -24,8 +24,14 @@ func (r *Repository) ListBanks(ctx context.Context) ([]domain.Bank, error) {
 }
 
 func (r *Repository) CreateBank(ctx context.Context, id string, input domain.BankInput) error {
-	_, err := r.pool.Exec(ctx, `INSERT INTO banks(id,name,website_url,is_active) VALUES($1,$2,NULLIF($3,''),$4)`, id, input.Name, input.WebsiteURL, input.IsActive)
-	return err
+	bank := domain.Bank{
+		ID:         id,
+		Name:       input.Name,
+		WebsiteURL: nullString(input.WebsiteURL),
+		IsActive:   input.IsActive,
+	}
+
+	return r.db.WithContext(ctx).Create(&bank).Error
 }
 
 func (r *Repository) UpdateBank(ctx context.Context, id string, input domain.BankInput) error {

@@ -4,6 +4,7 @@ import { activateActivity, Activity, ActivityBenefitInput, Category, createActiv
 import { benefitPayload, mapCardActivities, nextFormForMode, splitCardTypes, unavailableSelectableTypes, validateBenefitForm } from "./activityHelpers";
 import { filterBankCards } from "./activityFilters";
 import { ActivityForm, BenefitMode, emptyActivityForm } from "./types";
+import { Network } from "lucide-react";
 
 export function useActivities() {
   const [items, setItems] = useState<Activity[]>([]);
@@ -36,7 +37,7 @@ export function useActivities() {
       setMethods(nextMethods.filter((method) => method.is_active && method.id !== "any_payment"));
       setMerchants(nextMerchants.filter((merchant) => merchant.is_active));
       setActiveBank((current) => current || cardItems[0]?.bank_name || "");
-      setForm((current) => ({ ...current, bank_name: current.bank_name || cardItems[0]?.bank_name || "", card_product_id: current.card_product_id || cardItems[0]?.id || "", network_ids: current.network_ids.length ? current.network_ids : (cardItems[0]?.networks || []).map((network) => network.id), reward_unit_id: current.reward_unit_id || nextUnits[0]?.id || "", merchant_ids: current.merchant_ids || [] }));
+      setForm((current) => ({ ...current, bank_name: current.bank_name || cardItems[0]?.bank_name || "", card_product_id: current.card_product_id || cardItems[0]?.id || "", network_ids: current.network_ids.length ? current.network_ids : (cardItems[0]?.networks || []).map((network) => network), reward_unit_id: current.reward_unit_id || nextUnits[0]?.id || "", merchant_ids: current.merchant_ids || [] }));
     } catch (requestError) { setError((requestError as Error).message); }
     finally { setLoading(false); }
   }, []);
@@ -45,8 +46,8 @@ export function useActivities() {
   const bankOptions = useMemo(() => [...new Set(cards.map((card) => card.bank_name))], [cards]);
   const availableCards = useMemo(() => cards.filter((card) => card.bank_name === form.bank_name), [cards, form.bank_name]);
   const selectedCard = cards.find((card) => card.id === form.card_product_id);
-  const selectedNetworkIDs = useMemo(() => (selectedCard?.networks || []).map((network) => network.id), [selectedCard]);
-  const allNetworksSelected = selectedNetworkIDs.length > 0 && selectedNetworkIDs.every((id) => form.network_ids.includes(id));
+  const selectedNetworks = useMemo(() => (selectedCard?.networks || []).map((network) => network), [selectedCard]);
+  const allNetworksSelected = selectedNetworks.length > 0 && selectedNetworks.every((id) => form.network_ids.includes(id));
   const qualifiedTypes = splitCardTypes(selectedCard?.qualified_type);
   const selectableTypes = splitCardTypes(selectedCard?.selectable_type);
   const unavailableTypes = useMemo(() => unavailableSelectableTypes(items, benefits, form), [benefits, form, items]);
@@ -56,21 +57,21 @@ export function useActivities() {
     if (!showCreate || loading) return;
     if (!form.bank_name && bankOptions[0]) { setForm((current) => ({ ...current, bank_name: bankOptions[0] })); return; }
     if (!form.bank_name || (form.card_product_id && availableCards.some((card) => card.id === form.card_product_id))) return;
-    setForm((current) => ({ ...current, card_product_id: availableCards[0]?.id || "", network_ids: (availableCards[0]?.networks || []).map((network) => network.id), selectable_type: "" }));
+    setForm((current) => ({ ...current, card_product_id: availableCards[0]?.id || "", network_ids: [], selectable_type: "" }));
   }, [availableCards, bankOptions, form.bank_name, form.card_product_id, loading, showCreate]);
 
   useEffect(() => {
     if (!showCreate || !selectedCard) return;
-    const allowed = new Set(selectedNetworkIDs);
+    const allowed = new Set(selectedNetworks);
     const nextIDs = form.network_ids.filter((networkID) => allowed.has(networkID));
-    if (!nextIDs.length && selectedNetworkIDs.length) setForm((current) => ({ ...current, network_ids: selectedNetworkIDs }));
+    if (!nextIDs.length && selectedNetworks.length) setForm((current) => ({ ...current, network_ids: selectedNetworks }));
     if (nextIDs.length && nextIDs.length !== form.network_ids.length) setForm((current) => ({ ...current, network_ids: nextIDs }));
-  }, [form.network_ids, selectedCard, selectedNetworkIDs, showCreate]);
+  }, [form.network_ids, selectedCard, selectedNetworks, showCreate]);
 
   async function refreshCardActivities(cardID: string) {
     setCardLoadingID(cardID); setError("");
     try {
-      const activities = mapCardActivities(await getCard(cardID, true));
+      const activities = mapCardActivities(await getCard(cardID));
       setCardActivities((current) => ({ ...current, [cardID]: activities }));
       setItems((current) => [...current.filter((activity) => activity.card_product_id !== cardID), ...activities]);
       return activities;
@@ -107,7 +108,7 @@ export function useActivities() {
     try {
       await createActivity(form.card_product_id, form.name.trim(), form.start_date, form.end_date, form.source_url.trim(), form.network_ids, allBenefits);
       setBenefits([]); setShowCreate(false);
-      setForm((current) => ({ ...current, name: "", source_url: "", network_ids: (selectedCard?.networks || []).map((network) => network.id), benefit_name: "", monthly_cap: "", layer: "base", display_order: 0, effect_type: "ADD_RATE", reward_value: "0.01", benefit_mode: "standard", selectable_type: "", action_required: "none", action_message: "" }));
+      setForm((current) => ({ ...current, name: "", source_url: "", network_ids: [], benefit_name: "", monthly_cap: "", layer: "base", display_order: 0, effect_type: "ADD_RATE", reward_value: "0.01", benefit_mode: "standard", selectable_type: "", action_required: "none", action_message: "" }));
       await refreshCardActivities(form.card_product_id);
       setExpandedCards((current) => current.includes(form.card_product_id) ? current : [...current, form.card_product_id]);
     } catch (requestError) { setError((requestError as Error).message); }
@@ -166,5 +167,5 @@ export function useActivities() {
     setEditingActivity(null); setEditBenefits([]);
   }
 
-  return { activeBank, allNetworksSelected, availableCards, bankOptions, benefits, cardActivities, cardLoadingID, cards, categories, creating, editBenefits, editingActivity, error, expandedCards, form, loading, merchants, methods, processingID, qualifiedTypes, query, selectableTypes, selectedCard, selectedCards, selectedNetworkIDs, showCreate, unavailableTypes, units, closeRelationshipDialog, create, openRelationshipEditor, remove, saveRelationships, scheduleVersion, selectBenefitMode, setActiveBank, setBenefits, setEditBenefits, setForm, setQuery, setShowCreate, stageBenefit, toggle, toggleCard };
+  return { activeBank, allNetworksSelected, availableCards, bankOptions, benefits, cardActivities, cardLoadingID, cards, categories, creating, editBenefits, editingActivity, error, expandedCards, form, loading, merchants, methods, processingID, qualifiedTypes, query, selectableTypes, selectedCard, selectedCards, selectedNetworks, showCreate, unavailableTypes, units, closeRelationshipDialog, create, openRelationshipEditor, remove, saveRelationships, scheduleVersion, selectBenefitMode, setActiveBank, setBenefits, setEditBenefits, setForm, setQuery, setShowCreate, stageBenefit, toggle, toggleCard };
 }

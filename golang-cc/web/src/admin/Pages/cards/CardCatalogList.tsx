@@ -28,8 +28,8 @@ function CardTags({ card }: { card: CatalogCard }) {
     <>
       <div className="tag-row">
         {networks.map((network) => (
-          <span className="tag" key={network.id}>
-            {network.name}
+          <span className="tag" key={network}>
+            {network}
           </span>
         ))}
       </div>

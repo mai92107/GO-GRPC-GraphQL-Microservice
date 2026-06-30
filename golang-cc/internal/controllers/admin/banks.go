@@ -34,6 +34,7 @@ func (c *Controller) CreateBank(ctx *gin.Context) {
 	}
 	id, err := c.service.CreateBank(ctx.Request.Context(), service.BankInput{Name: input.Name, WebsiteURL: input.WebsiteURL, IsActive: active})
 	if err != nil {
+		println("error creating bank, error: ", err.Error())
 		failure(ctx, http.StatusConflict, "conflict", "銀行重複或資料無效")
 		return
 	}
