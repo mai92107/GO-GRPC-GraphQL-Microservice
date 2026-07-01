@@ -3,6 +3,7 @@ package public
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -87,4 +88,12 @@ func TestLoginRejectsRepositoryError(t *testing.T) {
 	if _, _, err := service.Login(context.Background(), "member@example.test", "valid-password-123"); !errors.Is(err, domain.ErrInvalidCredentials) {
 		t.Fatalf("expected invalid credentials, got %v", err)
 	}
+}
+
+func TestGenerateUserPasswordHash(t *testing.T) {
+	ans,err := HashPassword("iamrafaiamrafa")
+	if err != nil{
+		t.Fatalf("password invalid, got %v", err)
+	}
+	fmt.Printf("hash: %s\n", ans)
 }

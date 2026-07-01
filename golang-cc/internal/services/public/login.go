@@ -10,6 +10,7 @@ import (
 func (s *Service) Login(ctx context.Context, email, password string) (domain.User, string, error) {
 	result, err := s.repository.FindLoginUser(ctx, email)
 	if err != nil || result.Status != "active" || !VerifyPassword(result.PasswordHash, password) {
+		println(err.Error())
 		return domain.User{}, "", domain.ErrInvalidCredentials
 	}
 	raw, hash, err := secure.Token(32)

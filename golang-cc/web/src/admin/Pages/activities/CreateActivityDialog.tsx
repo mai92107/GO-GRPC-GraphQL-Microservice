@@ -20,7 +20,7 @@ type Props = {
   qualifiedTypes: string[];
   selectableTypes: string[];
   selectedCard?: CatalogCard;
-  selectedNetworkIDs: string[];
+  selectedNetworks: string[];
   unavailableTypes: Set<string>;
   units: Unit[];
   onAddBenefit: () => void;
@@ -38,7 +38,7 @@ export function CreateActivityDialog(props: Props) {
     props.creating ||
     !props.form.card_product_id ||
     !props.availableCards.length ||
-    !props.form.network_ids.length ||
+    !props.form.networks.length ||
     !props.form.name ||
     !props.form.start_date ||
     !props.form.end_date ||
@@ -56,7 +56,7 @@ export function CreateActivityDialog(props: Props) {
           form={props.form}
           onChange={props.onChange}
           selectedCard={props.selectedCard}
-          selectedNetworkIDs={props.selectedNetworkIDs}
+          selectedNetworks={props.selectedNetworks}
         />
         <ActivityBenefitFields
           benefits={props.benefits}

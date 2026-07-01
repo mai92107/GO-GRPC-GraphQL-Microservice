@@ -770,13 +770,16 @@ CREATE TABLE transaction.reward_calculations (
 -- Data for Name: card_networks; Type: TABLE DATA; Schema: catalog; Owner: -
 --
 
-COPY catalog.card_networks (id, name, is_active) FROM stdin;
-00000000-0000-0000-0000-000000000201	Visa	t
-00000000-0000-0000-0000-000000000202	Mastercard	t
-00000000-0000-0000-0000-000000000203	JCB	t
-00000000-0000-0000-0000-000000000204	American Express	t
-\.
-
+INSERT INTO catalog.card_networks (
+    id,
+    name,
+    is_active
+)
+VALUES
+    ('00000000-0000-0000-0000-000000000201', 'Visa', true),
+    ('00000000-0000-0000-0000-000000000202', 'Mastercard', true),
+    ('00000000-0000-0000-0000-000000000203', 'JCB', true),
+    ('00000000-0000-0000-0000-000000000204', 'American Express', true);
 
 --
 -- Data for Name: card_plan_versions; Type: TABLE DATA; Schema: catalog; Owner: -

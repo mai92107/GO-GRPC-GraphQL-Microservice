@@ -10,7 +10,7 @@ export type ActivityForm = {
   start_date: string;
   end_date: string;
   source_url: string;
-  network_ids: string[];
+  networks: string[];
   reward_unit_id: string;
   benefit_name: string;
   layer: string;
@@ -36,7 +36,7 @@ export const emptyActivityForm = (): ActivityForm => ({
   start_date: "2026-07-01",
   end_date: "2026-12-31",
   source_url: "",
-  network_ids: [],
+  networks: [],
   reward_unit_id: "",
   benefit_name: "",
   layer: "1",

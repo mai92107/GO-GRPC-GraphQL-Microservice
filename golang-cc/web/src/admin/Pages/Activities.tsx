@@ -71,7 +71,7 @@ export default function Activities() {
           qualifiedTypes={activities.qualifiedTypes}
           selectableTypes={activities.selectableTypes}
           selectedCard={activities.selectedCard}
-          selectedNetworkIDs={activities.selectedNetworkIDs}
+          selectedNetworks={activities.selectedNetworks}
           unavailableTypes={activities.unavailableTypes}
           units={activities.units}
         />
