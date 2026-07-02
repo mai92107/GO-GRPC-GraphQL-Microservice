@@ -1,15 +1,17 @@
-import { ComponentType, useState } from "react";
+﻿import { ComponentType, useState } from "react";
 import Head from "../../tool/Head";
+import CapPeriods from "./setting/CapPeriods";
 import Categories from "./setting/Categories";
 import Merchants from "./setting/Merchant";
 import PaymentMethods from "./setting/Payment";
 import Units from "./setting/Unit";
 
-type Tab = "categories" | "units" | "payments" | "merchants";
+type Tab = "categories" | "units" | "cap_periods" | "payments" | "merchants";
 
 const tabs: { id: Tab; label: string; component: ComponentType }[] = [
   { id: "categories", label: "消費類別", component: Categories },
   { id: "units", label: "回饋單位", component: Units },
+  { id: "cap_periods", label: "上限週期", component: CapPeriods },
   { id: "payments", label: "支付方式", component: PaymentMethods },
   { id: "merchants", label: "店家", component: Merchants },
 ];
@@ -20,7 +22,7 @@ export default function AdminSettings() {
 
   return (
     <>
-      <Head title="系統設定" text="消費類別、回饋單位、支付方式與店家管理。" />
+      <Head title="系統設定" text="消費類別、回饋單位、上限週期、支付方式與店家管理。" />
       <div className="toolbar settings-tabs" role="tablist" aria-label="系統設定">
         {tabs.map((item) => (
           <button
@@ -39,3 +41,4 @@ export default function AdminSettings() {
     </>
   );
 }
+
