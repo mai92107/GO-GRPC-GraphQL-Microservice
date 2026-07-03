@@ -1,4 +1,6 @@
 import { CirclePlus, Plus } from "lucide-react";
+import type { ActivityRequirementOptions, RequirementTypeOption } from "../../AdminApi";
+import type { Unit } from "../../../models";
 import { Field } from "../../../components";
 import {
   emptyBenefitForm,
@@ -94,11 +96,15 @@ export function CreateComponentForm({
 export function CreateRequirementForm({
   components,
   form,
+  requirementOptions,
+  requirementTypes,
   onAdd,
   onChange,
 }: {
   components: MockRewardComponent[];
   form: MockRequirementForm;
+  requirementOptions: ActivityRequirementOptions | null;
+  requirementTypes: RequirementTypeOption[];
   onAdd: () => void;
   onChange: (form: MockRequirementForm) => void;
 }) {
@@ -110,7 +116,7 @@ export function CreateRequirementForm({
         value={form.reward_component_id}
         onChange={(componentID) => onChange(emptyRequirementForm(componentID))}
       />
-      <RequirementFields form={form} onChange={onChange} />
+      <RequirementFields form={form} requirementOptions={requirementOptions} requirementTypes={requirementTypes} onChange={onChange} />
       <button className="button secondary" type="button" onClick={onAdd}>
         <Plus size={16} /> 新增 Requirement
       </button>
@@ -122,12 +128,14 @@ export function CreateBenefitForm({
   capPeriodOptions,
   components,
   form,
+  rewardUnits,
   onAdd,
   onChange,
 }: {
   capPeriodOptions: CapPeriodOption[];
   components: MockRewardComponent[];
   form: MockBenefitForm;
+  rewardUnits: Unit[];
   onAdd: () => void;
   onChange: (form: MockBenefitForm) => void;
 }) {
@@ -142,6 +150,7 @@ export function CreateBenefitForm({
       <BenefitFields
         capPeriodOptions={capPeriodOptions}
         form={form}
+        rewardUnits={rewardUnits}
         onChange={onChange}
       />
       <button className="button secondary" type="button" onClick={onAdd}>
@@ -150,3 +159,4 @@ export function CreateBenefitForm({
     </section>
   );
 }
+

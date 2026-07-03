@@ -162,6 +162,12 @@ type Category struct {
 	IsActive bool
 }
 
+type LookupItem struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	IsActive bool   `json:"is_active"`
+}
+
 type PaymentMethod struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
@@ -257,4 +263,110 @@ type RewardCapVersionInput struct {
 	PeriodType    string
 	EffectiveFrom time.Time
 	EffectiveTo   *time.Time
+}
+
+type ActivitySummary struct {
+	ID             string
+	BankID         string
+	BankName       string
+	CardProductID  string
+	CardName       string
+	Title          string
+	Description    string
+	SourceURL      string
+	EffectiveFrom  string
+	EffectiveTo    string
+	IsActive       bool
+	GroupCount     int64
+	ComponentCount int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type ActivityFlow struct {
+	Activity     ActivitySummary
+	RewardGroups []RewardGroup
+}
+
+type RewardGroup struct {
+	ID           string
+	ActivityID   string
+	Name         string
+	Description  string
+	DisplayOrder int
+	IsActive     bool
+	Components   []RewardComponent
+}
+
+type RewardComponent struct {
+	ID            string
+	RewardGroupID string
+	Name          string
+	Description   string
+	Layer         int
+	StackGroup    string
+	StackMode     string
+	Priority      int
+	EffectiveFrom string
+	EffectiveTo   string
+	IsActive      bool
+	Requirements  []RewardRequirement
+	Benefits      []RewardBenefit
+}
+
+type RewardRequirement struct {
+	ID                string
+	RewardComponentID string
+	RequirementType   string
+	Operator          string
+	Configuration     json.RawMessage
+	Description       string
+	IsActive          bool
+}
+
+type RewardBenefit struct {
+	ID                string
+	RewardComponentID string
+	BenefitType       string
+	Value             string
+	RewardUnitID      string
+	CapAmount         *string
+	CapPeriod         *string
+	Description       string
+	IsActive          bool
+}
+
+type RequirementOptionSet struct {
+	RequirementTypes   []RequirementTypeOption
+	Operators          []CodeNameOption
+	PaymentMethods     []CodeNameOption
+	Merchants          []CodeNameOption
+	Categories         []CodeNameOption
+	CardNetworks       []CodeNameOption
+	CardProducts       []CodeNameOption
+	CardPlans          []CardPlanOption
+	AccountTiers       []CodeNameOption
+	UserQualifications []CodeNameOption
+	Channels           []CodeNameOption
+	Regions            []CodeNameOption
+	Currencies         []CodeNameOption
+}
+
+type RequirementTypeOption struct {
+	Code        string
+	Name        string
+	ValueKey    string
+	ValueSource string
+}
+
+type CodeNameOption struct {
+	Code string
+	Name string
+}
+
+type CardPlanOption struct {
+	ID            string
+	CardProductID string
+	PlanType      string
+	Name          string
 }

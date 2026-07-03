@@ -26,6 +26,7 @@ export function ActivityEntityTree({
       </div>
       <TreeButton
         active={selection.type === "activity"}
+        enabled={flow.activity.is_active}
         label={`${flow.activity.bank_name} ${flow.activity.card_name} ${flow.activity.title}`}
         meta="Activity"
         onClick={() => onSelect({ type: "activity", id: flow.activity.id })}
@@ -34,6 +35,7 @@ export function ActivityEntityTree({
         <div className="entity-tree-group" key={group.id}>
           <TreeButton
             active={selection.type === "group" && selection.id === group.id}
+            enabled={group.is_active}
             label={group.name}
             meta={`Group · ${group.components.length} components`}
             onClick={() => onSelect({ type: "group", id: group.id })}
@@ -48,6 +50,7 @@ export function ActivityEntityTree({
                   selection.type === "component" &&
                   selection.id === component.id
                 }
+                enabled={component.is_active}
                 label={component.name}
                 meta={`L${component.layer} · ${component.stack_group} · ${component.stack_mode}`}
                 onClick={() =>
@@ -64,6 +67,7 @@ export function ActivityEntityTree({
                       selection.type === "requirement" &&
                       selection.id === requirement.id
                     }
+                    enabled={requirement.is_active}
                     label={
                       requirement.description || requirement.requirement_type
                     }
@@ -87,8 +91,9 @@ export function ActivityEntityTree({
                       selection.type === "benefit" &&
                       selection.id === benefit.id
                     }
+                    enabled={benefit.is_active}
                     label={benefit.description || benefit.benefit_type}
-                    meta={`Benefit · ${benefit.value} ${benefit.unit}`}
+                    meta={`Benefit · ${benefit.value} ${benefit.reward_unit_id}`}
                     key={benefit.id}
                     onClick={() =>
                       onSelect({
@@ -117,18 +122,20 @@ function TreeButton({
   meta,
   onClick,
   onDelete,
+  enabled = true,
 }: {
   active: boolean;
+  enabled?: boolean;
   label: string;
   meta: string;
   onClick: () => void;
   onDelete?: () => void;
 }) {
   return (
-    <div className={`entity-tree-row ${active ? "selected" : ""}`}>
+    <div className={`entity-tree-row ${active ? "selected" : ""} ${enabled ? "is-active" : "is-inactive"}`}>
       <button type="button" onClick={onClick}>
         <strong>{label || "未命名"}</strong>
-        <small>{meta}</small>
+        <small>{enabled ? meta : `${meta} · 已停用`}</small>
       </button>
       {onDelete && (
         <button
@@ -143,3 +150,4 @@ function TreeButton({
     </div>
   );
 }
+

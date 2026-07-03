@@ -22,7 +22,7 @@ export function ActivityClientPreview({
   return (
     <section className="client-preview">
       <details className="client-preview-activity">
-        <summary className="client-preview-card">
+        <summary className={`client-preview-card ${flow.activity.is_active ? "is-active" : "is-inactive"}`}>
           <div>
             <span className="page-eyebrow">{eyebrow}</span>
             <h3>{`${flow.activity.bank_name} ${flow.activity.card_name} ${flow.activity.title}`}</h3>
@@ -34,7 +34,7 @@ export function ActivityClientPreview({
         </summary>
         <div className="client-preview-groups">
           {sortedGroups.map((group) => (
-            <article className="client-reward-group" key={group.id}>
+            <article className={`client-reward-group ${group.is_active ? "is-active" : "is-inactive"}`} key={group.id}>
               <header>
                 <span>
                   <strong>{group.name}</strong>
@@ -44,7 +44,7 @@ export function ActivityClientPreview({
               </header>
               {group.components.map((component) => (
                 <div
-                  className={`client-component ${component.stack_mode.toLowerCase()}`}
+                  className={`client-component ${component.stack_mode.toLowerCase()} ${component.is_active ? "is-active" : "is-inactive"}`}
                   key={component.id}
                 >
                   <div>

@@ -1,6 +1,7 @@
 import { Layers3 } from "lucide-react";
 import { Field } from "../../../components";
-import { mockCatalogCards } from "./activityMockSettings";
+import type { ActivityRequirementOptions, RequirementTypeOption } from "../../AdminApi";
+import type { Unit } from "../../../models";
 import {
   updateBenefit,
   updateComponent,
@@ -11,6 +12,7 @@ import {
   BenefitFields,
   ComponentFields,
   FormHeading,
+  ActiveToggle,
   RequirementDirectFields,
 } from "./ActivityFormControls";
 import type {
@@ -23,37 +25,23 @@ import type {
 } from "./mockFlowTypes";
 
 type CapPeriodOption = { code: string; name: string };
+type CatalogCardOption = { bank_id: string; bank_name: string; card_product_id: string; card_name: string };
 
 export function ActivityEditor({
+  activityCardOptions,
+  bankOptions,
   flow,
+  onBankChange,
+  onCardChange,
   onChange,
 }: {
+  activityCardOptions: CatalogCardOption[];
+  bankOptions: CatalogCardOption[];
   flow: MockActivityFlow;
+  onBankChange: (bankID: string) => void;
+  onCardChange: (cardProductID: string) => void;
   onChange: (flow: MockActivityFlow) => void;
 }) {
-  const bankOptions = [
-    ...new Map(mockCatalogCards.map((card) => [card.bank_id, card])).values(),
-  ];
-  const availableCards = mockCatalogCards.filter(
-    (card) => card.bank_id === flow.activity.bank_id,
-  );
-  const selectCard = (cardProductID: string) => {
-    const card = mockCatalogCards.find(
-      (item) => item.card_product_id === cardProductID,
-    );
-    if (!card) return;
-    onChange({
-      ...flow,
-      activity: {
-        ...flow.activity,
-        bank_id: card.bank_id,
-        bank_name: card.bank_name,
-        card_product_id: card.card_product_id,
-        card_name: card.card_name,
-      },
-    });
-  };
-
   return (
     <section className="form-section selected-editor">
       <div className="form-section-title">
@@ -65,15 +53,7 @@ export function ActivityEditor({
       </div>
       <div className="two-col">
         <Field label="銀行">
-          <select
-            value={flow.activity.bank_id}
-            onChange={(event) => {
-              const card = mockCatalogCards.find(
-                (item) => item.bank_id === event.target.value,
-              );
-              if (card) selectCard(card.card_product_id);
-            }}
-          >
+          <select value={flow.activity.bank_id} onChange={(event) => onBankChange(event.target.value)}>
             {bankOptions.map((bank) => (
               <option value={bank.bank_id} key={bank.bank_id}>
                 {bank.bank_name}
@@ -82,11 +62,8 @@ export function ActivityEditor({
           </select>
         </Field>
         <Field label="卡別">
-          <select
-            value={flow.activity.card_product_id}
-            onChange={(event) => selectCard(event.target.value)}
-          >
-            {availableCards.map((card) => (
+          <select value={flow.activity.card_product_id} onChange={(event) => onCardChange(event.target.value)}>
+            {activityCardOptions.map((card) => (
               <option value={card.card_product_id} key={card.card_product_id}>
                 {card.card_name}
               </option>
@@ -94,52 +71,20 @@ export function ActivityEditor({
           </select>
         </Field>
       </div>
-      <Field
-        label="活動名稱"
-        hint={`右側 demo 顯示為：${flow.activity.bank_name} ${flow.activity.card_name} ${flow.activity.title}`}
-      >
-        <input
-          value={flow.activity.title}
-          onChange={(event) =>
-            onChange({
-              ...flow,
-              activity: { ...flow.activity, title: event.target.value },
-            })
-          }
-        />
+      <Field label="活動名稱" hint={`右側 demo 顯示為：${flow.activity.bank_name} ${flow.activity.card_name} ${flow.activity.title}`}>
+        <input value={flow.activity.title} onChange={(event) => onChange({ ...flow, activity: { ...flow.activity, title: event.target.value } })} />
       </Field>
       <div className="two-col">
         <Field label="開始日期">
-          <input
-            type="date"
-            value={flow.activity.effective_from}
-            onChange={(event) =>
-              onChange({
-                ...flow,
-                activity: {
-                  ...flow.activity,
-                  effective_from: event.target.value,
-                },
-              })
-            }
-          />
+          <input type="date" value={flow.activity.effective_from} onChange={(event) => onChange({ ...flow, activity: { ...flow.activity, effective_from: event.target.value } })} />
         </Field>
         <Field label="結束日期">
-          <input
-            type="date"
-            value={flow.activity.effective_to}
-            onChange={(event) =>
-              onChange({
-                ...flow,
-                activity: {
-                  ...flow.activity,
-                  effective_to: event.target.value,
-                },
-              })
-            }
-          />
+          <input type="date" value={flow.activity.effective_to} onChange={(event) => onChange({ ...flow, activity: { ...flow.activity, effective_to: event.target.value } })} />
         </Field>
       </div>
+      <Field label="狀態">
+        <ActiveToggle checked={flow.activity.is_active} onChange={(is_active) => onChange({ ...flow, activity: { ...flow.activity, is_active } })} />
+      </Field>
     </section>
   );
 }
@@ -193,6 +138,14 @@ export function GroupEditor({
           />
         </Field>
       </div>
+      <Field label="狀態">
+        <ActiveToggle
+          checked={group.is_active}
+          onChange={(is_active) =>
+            onChange(updateGroup(flow, group.id, { is_active }))
+          }
+        />
+      </Field>
     </section>
   );
 }
@@ -237,9 +190,13 @@ export function RequirementEditor({
   flow,
   onChange,
   requirement,
+  requirementOptions,
+  requirementTypes,
 }: {
   flow: MockActivityFlow;
   requirement: MockRequirement;
+  requirementOptions: ActivityRequirementOptions | null;
+  requirementTypes: RequirementTypeOption[];
   onChange: (flow: MockActivityFlow) => void;
 }) {
   return (
@@ -247,6 +204,8 @@ export function RequirementEditor({
       <FormHeading icon={<Layers3 size={16} />} title="修改 Requirement" />
       <RequirementDirectFields
         requirement={requirement}
+        requirementOptions={requirementOptions}
+        requirementTypes={requirementTypes}
         onChange={(next) =>
           onChange(updateRequirement(flow, requirement.id, next))
         }
@@ -260,10 +219,12 @@ export function BenefitEditor({
   capPeriodOptions,
   flow,
   onChange,
+  rewardUnits,
 }: {
   benefit: MockBenefit;
   capPeriodOptions: CapPeriodOption[];
   flow: MockActivityFlow;
+  rewardUnits: Unit[];
   onChange: (flow: MockActivityFlow) => void;
 }) {
   return (
@@ -272,6 +233,7 @@ export function BenefitEditor({
       <BenefitFields
         capPeriodOptions={capPeriodOptions}
         form={benefit}
+        rewardUnits={rewardUnits}
         onChange={(next) => onChange(updateBenefit(flow, benefit.id, next))}
       />
     </section>

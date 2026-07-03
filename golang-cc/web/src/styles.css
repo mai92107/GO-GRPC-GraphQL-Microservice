@@ -4884,3 +4884,37 @@ input::placeholder {
     justify-self: start;
   }
 }
+.activity-overview-row.is-inactive,
+.entity-tree-row.is-inactive > button:first-child,
+.client-preview-card.is-inactive,
+.client-reward-group.is-inactive,
+.client-component.is-inactive {
+  background: #f5f2ee;
+  border-color: #ddd6cc;
+  color: #7f7569;
+  opacity: 0.78;
+}
+
+.entity-tree-row.is-inactive strong::after,
+.activity-overview-row.is-inactive h3::after,
+.client-component.is-inactive strong::after,
+.client-reward-group.is-inactive header strong:first-child::after {
+  content: " 已停用";
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.activity-active-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.activity-active-toggle input {
+  inline-size: 18px;
+  block-size: 18px;
+}

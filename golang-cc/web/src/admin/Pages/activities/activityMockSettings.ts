@@ -6,27 +6,6 @@ export type MockCatalogCardOption = {
   card_name: string;
 };
 
-export const mockCatalogCards: MockCatalogCardOption[] = [
-  {
-    bank_id: "bank-sinopac",
-    bank_name: "永豐銀行",
-    card_product_id: "card-sport",
-    card_name: "SPORT 卡",
-  },
-  {
-    bank_id: "bank-line",
-    bank_name: "LINE Bank",
-    card_product_id: "card-linebank",
-    card_name: "LINE Bank 聯名卡",
-  },
-  {
-    bank_id: "bank-cathay",
-    bank_name: "國泰世華",
-    card_product_id: "card-cube",
-    card_name: "CUBE 卡",
-  },
-];
-
 export const requirementOperatorOptions: MockOption[] = [
   { code: "IN", name: "包含任一" },
   { code: "NOT_IN", name: "不包含" },

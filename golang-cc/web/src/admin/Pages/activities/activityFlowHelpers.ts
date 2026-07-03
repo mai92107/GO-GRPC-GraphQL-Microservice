@@ -1,7 +1,6 @@
 import { allComponents, removeComponentChild } from "./mockFlowHelpers";
 import type {
   ActivityMockSelection,
-  ActivityOverviewRow,
   MockActivityFlow,
   MockBenefit,
   MockBenefitForm,
@@ -203,9 +202,9 @@ export function benefitSummary(benefits: MockBenefit[]) {
   if (!benefits.length) return "尚未設定";
   return benefits
     .map((benefit) =>
-      benefit.unit === "PERCENT"
+      benefit.reward_unit_id === "PERCENT"
         ? `${benefit.value}%`
-        : `${benefit.value} ${benefit.unit}`,
+        : `${benefit.value} ${benefit.reward_unit_id}`,
     )
     .join(" + ");
 }
@@ -219,13 +218,9 @@ export function requirementSummary(requirements: MockRequirement[]) {
     .join(" / ");
 }
 
-export function overviewItems(flow: MockActivityFlow): ActivityOverviewRow[] {
-  return [flow];
-}
-
 function componentPercentValue(component: MockRewardComponent) {
   return component.benefits.reduce((sum, benefit) => {
-    if (benefit.benefit_type !== "RATE_CASHBACK" || benefit.unit !== "PERCENT")
+    if (benefit.benefit_type !== "RATE_CASHBACK" || benefit.reward_unit_id !== "PERCENT")
       return sum;
     const value = Number(benefit.value);
     return Number.isFinite(value) ? sum + value : sum;
@@ -235,3 +230,5 @@ function componentPercentValue(component: MockRewardComponent) {
 function formatPercent(value: number) {
   return `${Number(value.toFixed(4)).toLocaleString()}%`;
 }
+
+

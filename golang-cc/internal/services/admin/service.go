@@ -26,10 +26,22 @@ type Repository interface {
 	CreateCard(context.Context, string, domain.CardInput) error
 	UpdateCard(context.Context, string, domain.CardInput) error
 	DeleteCard(context.Context, string) error
-	ListActivities(context.Context) ([]domain.Activity, error)
-	CreateActivity(context.Context, domain.Activity) error
-	UpdateActivity(context.Context, domain.Activity) error
+	ListActivities(context.Context, ActivityFilters) ([]domain.ActivitySummary, error)
+	GetActivity(context.Context, string) (domain.ActivityFlow, error)
+	CreateActivity(context.Context, domain.ActivityFlow) error
+	UpdateActivity(context.Context, domain.ActivityFlow) error
+	SetActivityStatus(context.Context, string, bool) error
 	DeleteActivity(context.Context, string) error
+	ListRequirementTypes(context.Context) ([]domain.RequirementTypeOption, error)
+	ActivityRequirementOptions(context.Context, RequirementOptionFilters) (domain.RequirementOptionSet, error)
+	ListRegions(context.Context) ([]domain.LookupItem, error)
+	CreateRegion(context.Context, domain.LookupItem) error
+	UpdateRegion(context.Context, domain.LookupItem) error
+	DeleteRegion(context.Context, string) error
+	ListUserQualifications(context.Context) ([]domain.LookupItem, error)
+	CreateUserQualification(context.Context, domain.LookupItem) error
+	UpdateUserQualification(context.Context, domain.LookupItem) error
+	DeleteUserQualification(context.Context, string) error
 	ListCategories(context.Context) ([]domain.Category, error)
 	CreateCategory(context.Context, string, string) error
 	UpdateCategory(context.Context, string, string, bool) error

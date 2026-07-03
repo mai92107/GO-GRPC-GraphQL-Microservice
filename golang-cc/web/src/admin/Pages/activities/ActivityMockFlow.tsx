@@ -1,5 +1,4 @@
 import { AlertTriangle, CheckCircle2, CirclePlus, Save } from "lucide-react";
-import { ActivityClientPreview } from "./ActivityClientPreview";
 import {
   CreateBenefitForm,
   CreateComponentForm,
@@ -24,30 +23,20 @@ export function ActivityMockFlow() {
     <section className="panel activity-mock-flow">
       <div className="section-title">
         <div>
-          <span className="page-eyebrow">MOCK FLOW</span>
+          <span className="page-eyebrow">ACTIVITY FLOW</span>
           <h2>Activity 五層建檔流程</h2>
           <p className="muted">
-            先用前端假資料體驗新增、修改、刪除流程；總覽可展開會員端回饋預覽。
+            初次只載入活動清單；展開或編輯單筆活動時才載入 Group / Component / Requirement / Benefit。
           </p>
         </div>
         <div className="toolbar">
-          {activity.viewMode === "editor" &&
-            activity.editorMode === "edit" && (
-              <button
-                className="button ghost"
-                type="button"
-                onClick={() => activity.setViewMode("overview")}
-              >
-                返回總覽
-              </button>
-            )}
-          {activity.viewMode === "editor" && activity.editorMode === "create" && (
+          {activity.viewMode === "editor" && (
             <button
               className="button ghost"
               type="button"
               onClick={() => activity.setViewMode("overview")}
             >
-              取消建立
+              返回總覽
             </button>
           )}
           {activity.viewMode === "overview" && (
@@ -55,26 +44,21 @@ export function ActivityMockFlow() {
               <CirclePlus size={16} /> 新建活動
             </button>
           )}
-          {activity.viewMode === "editor" &&
-            activity.editorMode === "create" && (
-              <button
-                className="button ghost"
-                type="button"
-              >
-                新增活動
-              </button>
-            )}
-          {activity.viewMode === "editor" &&
-            activity.editorMode === "edit" && (
-              <button
-                className="button ghost"
-                type="button"
-              >
-                儲存活動
-              </button>
-            )}
+          {activity.viewMode === "editor" && (
+            <button
+              className="button ghost"
+              type="button"
+              disabled={!activity.canSave}
+              onClick={activity.saveActivity}
+            >
+              <Save size={16} />
+              {activity.editorMode === "create" ? "新增活動" : "儲存活動"}
+            </button>
+          )}
         </div>
       </div>
+
+      {activity.error && <p className="form-error">{activity.error}</p>}
 
       {activity.viewMode === "overview" ? (
         <ActivityOverviewList
@@ -110,44 +94,55 @@ export function ActivityMockFlow() {
                 <RequirementEditor
                   flow={activity.flow}
                   requirement={activity.selectedRequirement}
+                  requirementOptions={activity.requirementOptions}
+                  requirementTypes={activity.requirementTypes}
                   onChange={activity.setFlow}
                 />
               )}
-            {activity.selection.type === "benefit" &&
-              activity.selectedBenefit && (
-                <BenefitEditor
-                  benefit={activity.selectedBenefit}
-                  capPeriodOptions={activity.capPeriodOptions}
-                  flow={activity.flow}
-                  onChange={activity.setFlow}
-                />
-              )}
+            {activity.selection.type === "benefit" && activity.selectedBenefit && (
+              <BenefitEditor
+                benefit={activity.selectedBenefit}
+                capPeriodOptions={activity.capPeriodOptions}
+                flow={activity.flow}
+                rewardUnits={activity.rewardUnits}
+                onChange={activity.setFlow}
+              />
+            )}
 
-            <ActivityEditor flow={activity.flow} onChange={activity.setFlow} />
+            <ActivityEditor activityCardOptions={activity.activityCardOptions} bankOptions={activity.bankOptions} flow={activity.flow} onBankChange={activity.setActivityBank} onCardChange={activity.setActivityCard} onChange={activity.setFlow} />
             <CreateGroupForm
               form={activity.groupForm}
               onAdd={activity.addGroup}
               onChange={activity.setGroupForm}
             />
-            <CreateComponentForm
-              flow={activity.flow}
-              form={activity.componentForm}
-              onAdd={activity.addComponent}
-              onChange={activity.setComponentForm}
-            />
-            <CreateRequirementForm
-              components={activity.components}
-              form={activity.requirementForm}
-              onAdd={activity.addRequirement}
-              onChange={activity.setRequirementForm}
-            />
-            <CreateBenefitForm
-              capPeriodOptions={activity.capPeriodOptions}
-              components={activity.components}
-              form={activity.benefitForm}
-              onAdd={activity.addBenefit}
-              onChange={activity.setBenefitForm}
-            />
+            {activity.showComponentForm && (
+              <CreateComponentForm
+                flow={activity.flow}
+                form={activity.componentForm}
+                onAdd={activity.addComponent}
+                onChange={activity.setComponentForm}
+              />
+            )}
+            {activity.showRequirementForm && (
+              <CreateRequirementForm
+                components={activity.components}
+                form={activity.requirementForm}
+                requirementOptions={activity.requirementOptions}
+                requirementTypes={activity.requirementTypes}
+                onAdd={activity.addRequirement}
+                onChange={activity.setRequirementForm}
+              />
+            )}
+            {activity.showBenefitForm && (
+              <CreateBenefitForm
+                capPeriodOptions={activity.capPeriodOptions}
+                components={activity.components}
+                form={activity.benefitForm}
+                rewardUnits={activity.rewardUnits}
+                onAdd={activity.addBenefit}
+                onChange={activity.setBenefitForm}
+              />
+            )}
           </div>
 
           <aside className="activity-mock-output">

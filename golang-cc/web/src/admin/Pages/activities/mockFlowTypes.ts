@@ -1,3 +1,5 @@
+import type { ActivitySummary } from "../../AdminApi";
+
 export type MockStackMode = "ADDITIVE" | "BEST_ONLY" | "EXCLUSIVE";
 export type MockRequirementType =
   | "PAYMENT_METHOD"
@@ -41,6 +43,7 @@ export type MockRequirement = {
   operator: MockRequirementOperator;
   configuration_json: Record<string, unknown>;
   description: string;
+  is_active: boolean;
 };
 
 export type MockBenefit = {
@@ -48,11 +51,11 @@ export type MockBenefit = {
   reward_component_id: string;
   benefit_type: MockBenefitType;
   value: string;
-  unit: string;
+  reward_unit_id: string;
   cap_amount: string | null;
   cap_period: string | null;
-  currency: string;
   description: string;
+  is_active: boolean;
 };
 
 export type MockRewardComponent = {
@@ -131,4 +134,5 @@ export type ActivityMockSelection =
   | { type: "requirement"; id: string; componentID: string }
   | { type: "benefit"; id: string; componentID: string };
 
-export type ActivityOverviewRow = MockActivityFlow;
+export type ActivityOverviewRow = ActivitySummary;
+

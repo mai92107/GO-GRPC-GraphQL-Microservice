@@ -7,73 +7,64 @@ import (
 	"github.com/rafa/golang-cc/internal/domain"
 )
 
-func validActivityInput() ActivityInput {
-	return ActivityInput{
-		CardProductID: "card", Name: " 2026 上半年 ", StartDate: "2026-01-01", EndDate: "2026-06-30",
-		NetworkIDs: []string{"visa"},
-		Benefits: []ActivityBenefitInput{{
-			RewardUnitID: "unit", Name: " 全聯活動 ", EffectType: "ADD_RATE", RewardValue: "0.1", Layer: " 3 ", StackGroup: " bonus ",
-			CategoryIDs: []string{"dining"}, MerchantIds: []string{" 1 ", "2"},
-			PaymentMethods: []string{"apple_pay"},
+func validActivityFlowInput() ActivityFlowInput {
+	return ActivityFlowInput{
+		Activity: ActivitySummaryInput{
+			BankID: "bank", CardProductID: "card", Title: " 2026 Q3 ",
+			EffectiveFrom: "2026-07-01", EffectiveTo: "2026-09-30", IsActive: true,
+		},
+		RewardGroups: []RewardGroupInput{{
+			Name: " LINE Pay ", DisplayOrder: 10, IsActive: true,
+			Components: []RewardComponentInput{{
+				Name: " 基本回饋 ", Layer: 1, StackGroup: " PAYMENT ", StackMode: "ADDITIVE",
+				EffectiveFrom: "2026-07-01", EffectiveTo: "2026-09-30", IsActive: true,
+				Requirements: []RewardRequirementInput{{
+					RequirementType: "PAYMENT_METHOD", Operator: "IN",
+					Configuration: []byte(`{"payment_method_codes":["LINE_PAY"]}`), Description: "限 LINE Pay", IsActive: true,
+				}},
+				Benefits: []RewardBenefitInput{{
+					BenefitType: "RATE_CASHBACK", Value: "3", RewardUnitID: "unit", CapAmount: stringPtr("300"), CapPeriod: stringPtr("MONTHLY"), IsActive: true,
+				}, {
+					BenefitType: "POINT", Value: "1", RewardUnitID: "point", IsActive: true,
+				}},
+			}},
 		}},
 	}
 }
 
-func TestPrepareActivityNormalizesNestedBenefits(t *testing.T) {
-	activity, err := prepareActivity("activity", validActivityInput(), true)
+func TestPrepareActivityFlowNormalizesAndAcceptsMultipleBenefits(t *testing.T) {
+	flow, err := prepareActivityFlow("activity", validActivityFlowInput())
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := activity.Benefits[0]
-	if activity.Name != "2026 上半年" || b.Name != "全聯活動" || b.Layer != "3" || b.StackGroup != "bonus" || b.MerchantIDs[0] != "1" || len(b.PaymentMethods) != 1 {
-		t.Fatalf("activity not normalized: %+v", activity)
+	if flow.Activity.Title != "2026 Q3" || flow.RewardGroups[0].Name != "LINE Pay" {
+		t.Fatalf("flow not normalized: %+v", flow)
+	}
+	component := flow.RewardGroups[0].Components[0]
+	if component.StackMode != "ADDITIVE" || len(component.Benefits) != 2 || !component.Requirements[0].IsActive {
+		t.Fatalf("unexpected component: %+v", component)
 	}
 }
 
-func TestPrepareActivityRejectsDuplicateMerchantOrInvalidPeriod(t *testing.T) {
-	input := validActivityInput()
-	input.Benefits[0].MerchantIds = []string{"1", "1"}
-	if _, err := prepareActivity("activity", input, true); !errors.Is(err, domain.ErrInvalidInput) {
+func TestPrepareActivityFlowRejectsInvalidRequirementConfig(t *testing.T) {
+	input := validActivityFlowInput()
+	input.RewardGroups[0].Components[0].Requirements[0].Configuration = []byte(`{"network_codes":["VISA"]}`)
+	if _, err := prepareActivityFlow("activity", input); !errors.Is(err, domain.ErrInvalidInput) {
 		t.Fatalf("error=%v", err)
 	}
-	input = validActivityInput()
-	input.EndDate = "2025-12-31"
-	if _, err := prepareActivity("activity", input, true); !errors.Is(err, domain.ErrInvalidInput) {
-		t.Fatalf("error=%v", err)
+}
+
+func TestPrepareActivityFlowRejectsInvalidStackModeOrDecimal(t *testing.T) {
+	input := validActivityFlowInput()
+	input.RewardGroups[0].Components[0].StackMode = "BEST"
+	if _, err := prepareActivityFlow("activity", input); !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("stack mode error=%v", err)
 	}
-	input = validActivityInput()
-	input.Benefits[0].PaymentMethods = []string{"apple_pay", "apple_pay"}
-	if _, err := prepareActivity("activity", input, true); !errors.Is(err, domain.ErrInvalidInput) {
-		t.Fatalf("duplicate payment error=%v", err)
+	input = validActivityFlowInput()
+	input.RewardGroups[0].Components[0].Benefits[0].Value = "abc"
+	if _, err := prepareActivityFlow("activity", input); !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("decimal error=%v", err)
 	}
 }
 
-func TestPrepareActivityAcceptsAccountSetupReminder(t *testing.T) {
-	input := validActivityInput()
-	input.Benefits[0].ActionRequired = "account_setup"
-	input.Benefits[0].ActionMessage = "需完成自動扣繳"
-	if _, err := prepareActivity("activity", input, true); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestPrepareActivityValidatesPlanModes(t *testing.T) {
-	input := validActivityInput()
-	input.Benefits[0].ActionRequired = "app_switch"
-	if _, err := prepareActivity("activity", input, true); !errors.Is(err, domain.ErrInvalidInput) {
-		t.Fatalf("app switch without reminder error=%v", err)
-	}
-
-	input.Benefits[0].ActionMessage = "請切換回饋方案"
-	input.Benefits[0].QualifiedType = "尊榮會員"
-	if _, err := prepareActivity("activity", input, true); !errors.Is(err, domain.ErrInvalidInput) {
-		t.Fatalf("mixed selectable and qualified error=%v", err)
-	}
-
-	input.Benefits[0].ActionRequired = "none"
-	input.Benefits[0].ActionMessage = ""
-	input.Benefits[0].QualifiedType = "尊榮會員"
-	if _, err := prepareActivity("activity", input, true); err != nil {
-		t.Fatalf("qualified type error=%v", err)
-	}
-}
+func stringPtr(value string) *string { return &value }

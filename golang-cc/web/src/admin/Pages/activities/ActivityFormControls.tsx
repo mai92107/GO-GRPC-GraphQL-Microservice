@@ -1,10 +1,8 @@
 import type { ReactNode } from "react";
+import type { ActivityRequirementOptions, RequirementTypeOption } from "../../AdminApi";
+import type { Unit } from "../../../models";
 import { Field } from "../../../components";
-import {
-  benefitTypeOptions,
-  requirementOperatorOptions,
-  rewardUnitOptions,
-} from "./activityMockSettings";
+import { benefitTypeOptions, requirementOperatorOptions } from "./activityMockSettings";
 import {
   configForRequirement,
   displayRequirementValues,
@@ -33,17 +31,36 @@ const stackGroups = [
   "ACCOUNT_TIER",
   "CAMPAIGN",
 ];
-const requirementTypes: MockRequirementType[] = [
-  "PAYMENT_METHOD",
-  "CARD_NETWORK",
-  "MERCHANT",
-  "AMOUNT",
-  "ACCOUNT_TIER",
-  "USER_QUALIFICATION",
-  "ACTION_REQUIRED",
-];
 
 type CapPeriodOption = { code: string; name: string };
+
+type RequirementOptionProps = {
+  requirementOptions?: ActivityRequirementOptions | null;
+  requirementTypes?: RequirementTypeOption[];
+};
+
+function operatorOptions(options?: ActivityRequirementOptions | null) {
+  return options?.operators?.length ? options.operators : requirementOperatorOptions;
+}
+
+export function ActiveToggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="activity-active-toggle">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span>{checked ? "啟用" : "停用"}</span>
+    </label>
+  );
+}
 
 export function ComponentFields({
   flow,
@@ -109,15 +126,12 @@ export function ComponentFields({
         <Field label="Stack Mode">
           <select
             value={form.stack_mode}
-            onChange={(event) => {
-              const stackMode = event.target.value as MockStackMode;
+            onChange={(event) =>
               onChange({
                 ...form,
-                stack_mode: stackMode,
-                is_exclusive: stackMode === "EXCLUSIVE",
-                is_best_only: stackMode === "BEST_ONLY",
-              });
-            }}
+                stack_mode: event.target.value as MockStackMode,
+              })
+            }
           >
             {stackModes.map((mode) => (
               <option value={mode} key={mode}>
@@ -127,14 +141,22 @@ export function ComponentFields({
           </select>
         </Field>
       </div>
-      <Field label="描述">
-        <input
-          value={form.description}
-          onChange={(event) =>
-            onChange({ ...form, description: event.target.value })
-          }
-        />
-      </Field>
+      <div className="two-col">
+        <Field label="描述">
+          <input
+            value={form.description}
+            onChange={(event) =>
+              onChange({ ...form, description: event.target.value })
+            }
+          />
+        </Field>
+        <Field label="狀態">
+          <ActiveToggle
+            checked={form.is_active}
+            onChange={(is_active) => onChange({ ...form, is_active })}
+          />
+        </Field>
+      </div>
     </>
   );
 }
@@ -142,10 +164,12 @@ export function ComponentFields({
 export function RequirementFields({
   form,
   onChange,
+  requirementOptions,
+  requirementTypes,
 }: {
   form: MockRequirementForm;
   onChange: (form: MockRequirementForm) => void;
-}) {
+} & RequirementOptionProps) {
   return (
     <>
       <div className="three-col">
@@ -159,9 +183,9 @@ export function RequirementFields({
               })
             }
           >
-            {requirementTypes.map((type) => (
-              <option value={type} key={type}>
-                {type}
+            {(requirementTypes || []).map((type) => (
+              <option value={type.code} key={type.code}>
+                {type.name}
               </option>
             ))}
           </select>
@@ -176,7 +200,7 @@ export function RequirementFields({
               })
             }
           >
-            {requirementOperatorOptions.map((operator) => (
+            {operatorOptions(requirementOptions).map((operator) => (
               <option value={operator.code} key={operator.code}>
                 {operator.name}
               </option>
@@ -207,10 +231,12 @@ export function RequirementFields({
 export function RequirementDirectFields({
   onChange,
   requirement,
+  requirementOptions,
+  requirementTypes,
 }: {
   requirement: MockRequirement;
   onChange: (requirement: MockRequirement) => void;
-}) {
+} & RequirementOptionProps) {
   return (
     <>
       <div className="three-col">
@@ -224,9 +250,9 @@ export function RequirementDirectFields({
               })
             }
           >
-            {requirementTypes.map((type) => (
-              <option value={type} key={type}>
-                {type}
+            {(requirementTypes || []).map((type) => (
+              <option value={type.code} key={type.code}>
+                {type.name}
               </option>
             ))}
           </select>
@@ -241,7 +267,7 @@ export function RequirementDirectFields({
               })
             }
           >
-            {requirementOperatorOptions.map((operator) => (
+            {operatorOptions(requirementOptions).map((operator) => (
               <option value={operator.code} key={operator.code}>
                 {operator.name}
               </option>
@@ -263,14 +289,22 @@ export function RequirementDirectFields({
           />
         </Field>
       </div>
-      <Field label="描述">
-        <input
-          value={requirement.description}
-          onChange={(event) =>
-            onChange({ ...requirement, description: event.target.value })
-          }
-        />
-      </Field>
+      <div className="two-col">
+        <Field label="描述">
+          <input
+            value={requirement.description}
+            onChange={(event) =>
+              onChange({ ...requirement, description: event.target.value })
+            }
+          />
+        </Field>
+        <Field label="狀態">
+          <ActiveToggle
+            checked={requirement.is_active}
+            onChange={(is_active) => onChange({ ...requirement, is_active })}
+          />
+        </Field>
+      </div>
     </>
   );
 }
@@ -279,11 +313,16 @@ export function BenefitFields<T extends MockBenefit | MockBenefitForm>({
   capPeriodOptions,
   form,
   onChange,
+  rewardUnits,
 }: {
   capPeriodOptions: CapPeriodOption[];
   form: T;
   onChange: (form: T) => void;
+  rewardUnits: Unit[];
 }) {
+  const units = rewardUnits.length
+    ? rewardUnits.map((unit) => ({ code: unit.id, name: unit.name }))
+    : [{ code: "PERCENT", name: "百分比" }];
   return (
     <>
       <div className="three-col">
@@ -313,14 +352,14 @@ export function BenefitFields<T extends MockBenefit | MockBenefitForm>({
             }
           />
         </Field>
-        <Field label="單位">
+        <Field label="回饋單位">
           <select
-            value={form.unit}
+            value={form.reward_unit_id}
             onChange={(event) =>
-              onChange({ ...form, unit: event.target.value })
+              onChange({ ...form, reward_unit_id: event.target.value })
             }
           >
-            {rewardUnitOptions.map((unit) => (
+            {units.map((unit) => (
               <option value={unit.code} key={unit.code}>
                 {unit.name}
               </option>
@@ -328,7 +367,7 @@ export function BenefitFields<T extends MockBenefit | MockBenefitForm>({
           </select>
         </Field>
       </div>
-      <div className="three-col">
+      <div className="two-col">
         <Field label="上限金額">
           <input
             inputMode="decimal"
@@ -356,23 +395,23 @@ export function BenefitFields<T extends MockBenefit | MockBenefitForm>({
             ))}
           </select>
         </Field>
-        <Field label="幣別">
+      </div>
+      <div className="two-col">
+        <Field label="描述">
           <input
-            value={form.currency}
+            value={form.description}
             onChange={(event) =>
-              onChange({ ...form, currency: event.target.value })
+              onChange({ ...form, description: event.target.value })
             }
           />
         </Field>
+        <Field label="狀態">
+          <ActiveToggle
+            checked={form.is_active}
+            onChange={(is_active) => onChange({ ...form, is_active })}
+          />
+        </Field>
       </div>
-      <Field label="描述">
-        <input
-          value={form.description}
-          onChange={(event) =>
-            onChange({ ...form, description: event.target.value })
-          }
-        />
-      </Field>
     </>
   );
 }

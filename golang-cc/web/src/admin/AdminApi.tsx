@@ -1,4 +1,4 @@
-import { api, del, patch, post } from "../api";
+import { api, del, patch, post, put } from "../api";
 import type {
   AdminUser,
   Benefit,
@@ -25,20 +25,134 @@ export type Bank = {
   is_active: boolean;
 };
 export type Category = { id: string; name: string; is_active: boolean };
-export type Activity = {
+export type StackMode = "ADDITIVE" | "BEST_ONLY" | "EXCLUSIVE";
+export type RequirementType =
+  | "PAYMENT_METHOD"
+  | "CARD_NETWORK"
+  | "CARD_PLAN"
+  | "CARD_PRODUCT"
+  | "MERCHANT"
+  | "MERCHANT_CATEGORY"
+  | "CONSUMPTION_CATEGORY"
+  | "CHANNEL"
+  | "REGION"
+  | "CURRENCY"
+  | "AMOUNT"
+  | "ACCOUNT_TIER"
+  | "USER_QUALIFICATION"
+  | "DATE_RANGE"
+  | "WEEKDAY"
+  | "TIME_RANGE"
+  | "ACTION_REQUIRED";
+export type RequirementOperator =
+  | "IN"
+  | "NOT_IN"
+  | "EQ"
+  | "GTE"
+  | "LTE"
+  | "BETWEEN";
+export type BenefitType =
+  | "RATE_CASHBACK"
+  | "FIXED_CASHBACK"
+  | "POINT"
+  | "MILE"
+  | "DISCOUNT"
+  | "COUPON"
+  | "GIFT"
+  | "INSTALLMENT";
+export type ActivitySummary = {
   id: string;
+  bank_id: string;
+  bank_name: string;
   card_product_id: string;
-  name: string;
-  start_date: string;
-  end_date: string;
-  is_active: boolean;
+  card_name: string;
+  title: string;
+  description: string;
   source_url: string;
-  verified_at: string | null;
-  network_ids: string[];
-  shared_monthly_caps: Record<string, string>;
-  benefits: Benefit[];
+  effective_from: string;
+  effective_to: string;
+  is_active: boolean;
+  group_count: number;
+  component_count: number;
+  created_at: string;
+  updated_at: string;
 };
-export type ActivityBenefitInput = Omit<Benefit, "id"> & { id?: string };
+export type RewardRequirement = {
+  id: string;
+  reward_component_id: string;
+  requirement_type: RequirementType;
+  operator: RequirementOperator;
+  configuration_json: Record<string, unknown>;
+  description: string;
+};
+export type RewardBenefit = {
+  id: string;
+  reward_component_id: string;
+  benefit_type: BenefitType;
+  value: string;
+  reward_unit_id: string;
+  cap_amount: string | null;
+  cap_period: string | null;
+  description: string;
+};
+export type RewardComponent = {
+  id: string;
+  reward_group_id: string;
+  name: string;
+  description: string;
+  layer: number;
+  stack_group: string;
+  stack_mode: StackMode;
+  priority: number;
+  effective_from: string;
+  effective_to: string;
+  is_active: boolean;
+  requirements: RewardRequirement[];
+  benefits: RewardBenefit[];
+};
+export type RewardGroup = {
+  id: string;
+  activity_id: string;
+  name: string;
+  description: string;
+  display_order: number;
+  is_active: boolean;
+  components: RewardComponent[];
+};
+export type ActivityFlow = {
+  activity: ActivitySummary;
+  reward_groups: RewardGroup[];
+};
+export type RequirementTypeOption = {
+  code: RequirementType;
+  name: string;
+  value_key: string;
+  value_source: string;
+};
+export type ActivityRequirementOptions = {
+  operators: { code: RequirementOperator; name: string }[];
+  payment_methods: { code: string; name: string }[];
+  merchants: { code: string; name: string }[];
+  categories: { code: string; name: string }[];
+  card_networks: { code: string; name: string }[];
+  card_products: { code: string; name: string }[];
+  card_plans: {
+    id: string;
+    card_product_id: string;
+    plan_type: string;
+    name: string;
+  }[];
+  account_tiers: { code: string; name: string }[];
+  user_qualifications: { code: string; name: string }[];
+  channels: { code: string; name: string }[];
+  regions: { code: string; name: string }[];
+  currencies: { code: string; name: string }[];
+};
+export type ActivityBenefitInput = Omit<
+  RewardBenefit,
+  "id" | "reward_component_id"
+> & { id?: string };
+export type LookupItem = { id: string; name: string; is_active: boolean };
 export type RewardUnitInput = Omit<Unit, "id">;
 export type MerchantInput = {
   name: string;
@@ -139,35 +253,42 @@ export const updateCard = (
 export const deleteCard = (id: string) =>
   del<{ deleted: boolean }>(`/admin/card-products/${id}`);
 
-export const getActivities = () => api<Activity[]>("/admin/activities");
-export const createActivity = (
-  cardId: string,
-  eventName: string,
-  startAt: string,
-  endAt: string,
-  sourceUrl: string,
-  networkIDs: string[],
-  benefits: ActivityBenefitInput[],
-) =>
-  post<{ id: string }>("/admin/activities", {
-    card_product_id: cardId,
-    name: eventName,
-    start_date: startAt,
-    end_date: endAt,
-    source_url: sourceUrl,
-    network_ids: networkIDs,
-    verified_at: new Date().toISOString().slice(0, 10),
-    shared_monthly_caps: {},
-    is_active: true,
-    benefits,
-  });
-export const activateActivity = (activity: Activity) =>
-  patch<{ updated: boolean }>(`/admin/activities/${activity.id}`, {
-    ...activity,
+export const getActivities = (filters?: {
+  bank_id?: string;
+  card_product_id?: string;
+  is_active?: boolean;
+}) => {
+  const params = new URLSearchParams();
+  if (filters?.bank_id) params.set("bank_id", filters.bank_id);
+  if (filters?.card_product_id)
+    params.set("card_product_id", filters.card_product_id);
+  if (filters?.is_active !== undefined)
+    params.set("is_active", String(filters.is_active));
+  const query = params.toString();
+  return api<ActivitySummary[]>(`/admin/activities${query ? `?${query}` : ""}`);
+};
+export const getActivity = (id: string) =>
+  api<ActivityFlow>(`/admin/activities/${id}`);
+export const getRequirementTypes = () =>
+  api<RequirementTypeOption[]>("/admin/requirement-types");
+export const getActivityRequirementOptions = (
+  requirementType: RequirementType,
+  cardProductID?: string,
+) => {
+  const params = new URLSearchParams({ requirement_type: requirementType });
+  if (cardProductID) params.set("card_product_id", cardProductID);
+  return api<ActivityRequirementOptions>(
+    `/admin/activity-requirement-options?${params.toString()}`,
+  );
+};
+export const createActivity = (flow: ActivityFlow) =>
+  post<{ id: string }>("/admin/activities", flow);
+export const activateActivity = (activity: ActivitySummary) =>
+  patch<{ updated: boolean }>(`/admin/activities/${activity.id}/status`, {
     is_active: !activity.is_active,
   });
-export const updateActivity = (activity: Activity) =>
-  patch<{ updated: boolean }>(`/admin/activities/${activity.id}`, activity);
+export const updateActivity = (flow: ActivityFlow) =>
+  put<{ updated: boolean }>(`/admin/activities/${flow.activity.id}`, flow);
 export const deleteActivity = (id: string) =>
   del<{ deleted: boolean }>(`/admin/activities/${id}`);
 export const publishRewardComponentVersion = (
@@ -226,3 +347,33 @@ export const updateMerchant = (merchant: Merchant, isActive: boolean) =>
   });
 export const deleteMerchant = (id: string) =>
   del<{ deleted: boolean }>(`/admin/merchants/${id}`);
+
+
+export const getRegions = () => api<LookupItem[]>("/admin/regions");
+export const createRegion = (id: string, name: string) =>
+  post<{ id: string }>("/admin/regions", { id, name });
+export const updateRegion = (id: string, name: string, isActive: boolean) =>
+  patch<{ updated: boolean }>(`/admin/regions/${id}`, {
+    id,
+    name,
+    is_active: isActive,
+  });
+export const deleteRegion = (id: string) =>
+  del<{ deleted: boolean }>(`/admin/regions/${id}`);
+
+export const getUserQualifications = () =>
+  api<LookupItem[]>("/admin/user-qualifications");
+export const createUserQualification = (id: string, name: string) =>
+  post<{ id: string }>("/admin/user-qualifications", { id, name });
+export const updateUserQualification = (
+  id: string,
+  name: string,
+  isActive: boolean,
+) =>
+  patch<{ updated: boolean }>(`/admin/user-qualifications/${id}`, {
+    id,
+    name,
+    is_active: isActive,
+  });
+export const deleteUserQualification = (id: string) =>
+  del<{ deleted: boolean }>(`/admin/user-qualifications/${id}`);
