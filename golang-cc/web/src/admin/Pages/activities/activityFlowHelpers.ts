@@ -220,7 +220,7 @@ export function requirementSummary(requirements: MockRequirement[]) {
 }
 
 export function overviewItems(flow: MockActivityFlow): ActivityOverviewRow[] {
-  return [{ activity: flow.activity }];
+  return [flow];
 }
 
 function componentPercentValue(component: MockRewardComponent) {

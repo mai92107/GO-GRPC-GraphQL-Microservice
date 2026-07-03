@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   allComponents,
+  blankMockActivity,
   emptyBenefitForm,
   emptyComponentForm,
   emptyGroupForm,
@@ -31,10 +32,13 @@ const initialSelection: ActivityMockSelection = {
   id: "activity-sport-q3",
 };
 
+type ActivityEditorMode = "create" | "edit";
+
 export function useActivityMockFlow() {
   const [flow, setFlow] = useState(emptyMockActivity);
   const [viewMode, setViewMode] =
     useState<ActivityMockViewMode>("overview");
+  const [editorMode, setEditorMode] = useState<ActivityEditorMode>("edit");
   const [bankFilter, setBankFilter] = useState("all");
   const [cardFilter, setCardFilter] = useState("all");
   const [selection, setSelection] =
@@ -108,6 +112,13 @@ export function useActivityMockFlow() {
           .find((benefit) => benefit.id === selection.id)
       : undefined;
 
+  const resetForms = (componentID = "", groupID = "") => {
+    setGroupForm(emptyGroupForm());
+    setComponentForm(emptyComponentForm(groupID));
+    setRequirementForm(emptyRequirementForm(componentID));
+    setBenefitForm(emptyBenefitForm(componentID));
+  };
+
   const select = (nextSelection: ActivityMockSelection) => {
     setSelection(nextSelection);
     if (nextSelection.type === "component") {
@@ -154,14 +165,24 @@ export function useActivityMockFlow() {
   };
 
   const openActivityEditor = (activityID = flow.activity.id) => {
+    setEditorMode("edit");
     setSelection({ type: "activity", id: activityID });
     setViewMode("editor");
   };
 
-  const resetExample = () => {
+  const finishActivityEdit = () => {
+    setEditorMode("edit");
+    setSelection({ type: "activity", id: flow.activity.id });
+    setViewMode("overview");
+  };
+
+  const reset = () => {
     const next = emptyMockActivity();
     setFlow(next);
+    setEditorMode("create");
     setSelection({ type: "activity", id: next.activity.id });
+    resetForms();
+    setViewMode("editor");
   };
 
   return {
@@ -179,12 +200,14 @@ export function useActivityMockFlow() {
     componentForm,
     components,
     deleteSelected,
+    editorMode,
+    finishActivityEdit,
     flow,
     groupForm,
     openActivityEditor,
     overviewRows,
     requirementForm,
-    resetExample,
+    reset,
     select,
     selectedBenefit,
     selectedComponent,

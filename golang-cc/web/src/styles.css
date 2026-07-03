@@ -4634,6 +4634,7 @@ input::placeholder {
 .activity-overview,
 .activity-overview-list,
 .client-preview,
+.client-preview-activity,
 .client-preview-groups {
   display: grid;
   gap: 12px;
@@ -4726,7 +4727,7 @@ input::placeholder {
 .activity-overview-row p,
 .activity-overview-row small,
 .client-preview-card p,
-.client-reward-group summary small,
+.client-reward-group header small,
 .client-component small,
 .client-component p {
   color: var(--muted);
@@ -4781,11 +4782,28 @@ input::placeholder {
 
 .client-preview-card {
   display: grid;
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
   padding: 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.client-preview-card::-webkit-details-marker { display: none; }
+
+.client-preview-card > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.client-preview-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .client-reward-group {
@@ -4795,7 +4813,7 @@ input::placeholder {
   background: #fff;
 }
 
-.client-reward-group summary {
+.client-reward-group header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -4803,24 +4821,20 @@ input::placeholder {
   border-bottom: 1px solid var(--line);
   background: var(--cream);
   padding: 12px 14px;
-  cursor: pointer;
-  list-style: none;
 }
 
-.client-reward-group summary::-webkit-details-marker { display: none; }
-
-.client-reward-group summary > span {
+.client-reward-group header > span {
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 
-.client-reward-group summary > span > strong,
+.client-reward-group header > span > strong,
 .client-component strong {
   color: var(--ink);
 }
 
-.client-reward-group summary > strong,
+.client-reward-group header > strong,
 .client-component > span {
   color: #24734d;
   font-size: 20px;
@@ -4828,8 +4842,6 @@ input::placeholder {
   line-height: 1.2;
   white-space: nowrap;
 }
-
-.client-reward-group:not([open]) summary { border-bottom: 0; }
 
 .client-component {
   display: grid;
@@ -4854,7 +4866,6 @@ input::placeholder {
 
 .client-component.best_only > span { color: #755c16; }
 .client-component.exclusive > span { color: var(--danger); }
-
 @media (max-width: 980px) {
   .activity-mock-layout { grid-template-columns: 1fr; }
   .activity-mock-output { position: static; }
@@ -4863,12 +4874,12 @@ input::placeholder {
 @media (max-width: 760px) {
   .activity-overview-filters,
   .activity-overview-row,
-  .client-reward-group summary,
+  .client-reward-group header,
   .client-component {
     grid-template-columns: 1fr;
   }
 
-  .client-reward-group summary > strong,
+  .client-reward-group header > strong,
   .client-component > span {
     justify-self: start;
   }

@@ -1,6 +1,7 @@
 import { Pencil } from "lucide-react";
 import { Empty, Field } from "../../../components";
 import type { MockCatalogCardOption } from "./activityMockSettings";
+import { ActivityClientPreview } from "./ActivityClientPreview";
 import type { ActivityOverviewRow } from "./mockFlowTypes";
 
 export function ActivityOverviewList({
@@ -56,25 +57,24 @@ export function ActivityOverviewList({
         <span>{rows.length} 個活動</span>
       </div>
       <div className="activity-overview-list">
-        {rows.map((row) => (
-          <article className="activity-overview-row" key={row.activity.id}>
-            <div>
-              <span className="entity-kicker">
-                {row.activity.bank_name} · {row.activity.card_name}
-              </span>
-              <h3>{`${row.activity.bank_name} ${row.activity.card_name} ${row.activity.title}`}</h3>
-              <p>
-                {row.activity.effective_from} - {row.activity.effective_to}
-              </p>
-            </div>
-            <button
-              className="button ghost"
-              type="button"
-              onClick={() => onEdit(row.activity.id)}
-            >
-              <Pencil size={15} /> 編輯
-            </button>
-          </article>
+        {rows.map((row, id) => (
+          <ActivityClientPreview
+            flow={row}
+            key={id}
+            actions={
+              <button
+                className="button ghost"
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onEdit(row.activity.id);
+                }}
+              >
+                <Pencil size={15} /> 編輯
+              </button>
+            }
+          />
         ))}
         {!rows.length && (
           <Empty title="找不到活動" text="請調整銀行或信用卡篩選。" />

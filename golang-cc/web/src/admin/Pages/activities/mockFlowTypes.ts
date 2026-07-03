@@ -131,6 +131,4 @@ export type ActivityMockSelection =
   | { type: "requirement"; id: string; componentID: string }
   | { type: "benefit"; id: string; componentID: string };
 
-export type ActivityOverviewRow = {
-  activity: MockActivityFlow["activity"];
-};
+export type ActivityOverviewRow = MockActivityFlow;

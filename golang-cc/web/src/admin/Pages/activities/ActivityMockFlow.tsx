@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CirclePlus } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CirclePlus, Save } from "lucide-react";
 import { ActivityClientPreview } from "./ActivityClientPreview";
 import {
   CreateBenefitForm,
@@ -27,37 +27,52 @@ export function ActivityMockFlow() {
           <span className="page-eyebrow">MOCK FLOW</span>
           <h2>Activity 五層建檔流程</h2>
           <p className="muted">
-            先用前端假資料體驗新增、修改、刪除流程；右側即時顯示會員端會看到的回饋內容。
+            先用前端假資料體驗新增、修改、刪除流程；總覽可展開會員端回饋預覽。
           </p>
         </div>
         <div className="toolbar">
-          {activity.viewMode === "editor" && (
+          {activity.viewMode === "editor" &&
+            activity.editorMode === "edit" && (
+              <button
+                className="button ghost"
+                type="button"
+                onClick={() => activity.setViewMode("overview")}
+              >
+                返回總覽
+              </button>
+            )}
+          {activity.viewMode === "editor" && activity.editorMode === "create" && (
             <button
               className="button ghost"
               type="button"
               onClick={() => activity.setViewMode("overview")}
             >
-              返回總覽
+              取消建立
             </button>
           )}
           {activity.viewMode === "overview" && (
-            <button
-              className="button"
-              type="button"
-              onClick={() => activity.openActivityEditor()}
-            >
-              <CirclePlus size={16} /> 新增
+            <button className="button" type="button" onClick={activity.reset}>
+              <CirclePlus size={16} /> 新建活動
             </button>
           )}
-          {activity.viewMode === "editor" && (
-            <button
-              className="button ghost"
-              type="button"
-              onClick={activity.resetExample}
-            >
-              重設範例
-            </button>
-          )}
+          {activity.viewMode === "editor" &&
+            activity.editorMode === "create" && (
+              <button
+                className="button ghost"
+                type="button"
+              >
+                新增活動
+              </button>
+            )}
+          {activity.viewMode === "editor" &&
+            activity.editorMode === "edit" && (
+              <button
+                className="button ghost"
+                type="button"
+              >
+                儲存活動
+              </button>
+            )}
         </div>
       </div>
 
@@ -75,12 +90,6 @@ export function ActivityMockFlow() {
       ) : (
         <div className="activity-mock-layout">
           <div className="activity-mock-builder">
-            <ActivityEntityTree
-              flow={activity.flow}
-              selection={activity.selection}
-              onSelect={activity.select}
-              onDelete={activity.deleteSelected}
-            />
             {activity.selection.type === "group" && activity.selectedGroup && (
               <GroupEditor
                 flow={activity.flow}
@@ -157,7 +166,12 @@ export function ActivityMockFlow() {
                 </span>
               ))}
             </div>
-            <ActivityClientPreview flow={activity.flow} />
+            <ActivityEntityTree
+              flow={activity.flow}
+              selection={activity.selection}
+              onSelect={activity.select}
+              onDelete={activity.deleteSelected}
+            />
           </aside>
         </div>
       )}

@@ -207,6 +207,26 @@ export const emptyMockActivity = (): MockActivityFlow => ({
   ],
 });
 
+
+export const blankMockActivity = (): MockActivityFlow => {
+  const activityID = nextID("activity");
+  return {
+    activity: {
+      id: activityID,
+      bank_id: "bank-sinopac",
+      bank_name: "永豐銀行",
+      card_product_id: "card-sport",
+      card_name: "SPORT 卡",
+      title: "",
+      description: "",
+      source_url: "",
+      effective_from: "",
+      effective_to: "",
+      is_active: true,
+    },
+    reward_groups: [],
+  };
+};
 export const emptyGroupForm = (): MockGroupForm => ({
   name: "",
   description: "",
