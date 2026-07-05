@@ -4,7 +4,7 @@ import {
   groupCalculationSummary,
   requirementSummary,
 } from "./activityFlowHelpers";
-import type { MockActivityFlow } from "./mockFlowTypes";
+import type { ActivityFlowModel } from "./activityFlowTypes";
 
 export function ActivityClientPreview({
   actions,
@@ -13,7 +13,7 @@ export function ActivityClientPreview({
 }: {
   actions?: ReactNode;
   eyebrow?: string;
-  flow: MockActivityFlow;
+  flow: ActivityFlowModel;
 }) {
   const sortedGroups = [...flow.reward_groups].sort(
     (a, b) => a.display_order - b.display_order,

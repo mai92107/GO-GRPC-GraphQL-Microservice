@@ -140,3 +140,6 @@ cd web && npm test -- --run && npm run build
 docker compose config --quiet
 docker compose build app
 ```
+
+## 注意
+AI 協助開發前，必須先閱讀 `docs/ai-development-guidelines.md`，並遵守其中的分層、資料庫、權限與推薦邏輯規範。

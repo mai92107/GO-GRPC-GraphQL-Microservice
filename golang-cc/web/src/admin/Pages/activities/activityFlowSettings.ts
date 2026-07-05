@@ -1,12 +1,12 @@
-export type MockOption = { code: string; name: string };
-export type MockCatalogCardOption = {
+export type ActivityOption = { code: string; name: string };
+export type ActivityCatalogCardOption = {
   bank_id: string;
   bank_name: string;
   card_product_id: string;
   card_name: string;
 };
 
-export const requirementOperatorOptions: MockOption[] = [
+export const requirementOperatorOptions: ActivityOption[] = [
   { code: "IN", name: "包含任一" },
   { code: "NOT_IN", name: "不包含" },
   { code: "EQ", name: "等於" },
@@ -15,7 +15,7 @@ export const requirementOperatorOptions: MockOption[] = [
   { code: "BETWEEN", name: "介於" },
 ];
 
-export const benefitTypeOptions: MockOption[] = [
+export const benefitTypeOptions: ActivityOption[] = [
   { code: "RATE_CASHBACK", name: "百分比現金回饋" },
   { code: "FIXED_CASHBACK", name: "固定金額回饋" },
   { code: "POINT", name: "點數回饋" },
@@ -26,7 +26,7 @@ export const benefitTypeOptions: MockOption[] = [
   { code: "INSTALLMENT", name: "分期優惠" },
 ];
 
-export const rewardUnitOptions: MockOption[] = [
+export const rewardUnitOptions: ActivityOption[] = [
   { code: "PERCENT", name: "百分比" },
   { code: "AMOUNT", name: "金額" },
   { code: "POINT", name: "點數" },
@@ -34,7 +34,7 @@ export const rewardUnitOptions: MockOption[] = [
   { code: "MILE", name: "哩程" },
 ];
 
-export const defaultCapPeriodOptions: MockOption[] = [
+export const defaultCapPeriodOptions: ActivityOption[] = [
   { code: "NONE", name: "無上限週期" },
   { code: "DAILY", name: "每日" },
   { code: "WEEKLY", name: "每週" },
@@ -44,21 +44,21 @@ export const defaultCapPeriodOptions: MockOption[] = [
   { code: "CAMPAIGN", name: "活動期間" },
 ];
 
-const capPeriodStorageKey = "activity_mock_cap_period_options";
+const capPeriodStorageKey = "activity_flow_cap_period_options";
 
 export function loadCapPeriodOptions() {
   if (typeof window === "undefined") return defaultCapPeriodOptions;
   const raw = window.localStorage.getItem(capPeriodStorageKey);
   if (!raw) return defaultCapPeriodOptions;
   try {
-    const parsed = JSON.parse(raw) as MockOption[];
+    const parsed = JSON.parse(raw) as ActivityOption[];
     return parsed.length ? parsed : defaultCapPeriodOptions;
   } catch {
     return defaultCapPeriodOptions;
   }
 }
 
-export function saveCapPeriodOptions(options: MockOption[]) {
+export function saveCapPeriodOptions(options: ActivityOption[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(capPeriodStorageKey, JSON.stringify(options));
 }

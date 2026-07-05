@@ -16,13 +16,13 @@ import {
   RequirementDirectFields,
 } from "./ActivityFormControls";
 import type {
-  MockActivityFlow,
-  MockBenefit,
-  MockComponentForm,
-  MockRequirement,
-  MockRewardComponent,
-  MockRewardGroup,
-} from "./mockFlowTypes";
+  ActivityFlowModel,
+  ActivityBenefit,
+  ActivityComponentForm,
+  ActivityRequirement,
+  ActivityRewardComponent,
+  ActivityRewardGroup,
+} from "./activityFlowTypes";
 
 type CapPeriodOption = { code: string; name: string };
 type CatalogCardOption = { bank_id: string; bank_name: string; card_product_id: string; card_name: string };
@@ -37,10 +37,10 @@ export function ActivityEditor({
 }: {
   activityCardOptions: CatalogCardOption[];
   bankOptions: CatalogCardOption[];
-  flow: MockActivityFlow;
+  flow: ActivityFlowModel;
   onBankChange: (bankID: string) => void;
   onCardChange: (cardProductID: string) => void;
-  onChange: (flow: MockActivityFlow) => void;
+  onChange: (flow: ActivityFlowModel) => void;
 }) {
   return (
     <section className="form-section selected-editor">
@@ -74,6 +74,14 @@ export function ActivityEditor({
       <Field label="活動名稱" hint={`右側 demo 顯示為：${flow.activity.bank_name} ${flow.activity.card_name} ${flow.activity.title}`}>
         <input value={flow.activity.title} onChange={(event) => onChange({ ...flow, activity: { ...flow.activity, title: event.target.value } })} />
       </Field>
+      <Field label="來源 URL">
+        <input
+          type="url"
+          placeholder="https://example.com/activity"
+          value={flow.activity.source_url}
+          onChange={(event) => onChange({ ...flow, activity: { ...flow.activity, source_url: event.target.value } })}
+        />
+      </Field>
       <div className="two-col">
         <Field label="開始日期">
           <input type="date" value={flow.activity.effective_from} onChange={(event) => onChange({ ...flow, activity: { ...flow.activity, effective_from: event.target.value } })} />
@@ -94,9 +102,9 @@ export function GroupEditor({
   group,
   onChange,
 }: {
-  flow: MockActivityFlow;
-  group: MockRewardGroup;
-  onChange: (flow: MockActivityFlow) => void;
+  flow: ActivityFlowModel;
+  group: ActivityRewardGroup;
+  onChange: (flow: ActivityFlowModel) => void;
 }) {
   return (
     <section className="form-section selected-editor">
@@ -155,11 +163,11 @@ export function ComponentEditor({
   flow,
   onChange,
 }: {
-  component: MockRewardComponent;
-  flow: MockActivityFlow;
-  onChange: (flow: MockActivityFlow) => void;
+  component: ActivityRewardComponent;
+  flow: ActivityFlowModel;
+  onChange: (flow: ActivityFlowModel) => void;
 }) {
-  const form: MockComponentForm = {
+  const form: ActivityComponentForm = {
     reward_group_id: component.reward_group_id,
     name: component.name,
     description: component.description,
@@ -193,11 +201,11 @@ export function RequirementEditor({
   requirementOptions,
   requirementTypes,
 }: {
-  flow: MockActivityFlow;
-  requirement: MockRequirement;
+  flow: ActivityFlowModel;
+  requirement: ActivityRequirement;
   requirementOptions: ActivityRequirementOptions | null;
   requirementTypes: RequirementTypeOption[];
-  onChange: (flow: MockActivityFlow) => void;
+  onChange: (flow: ActivityFlowModel) => void;
 }) {
   return (
     <section className="form-section selected-editor">
@@ -221,11 +229,11 @@ export function BenefitEditor({
   onChange,
   rewardUnits,
 }: {
-  benefit: MockBenefit;
+  benefit: ActivityBenefit;
   capPeriodOptions: CapPeriodOption[];
-  flow: MockActivityFlow;
+  flow: ActivityFlowModel;
   rewardUnits: Unit[];
-  onChange: (flow: MockActivityFlow) => void;
+  onChange: (flow: ActivityFlowModel) => void;
 }) {
   return (
     <section className="form-section selected-editor">

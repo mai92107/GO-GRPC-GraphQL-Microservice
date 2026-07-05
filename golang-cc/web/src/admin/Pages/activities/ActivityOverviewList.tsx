@@ -1,7 +1,7 @@
 import { Pencil } from "lucide-react";
 import { Empty, Field, StatusBadge } from "../../../components";
-import type { MockCatalogCardOption } from "./activityMockSettings";
-import type { ActivityOverviewRow } from "./mockFlowTypes";
+import type { ActivityCatalogCardOption } from "./activityFlowSettings";
+import type { ActivityOverviewRow } from "./activityFlowTypes";
 
 export function ActivityOverviewList({
   bankFilter,
@@ -14,9 +14,9 @@ export function ActivityOverviewList({
   rows,
 }: {
   bankFilter: string;
-  bankOptions: MockCatalogCardOption[];
+  bankOptions: ActivityCatalogCardOption[];
   cardFilter: string;
-  cardOptions: MockCatalogCardOption[];
+  cardOptions: ActivityCatalogCardOption[];
   rows: ActivityOverviewRow[];
   onBankFilterChange: (bankID: string) => void;
   onCardFilterChange: (cardID: string) => void;

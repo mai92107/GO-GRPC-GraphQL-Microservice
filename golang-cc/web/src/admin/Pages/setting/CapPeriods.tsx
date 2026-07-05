@@ -5,20 +5,20 @@ import {
   defaultCapPeriodOptions,
   loadCapPeriodOptions,
   saveCapPeriodOptions,
-  type MockOption,
-} from "../activities/activityMockSettings";
+  type ActivityOption,
+} from "../activities/activityFlowSettings";
 
 const emptyForm = { code: "", name: "" };
 
 export default function CapPeriods() {
-  const [items, setItems] = useState<MockOption[]>(loadCapPeriodOptions);
+  const [items, setItems] = useState<ActivityOption[]>(loadCapPeriodOptions);
   const [form, setForm] = useState(emptyForm);
-  const [editing, setEditing] = useState<MockOption | null>(null);
+  const [editing, setEditing] = useState<ActivityOption | null>(null);
   const [editForm, setEditForm] = useState(emptyForm);
   const [query, setQuery] = useState("");
   const [showCreate, setShowCreate] = useState(false);
 
-  const persist = (nextItems: MockOption[]) => {
+  const persist = (nextItems: ActivityOption[]) => {
     setItems(nextItems);
     saveCapPeriodOptions(nextItems);
   };
@@ -37,7 +37,7 @@ export default function CapPeriods() {
     setShowCreate(false);
   }
 
-  function openEditor(item: MockOption) {
+  function openEditor(item: ActivityOption) {
     setEditing(item);
     setEditForm({ code: item.code, name: item.name });
   }

@@ -1,15 +1,19 @@
 import type {
-  MockActivityFlow,
-  MockBenefitForm,
-  MockComponentForm,
-  MockGroupForm,
-  MockRequirementForm,
-} from "./mockFlowTypes";
+  ActivityFlowModel,
+  ActivityBenefitForm,
+  ActivityComponentForm,
+  ActivityGroupForm,
+  ActivityRequirementForm,
+} from "./activityFlowTypes";
+import {
+  isUnconditionalRequirement,
+  unconditionalRequirementOperator,
+} from "./requirementHelpers";
 
 const nextID = (prefix: string) =>
   `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 
-export const emptyMockActivity = (): MockActivityFlow => {
+export const emptyActivityFlow = (): ActivityFlowModel => {
   const activityID = nextID("activity");
   return {
     activity: {
@@ -29,14 +33,14 @@ export const emptyMockActivity = (): MockActivityFlow => {
   };
 };
 
-export const emptyGroupForm = (): MockGroupForm => ({
+export const emptyGroupForm = (): ActivityGroupForm => ({
   name: "",
   description: "",
   display_order: 30,
   is_active: true,
 });
 
-export const emptyComponentForm = (groupID = ""): MockComponentForm => ({
+export const emptyComponentForm = (groupID = ""): ActivityComponentForm => ({
   reward_group_id: groupID,
   name: "",
   description: "",
@@ -51,7 +55,7 @@ export const emptyComponentForm = (groupID = ""): MockComponentForm => ({
   is_active: true,
 });
 
-export const emptyRequirementForm = (componentID = ""): MockRequirementForm => ({
+export const emptyRequirementForm = (componentID = ""): ActivityRequirementForm => ({
   reward_component_id: componentID,
   requirement_type: "PAYMENT_METHOD",
   operator: "IN",
@@ -59,7 +63,7 @@ export const emptyRequirementForm = (componentID = ""): MockRequirementForm => (
   description: "限 LINE Pay",
 });
 
-export const emptyBenefitForm = (componentID = ""): MockBenefitForm => ({
+export const emptyBenefitForm = (componentID = ""): ActivityBenefitForm => ({
   reward_component_id: componentID,
   benefit_type: "RATE_CASHBACK",
   value: "1",
@@ -70,7 +74,7 @@ export const emptyBenefitForm = (componentID = ""): MockBenefitForm => ({
   is_active: true,
 });
 
-export function withGroup(flow: MockActivityFlow, form: MockGroupForm) {
+export function withGroup(flow: ActivityFlowModel, form: ActivityGroupForm) {
   const group = {
     ...form,
     id: nextID("group"),
@@ -83,7 +87,7 @@ export function withGroup(flow: MockActivityFlow, form: MockGroupForm) {
   };
 }
 
-export function withComponent(flow: MockActivityFlow, form: MockComponentForm) {
+export function withComponent(flow: ActivityFlowModel, form: ActivityComponentForm) {
   const component = {
     ...form,
     id: nextID("component"),
@@ -101,14 +105,16 @@ export function withComponent(flow: MockActivityFlow, form: MockComponentForm) {
 }
 
 export function withRequirement(
-  flow: MockActivityFlow,
-  form: MockRequirementForm,
+  flow: ActivityFlowModel,
+  form: ActivityRequirementForm,
 ) {
   const requirement = {
     id: nextID("req"),
     reward_component_id: form.reward_component_id,
     requirement_type: form.requirement_type,
-    operator: form.operator,
+    operator: isUnconditionalRequirement(form.requirement_type)
+      ? unconditionalRequirementOperator
+      : form.operator,
     configuration_json: configurationForRequirement(form),
     description: form.description,
     is_active: true,
@@ -119,7 +125,7 @@ export function withRequirement(
   }));
 }
 
-export function withBenefit(flow: MockActivityFlow, form: MockBenefitForm) {
+export function withBenefit(flow: ActivityFlowModel, form: ActivityBenefitForm) {
   const benefit = {
     ...form,
     id: nextID("benefit"),
@@ -133,7 +139,7 @@ export function withBenefit(flow: MockActivityFlow, form: MockBenefitForm) {
 }
 
 export function removeComponentChild(
-  flow: MockActivityFlow,
+  flow: ActivityFlowModel,
   componentID: string,
   childID: string,
   childType: "requirements" | "benefits",
@@ -144,11 +150,11 @@ export function removeComponentChild(
   }));
 }
 
-export function allComponents(flow: MockActivityFlow) {
+export function allComponents(flow: ActivityFlowModel) {
   return flow.reward_groups.flatMap((group) => group.components);
 }
 
-export function validateMockFlow(flow: MockActivityFlow) {
+export function validateActivityFlow(flow: ActivityFlowModel) {
   const components = allComponents(flow);
   const requirements = components.flatMap((component) => component.requirements);
   const benefits = components.flatMap((component) => component.benefits);
@@ -163,7 +169,9 @@ export function validateMockFlow(flow: MockActivityFlow) {
   ];
 }
 
-function configurationForRequirement(form: MockRequirementForm) {
+function configurationForRequirement(form: ActivityRequirementForm) {
+  if (isUnconditionalRequirement(form.requirement_type)) return {};
+
   const values = form.values
     .split(",")
     .map((value) => value.trim())
@@ -190,7 +198,7 @@ function configurationForRequirement(form: MockRequirementForm) {
 }
 
 function updateComponent(
-  flow: MockActivityFlow,
+  flow: ActivityFlowModel,
   componentID: string,
   updater: (component: ReturnType<typeof allComponents>[number]) => ReturnType<typeof allComponents>[number],
 ) {
@@ -204,7 +212,6 @@ function updateComponent(
     })),
   };
 }
-
 
 
 

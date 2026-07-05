@@ -1,8 +1,8 @@
 import { Trash2 } from "lucide-react";
 import type {
-  ActivityMockSelection,
-  MockActivityFlow,
-} from "./mockFlowTypes";
+  ActivityFlowSelection,
+  ActivityFlowModel,
+} from "./activityFlowTypes";
 
 export function ActivityEntityTree({
   flow,
@@ -10,10 +10,10 @@ export function ActivityEntityTree({
   onSelect,
   selection,
 }: {
-  flow: MockActivityFlow;
-  selection: ActivityMockSelection;
-  onDelete: (nextSelection: ActivityMockSelection) => void;
-  onSelect: (selection: ActivityMockSelection) => void;
+  flow: ActivityFlowModel;
+  selection: ActivityFlowSelection;
+  onDelete: (nextSelection: ActivityFlowSelection) => void;
+  onSelect: (selection: ActivityFlowSelection) => void;
 }) {
   return (
     <section className="activity-entity-tree">

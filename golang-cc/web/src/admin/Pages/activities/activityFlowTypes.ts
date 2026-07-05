@@ -1,7 +1,8 @@
 import type { ActivitySummary } from "../../AdminApi";
 
-export type MockStackMode = "ADDITIVE" | "BEST_ONLY" | "EXCLUSIVE";
-export type MockRequirementType =
+export type ActivityStackMode = "ADDITIVE" | "BEST_ONLY" | "EXCLUSIVE";
+export type ActivityRequirementType =
+  | "none"
   | "PAYMENT_METHOD"
   | "CARD_NETWORK"
   | "CARD_PLAN"
@@ -19,14 +20,14 @@ export type MockRequirementType =
   | "WEEKDAY"
   | "TIME_RANGE"
   | "ACTION_REQUIRED";
-export type MockRequirementOperator =
+export type ActivityRequirementOperator =
   | "IN"
   | "NOT_IN"
   | "EQ"
   | "GTE"
   | "LTE"
   | "BETWEEN";
-export type MockBenefitType =
+export type ActivityBenefitType =
   | "RATE_CASHBACK"
   | "FIXED_CASHBACK"
   | "POINT"
@@ -36,20 +37,20 @@ export type MockBenefitType =
   | "GIFT"
   | "INSTALLMENT";
 
-export type MockRequirement = {
+export type ActivityRequirement = {
   id: string;
   reward_component_id: string;
-  requirement_type: MockRequirementType;
-  operator: MockRequirementOperator;
+  requirement_type: ActivityRequirementType;
+  operator: ActivityRequirementOperator;
   configuration_json: Record<string, unknown>;
   description: string;
   is_active: boolean;
 };
 
-export type MockBenefit = {
+export type ActivityBenefit = {
   id: string;
   reward_component_id: string;
-  benefit_type: MockBenefitType;
+  benefit_type: ActivityBenefitType;
   value: string;
   reward_unit_id: string;
   cap_amount: string | null;
@@ -58,35 +59,35 @@ export type MockBenefit = {
   is_active: boolean;
 };
 
-export type MockRewardComponent = {
+export type ActivityRewardComponent = {
   id: string;
   reward_group_id: string;
   name: string;
   description: string;
   layer: number;
   stack_group: string;
-  stack_mode: MockStackMode;
+  stack_mode: ActivityStackMode;
   priority: number;
   is_exclusive: boolean;
   is_best_only: boolean;
   effective_from: string;
   effective_to: string;
   is_active: boolean;
-  requirements: MockRequirement[];
-  benefits: MockBenefit[];
+  requirements: ActivityRequirement[];
+  benefits: ActivityBenefit[];
 };
 
-export type MockRewardGroup = {
+export type ActivityRewardGroup = {
   id: string;
   activity_id: string;
   name: string;
   description: string;
   display_order: number;
   is_active: boolean;
-  components: MockRewardComponent[];
+  components: ActivityRewardComponent[];
 };
 
-export type MockActivityFlow = {
+export type ActivityFlowModel = {
   activity: {
     id: string;
     bank_id: string;
@@ -100,34 +101,34 @@ export type MockActivityFlow = {
     effective_to: string;
     is_active: boolean;
   };
-  reward_groups: MockRewardGroup[];
+  reward_groups: ActivityRewardGroup[];
 };
 
-export type MockGroupForm = Omit<
-  MockRewardGroup,
+export type ActivityGroupForm = Omit<
+  ActivityRewardGroup,
   "id" | "activity_id" | "components"
 >;
 
-export type MockComponentForm = Omit<
-  MockRewardComponent,
+export type ActivityComponentForm = Omit<
+  ActivityRewardComponent,
   "id" | "reward_group_id" | "requirements" | "benefits"
 > & {
   reward_group_id: string;
 };
 
-export type MockRequirementForm = {
+export type ActivityRequirementForm = {
   reward_component_id: string;
-  requirement_type: MockRequirementType;
-  operator: MockRequirementOperator;
+  requirement_type: ActivityRequirementType;
+  operator: ActivityRequirementOperator;
   values: string;
   description: string;
 };
 
-export type MockBenefitForm = Omit<MockBenefit, "id">;
+export type ActivityBenefitForm = Omit<ActivityBenefit, "id">;
 
-export type ActivityMockViewMode = "overview" | "editor";
+export type ActivityFlowViewMode = "overview" | "editor";
 
-export type ActivityMockSelection =
+export type ActivityFlowSelection =
   | { type: "activity"; id: string }
   | { type: "group"; id: string }
   | { type: "component"; id: string }
@@ -135,4 +136,3 @@ export type ActivityMockSelection =
   | { type: "benefit"; id: string; componentID: string };
 
 export type ActivityOverviewRow = ActivitySummary;
-

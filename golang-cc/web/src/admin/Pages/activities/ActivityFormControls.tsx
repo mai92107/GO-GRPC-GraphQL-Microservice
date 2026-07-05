@@ -2,26 +2,31 @@ import type { ReactNode } from "react";
 import type { ActivityRequirementOptions, RequirementTypeOption } from "../../AdminApi";
 import type { Unit } from "../../../models";
 import { Field } from "../../../components";
-import { benefitTypeOptions, requirementOperatorOptions } from "./activityMockSettings";
+import { benefitTypeOptions, requirementOperatorOptions } from "./activityFlowSettings";
 import {
   configForRequirement,
   displayRequirementValues,
 } from "./activityFlowHelpers";
+import {
+  isUnconditionalRequirement,
+  normalizeRequirementFormType,
+  unconditionalRequirementOperator,
+} from "./requirementHelpers";
 import type {
-  MockActivityFlow,
-  MockBenefit,
-  MockBenefitForm,
-  MockBenefitType,
-  MockComponentForm,
-  MockRequirement,
-  MockRequirementForm,
-  MockRequirementOperator,
-  MockRequirementType,
-  MockRewardComponent,
-  MockStackMode,
-} from "./mockFlowTypes";
+  ActivityFlowModel,
+  ActivityBenefit,
+  ActivityBenefitForm,
+  ActivityBenefitType,
+  ActivityComponentForm,
+  ActivityRequirement,
+  ActivityRequirementForm,
+  ActivityRequirementOperator,
+  ActivityRequirementType,
+  ActivityRewardComponent,
+  ActivityStackMode,
+} from "./activityFlowTypes";
 
-const stackModes: MockStackMode[] = ["ADDITIVE", "BEST_ONLY", "EXCLUSIVE"];
+const stackModes: ActivityStackMode[] = ["ADDITIVE", "BEST_ONLY", "EXCLUSIVE"];
 const stackGroups = [
   "BASE",
   "PAYMENT",
@@ -67,9 +72,9 @@ export function ComponentFields({
   form,
   onChange,
 }: {
-  flow: MockActivityFlow;
-  form: MockComponentForm;
-  onChange: (form: MockComponentForm) => void;
+  flow: ActivityFlowModel;
+  form: ActivityComponentForm;
+  onChange: (form: ActivityComponentForm) => void;
 }) {
   return (
     <>
@@ -129,7 +134,7 @@ export function ComponentFields({
             onChange={(event) =>
               onChange({
                 ...form,
-                stack_mode: event.target.value as MockStackMode,
+                stack_mode: event.target.value as ActivityStackMode,
               })
             }
           >
@@ -167,21 +172,24 @@ export function RequirementFields({
   requirementOptions,
   requirementTypes,
 }: {
-  form: MockRequirementForm;
-  onChange: (form: MockRequirementForm) => void;
+  form: ActivityRequirementForm;
+  onChange: (form: ActivityRequirementForm) => void;
 } & RequirementOptionProps) {
+  const isUnconditional = isUnconditionalRequirement(form.requirement_type);
+
   return (
     <>
       <div className="three-col">
         <Field label="條件類型">
           <select
             value={form.requirement_type}
-            onChange={(event) =>
+            onChange={(event) => {
+              const requirement_type = event.target.value as ActivityRequirementType;
               onChange({
                 ...form,
-                requirement_type: event.target.value as MockRequirementType,
-              })
-            }
+                ...normalizeRequirementFormType(requirement_type),
+              });
+            }}
           >
             {(requirementTypes || []).map((type) => (
               <option value={type.code} key={type.code}>
@@ -192,11 +200,14 @@ export function RequirementFields({
         </Field>
         <Field label="運算子">
           <select
-            value={form.operator}
+            value={
+              isUnconditional ? unconditionalRequirementOperator : form.operator
+            }
+            disabled={isUnconditional}
             onChange={(event) =>
               onChange({
                 ...form,
-                operator: event.target.value as MockRequirementOperator,
+                operator: event.target.value as ActivityRequirementOperator,
               })
             }
           >
@@ -210,6 +221,7 @@ export function RequirementFields({
         <Field label="值" hint="多值用逗號，例如 VISA, MASTERCARD">
           <input
             value={form.values}
+            disabled={isUnconditional}
             onChange={(event) =>
               onChange({ ...form, values: event.target.value })
             }
@@ -234,21 +246,36 @@ export function RequirementDirectFields({
   requirementOptions,
   requirementTypes,
 }: {
-  requirement: MockRequirement;
-  onChange: (requirement: MockRequirement) => void;
+  requirement: ActivityRequirement;
+  onChange: (requirement: ActivityRequirement) => void;
 } & RequirementOptionProps) {
+  const isUnconditional = isUnconditionalRequirement(
+    requirement.requirement_type,
+  );
+
   return (
     <>
       <div className="three-col">
         <Field label="條件類型">
           <select
             value={requirement.requirement_type}
-            onChange={(event) =>
+            onChange={(event) => {
+              const requirement_type = event.target.value as ActivityRequirementType;
+              const nextIsUnconditional =
+                isUnconditionalRequirement(requirement_type);
               onChange({
                 ...requirement,
-                requirement_type: event.target.value as MockRequirementType,
-              })
-            }
+                requirement_type,
+                operator: nextIsUnconditional
+                  ? unconditionalRequirementOperator
+                  : requirement.operator,
+                configuration_json: {},
+                description:
+                  isUnconditional || nextIsUnconditional
+                    ? ""
+                    : requirement.description,
+              });
+            }}
           >
             {(requirementTypes || []).map((type) => (
               <option value={type.code} key={type.code}>
@@ -259,11 +286,16 @@ export function RequirementDirectFields({
         </Field>
         <Field label="運算子">
           <select
-            value={requirement.operator}
+            value={
+              isUnconditional
+                ? unconditionalRequirementOperator
+                : requirement.operator
+            }
+            disabled={isUnconditional}
             onChange={(event) =>
               onChange({
                 ...requirement,
-                operator: event.target.value as MockRequirementOperator,
+                operator: event.target.value as ActivityRequirementOperator,
               })
             }
           >
@@ -277,6 +309,7 @@ export function RequirementDirectFields({
         <Field label="值">
           <input
             value={displayRequirementValues(requirement)}
+            disabled={isUnconditional}
             onChange={(event) =>
               onChange({
                 ...requirement,
@@ -309,7 +342,7 @@ export function RequirementDirectFields({
   );
 }
 
-export function BenefitFields<T extends MockBenefit | MockBenefitForm>({
+export function BenefitFields<T extends ActivityBenefit | ActivityBenefitForm>({
   capPeriodOptions,
   form,
   onChange,
@@ -332,7 +365,7 @@ export function BenefitFields<T extends MockBenefit | MockBenefitForm>({
             onChange={(event) =>
               onChange({
                 ...form,
-                benefit_type: event.target.value as MockBenefitType,
+                benefit_type: event.target.value as ActivityBenefitType,
               })
             }
           >
@@ -421,7 +454,7 @@ export function ComponentSelect({
   onChange,
   value,
 }: {
-  components: MockRewardComponent[];
+  components: ActivityRewardComponent[];
   value: string;
   onChange: (componentID: string) => void;
 }) {

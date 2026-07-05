@@ -1,18 +1,19 @@
-import { allComponents, removeComponentChild } from "./mockFlowHelpers";
+import { allComponents, removeComponentChild } from "./activityFlowFactory";
 import type {
-  ActivityMockSelection,
-  MockActivityFlow,
-  MockBenefit,
-  MockBenefitForm,
-  MockRequirement,
-  MockRequirementType,
-  MockRewardComponent,
-  MockRewardGroup,
-} from "./mockFlowTypes";
+  ActivityFlowSelection,
+  ActivityFlowModel,
+  ActivityBenefit,
+  ActivityBenefitForm,
+  ActivityRequirement,
+  ActivityRequirementType,
+  ActivityRewardComponent,
+  ActivityRewardGroup,
+} from "./activityFlowTypes";
+import { isUnconditionalRequirement } from "./requirementHelpers";
 
 export function deleteSelection(
-  flow: MockActivityFlow,
-  selection: ActivityMockSelection,
+  flow: ActivityFlowModel,
+  selection: ActivityFlowSelection,
 ) {
   if (selection.type === "group")
     return {
@@ -49,9 +50,9 @@ export function deleteSelection(
 }
 
 export function updateGroup(
-  flow: MockActivityFlow,
+  flow: ActivityFlowModel,
   groupID: string,
-  patch: Partial<MockRewardGroup>,
+  patch: Partial<ActivityRewardGroup>,
 ) {
   return {
     ...flow,
@@ -62,9 +63,9 @@ export function updateGroup(
 }
 
 export function updateComponent(
-  flow: MockActivityFlow,
+  flow: ActivityFlowModel,
   componentID: string,
-  patch: Partial<MockRewardComponent>,
+  patch: Partial<ActivityRewardComponent>,
 ) {
   const current = allComponents(flow).find(
     (component) => component.id === componentID,
@@ -103,9 +104,9 @@ export function updateComponent(
 }
 
 export function updateRequirement(
-  flow: MockActivityFlow,
+  flow: ActivityFlowModel,
   requirementID: string,
-  nextRequirement: MockRequirement,
+  nextRequirement: ActivityRequirement,
 ) {
   return {
     ...flow,
@@ -122,9 +123,9 @@ export function updateRequirement(
 }
 
 export function updateBenefit(
-  flow: MockActivityFlow,
+  flow: ActivityFlowModel,
   benefitID: string,
-  nextBenefit: MockBenefit | MockBenefitForm,
+  nextBenefit: ActivityBenefit | ActivityBenefitForm,
 ) {
   return {
     ...flow,
@@ -140,7 +141,9 @@ export function updateBenefit(
   };
 }
 
-export function displayRequirementValues(requirement: MockRequirement) {
+export function displayRequirementValues(requirement: ActivityRequirement) {
+  if (isUnconditionalRequirement(requirement.requirement_type)) return "";
+
   const config = requirement.configuration_json;
   const value =
     config.network_codes ||
@@ -157,9 +160,11 @@ export function displayRequirementValues(requirement: MockRequirement) {
 }
 
 export function configForRequirement(
-  type: MockRequirementType,
+  type: ActivityRequirementType,
   value: string,
 ) {
+  if (isUnconditionalRequirement(type)) return {};
+
   const values = value
     .split(",")
     .map((item) => item.trim())
@@ -175,7 +180,7 @@ export function configForRequirement(
   return { values };
 }
 
-export function groupCalculationSummary(components: MockRewardComponent[]) {
+export function groupCalculationSummary(components: ActivityRewardComponent[]) {
   const exclusive = components.find(
     (component) => component.stack_mode === "EXCLUSIVE",
   );
@@ -198,7 +203,7 @@ export function groupCalculationSummary(components: MockRewardComponent[]) {
   return values.length ? values.join(" + ") : "尚未設定可計算回饋";
 }
 
-export function benefitSummary(benefits: MockBenefit[]) {
+export function benefitSummary(benefits: ActivityBenefit[]) {
   if (!benefits.length) return "尚未設定";
   return benefits
     .map((benefit) =>
@@ -209,7 +214,7 @@ export function benefitSummary(benefits: MockBenefit[]) {
     .join(" + ");
 }
 
-export function requirementSummary(requirements: MockRequirement[]) {
+export function requirementSummary(requirements: ActivityRequirement[]) {
   if (!requirements.length) return "不限條件";
   return requirements
     .map(
@@ -218,7 +223,7 @@ export function requirementSummary(requirements: MockRequirement[]) {
     .join(" / ");
 }
 
-function componentPercentValue(component: MockRewardComponent) {
+function componentPercentValue(component: ActivityRewardComponent) {
   return component.benefits.reduce((sum, benefit) => {
     if (benefit.benefit_type !== "RATE_CASHBACK" || benefit.reward_unit_id !== "PERCENT")
       return sum;
@@ -230,5 +235,4 @@ function componentPercentValue(component: MockRewardComponent) {
 function formatPercent(value: number) {
   return `${Number(value.toFixed(4)).toLocaleString()}%`;
 }
-
 

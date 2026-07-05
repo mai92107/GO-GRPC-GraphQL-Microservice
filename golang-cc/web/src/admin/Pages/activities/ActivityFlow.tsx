@@ -14,13 +14,13 @@ import {
 } from "./ActivityEditors";
 import { ActivityEntityTree } from "./ActivityEntityTree";
 import { ActivityOverviewList } from "./ActivityOverviewList";
-import { useActivityMockFlow } from "./useActivityMockFlow";
+import { useActivityFlow } from "./useActivityFlow";
 
-export function ActivityMockFlow() {
-  const activity = useActivityMockFlow();
+export function ActivityFlow() {
+  const activity = useActivityFlow();
 
   return (
-    <section className="panel activity-mock-flow">
+    <section className="panel activity-flow">
       <div className="section-title">
         <div>
           <span className="page-eyebrow">ACTIVITY FLOW</span>
@@ -72,8 +72,8 @@ export function ActivityMockFlow() {
           onEdit={activity.openActivityEditor}
         />
       ) : (
-        <div className="activity-mock-layout">
-          <div className="activity-mock-builder">
+        <div className="activity-flow-layout">
+          <div className="activity-flow-builder">
             {activity.selection.type === "group" && activity.selectedGroup && (
               <GroupEditor
                 flow={activity.flow}
@@ -145,8 +145,8 @@ export function ActivityMockFlow() {
             )}
           </div>
 
-          <aside className="activity-mock-output">
-            <div className="activity-mock-checks">
+          <aside className="activity-flow-output">
+            <div className="activity-flow-checks">
               {activity.checks.map((check) => (
                 <span
                   className={check.pass ? "pass" : "fail"}

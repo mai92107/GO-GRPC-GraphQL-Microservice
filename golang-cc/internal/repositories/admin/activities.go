@@ -98,7 +98,7 @@ func (r *Repository) ListActivities(ctx context.Context, filters service.Activit
 			a.effective_from::text AS effective_from,a.effective_to::text AS effective_to,a.is_active,a.created_at,a.updated_at,
 			COUNT(DISTINCT g.id) AS group_count,COUNT(DISTINCT c.id) AS component_count`).
 		Joins("JOIN banks AS b ON b.id=a.bank_id").
-		Joins("JOIN card_products AS cp ON cp.id=a.card_product_id").
+		Joins("JOIN catalog.card_products AS cp ON cp.id=a.card_product_id").
 		Joins("LEFT JOIN reward.activity_groups AS g ON g.activity_id=a.id").
 		Joins("LEFT JOIN reward.activity_components AS c ON c.reward_group_id=g.id").
 		Group("a.id,b.name,cp.name")

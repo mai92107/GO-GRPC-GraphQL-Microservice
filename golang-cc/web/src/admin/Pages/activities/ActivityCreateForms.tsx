@@ -5,7 +5,7 @@ import { Field } from "../../../components";
 import {
   emptyBenefitForm,
   emptyRequirementForm,
-} from "./mockFlowHelpers";
+} from "./activityFlowFactory";
 import {
   BenefitFields,
   ComponentFields,
@@ -14,13 +14,13 @@ import {
   RequirementFields,
 } from "./ActivityFormControls";
 import type {
-  MockActivityFlow,
-  MockBenefitForm,
-  MockComponentForm,
-  MockGroupForm,
-  MockRequirementForm,
-  MockRewardComponent,
-} from "./mockFlowTypes";
+  ActivityFlowModel,
+  ActivityBenefitForm,
+  ActivityComponentForm,
+  ActivityGroupForm,
+  ActivityRequirementForm,
+  ActivityRewardComponent,
+} from "./activityFlowTypes";
 
 type CapPeriodOption = { code: string; name: string };
 
@@ -29,9 +29,9 @@ export function CreateGroupForm({
   onAdd,
   onChange,
 }: {
-  form: MockGroupForm;
+  form: ActivityGroupForm;
   onAdd: () => void;
-  onChange: (form: MockGroupForm) => void;
+  onChange: (form: ActivityGroupForm) => void;
 }) {
   return (
     <section className="form-section compact-form-section">
@@ -77,10 +77,10 @@ export function CreateComponentForm({
   onAdd,
   onChange,
 }: {
-  flow: MockActivityFlow;
-  form: MockComponentForm;
+  flow: ActivityFlowModel;
+  form: ActivityComponentForm;
   onAdd: () => void;
-  onChange: (form: MockComponentForm) => void;
+  onChange: (form: ActivityComponentForm) => void;
 }) {
   return (
     <section className="form-section compact-form-section">
@@ -101,12 +101,12 @@ export function CreateRequirementForm({
   onAdd,
   onChange,
 }: {
-  components: MockRewardComponent[];
-  form: MockRequirementForm;
+  components: ActivityRewardComponent[];
+  form: ActivityRequirementForm;
   requirementOptions: ActivityRequirementOptions | null;
   requirementTypes: RequirementTypeOption[];
   onAdd: () => void;
-  onChange: (form: MockRequirementForm) => void;
+  onChange: (form: ActivityRequirementForm) => void;
 }) {
   return (
     <section className="form-section compact-form-section">
@@ -133,11 +133,11 @@ export function CreateBenefitForm({
   onChange,
 }: {
   capPeriodOptions: CapPeriodOption[];
-  components: MockRewardComponent[];
-  form: MockBenefitForm;
+  components: ActivityRewardComponent[];
+  form: ActivityBenefitForm;
   rewardUnits: Unit[];
   onAdd: () => void;
-  onChange: (form: MockBenefitForm) => void;
+  onChange: (form: ActivityBenefitForm) => void;
 }) {
   return (
     <section className="form-section compact-form-section">

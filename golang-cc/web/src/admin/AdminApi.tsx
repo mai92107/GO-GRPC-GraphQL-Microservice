@@ -27,6 +27,7 @@ export type Bank = {
 export type Category = { id: string; name: string; is_active: boolean };
 export type StackMode = "ADDITIVE" | "BEST_ONLY" | "EXCLUSIVE";
 export type RequirementType =
+  | "none"
   | "PAYMENT_METHOD"
   | "CARD_NETWORK"
   | "CARD_PLAN"
