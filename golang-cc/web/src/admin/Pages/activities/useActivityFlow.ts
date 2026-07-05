@@ -127,6 +127,52 @@ export function useActivityFlow() {
   const showBenefitForm = requirements.length > 0;
 
   useEffect(() => {
+    const firstGroup = flow.reward_groups[0];
+    if (!firstGroup) return;
+    if (
+      componentForm.reward_group_id &&
+      flow.reward_groups.some((group) => group.id === componentForm.reward_group_id)
+    )
+      return;
+    setComponentForm((current) => ({
+      ...current,
+      reward_group_id: firstGroup.id,
+    }));
+  }, [flow.reward_groups, componentForm.reward_group_id]);
+
+  useEffect(() => {
+    const firstComponent = components[0];
+    if (!firstComponent) return;
+    if (
+      requirementForm.reward_component_id &&
+      components.some(
+        (component) => component.id === requirementForm.reward_component_id,
+      )
+    )
+      return;
+    setRequirementFormState((current) => ({
+      ...current,
+      reward_component_id: firstComponent.id,
+    }));
+  }, [components, requirementForm.reward_component_id]);
+
+  useEffect(() => {
+    const firstComponent = components[0];
+    if (!firstComponent) return;
+    if (
+      benefitForm.reward_component_id &&
+      components.some(
+        (component) => component.id === benefitForm.reward_component_id,
+      )
+    )
+      return;
+    setBenefitFormState((current) => ({
+      ...current,
+      reward_component_id: firstComponent.id,
+    }));
+  }, [components, benefitForm.reward_component_id]);
+
+  useEffect(() => {
     if (
       viewMode !== "editor" ||
       !showRequirementForm ||
@@ -147,26 +193,6 @@ export function useActivityFlow() {
       })
       .catch((err) => setError(err.message));
   }, [viewMode, showRequirementForm, requirementTypes.length]);
-
-  useEffect(() => {
-    if (
-      viewMode !== "editor" ||
-      !showRequirementForm ||
-      !requirementForm.requirement_type
-    )
-      return;
-    getActivityRequirementOptions(
-      requirementForm.requirement_type,
-      flow.activity.card_product_id,
-    )
-      .then(setRequirementOptions)
-      .catch((err) => setError(err.message));
-  }, [
-    viewMode,
-    showRequirementForm,
-    requirementForm.requirement_type,
-    flow.activity.card_product_id,
-  ]);
 
   useEffect(() => {
     if (!rewardUnits.length || benefitForm.reward_unit_id) return;
@@ -216,6 +242,33 @@ export function useActivityFlow() {
     selection.type === "benefit"
       ? benefits.find((benefit) => benefit.id === selection.id)
       : undefined;
+  const activeRequirementType =
+    selection.type === "requirement" && selectedRequirement
+      ? selectedRequirement.requirement_type
+      : requirementForm.requirement_type;
+
+  useEffect(() => {
+    if (viewMode !== "editor" || !showRequirementForm || !activeRequirementType)
+      return;
+    let ignore = false;
+    setRequirementOptions(null);
+    getActivityRequirementOptions(
+      activeRequirementType,
+      flow.activity.card_product_id,
+    )
+      .then((options) => {
+        if (!ignore) setRequirementOptions(options);
+      })
+      .catch((err) => setError(err.message));
+    return () => {
+      ignore = true;
+    };
+  }, [
+    viewMode,
+    showRequirementForm,
+    activeRequirementType,
+    flow.activity.card_product_id,
+  ]);
 
   const resetForms = (componentID = "", groupID = "") => {
     setGroupForm(emptyGroupForm());

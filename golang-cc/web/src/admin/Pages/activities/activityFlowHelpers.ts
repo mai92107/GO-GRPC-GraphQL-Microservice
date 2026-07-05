@@ -148,10 +148,16 @@ export function displayRequirementValues(requirement: ActivityRequirement) {
   const value =
     config.network_codes ||
     config.payment_method_codes ||
+    config.card_plan_ids ||
+    config.card_product_ids ||
     config.merchant_ids ||
+    config.category_ids ||
+    config.channels ||
+    config.regions ||
     config.tiers ||
     config.qualification_codes ||
     config.action_codes ||
+    config.weekdays ||
     config.values;
   if (Array.isArray(value)) return value.join(", ");
   if (typeof config.amount === "number")
@@ -171,11 +177,18 @@ export function configForRequirement(
     .filter(Boolean);
   if (type === "CARD_NETWORK") return { network_codes: values };
   if (type === "PAYMENT_METHOD") return { payment_method_codes: values };
+  if (type === "CARD_PLAN") return { card_plan_ids: values };
+  if (type === "CARD_PRODUCT") return { card_product_ids: values };
   if (type === "MERCHANT") return { merchant_ids: values };
+  if (type === "MERCHANT_CATEGORY" || type === "CONSUMPTION_CATEGORY")
+    return { category_ids: values };
   if (type === "AMOUNT")
     return { amount: Number(values[0] || 0), currency: values[1] || "TWD" };
   if (type === "ACCOUNT_TIER") return { tiers: values };
   if (type === "USER_QUALIFICATION") return { qualification_codes: values };
+  if (type === "CHANNEL") return { channels: values };
+  if (type === "REGION") return { regions: values };
+  if (type === "WEEKDAY") return { weekdays: values };
   if (type === "ACTION_REQUIRED") return { action_codes: values };
   return { values };
 }
@@ -235,4 +248,3 @@ function componentPercentValue(component: ActivityRewardComponent) {
 function formatPercent(value: number) {
   return `${Number(value.toFixed(4)).toLocaleString()}%`;
 }
-

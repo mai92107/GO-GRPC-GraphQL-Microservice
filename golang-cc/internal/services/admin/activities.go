@@ -61,9 +61,11 @@ func (s *Service) ActivityRequirementOptions(ctx context.Context, filters Requir
 func prepareActivityFlow(id string, input ActivityFlowInput) (domain.ActivityFlow, error) {
 	activity, err := prepareActivitySummary(id, input.Activity)
 	if err != nil {
+		println("prepareActivityFlow error:", err.Error())
 		return domain.ActivityFlow{}, err
 	}
 	if len(input.RewardGroups) == 0 {
+		println("prepareActivityFlow error: no reward groups provided")
 		return domain.ActivityFlow{}, domain.ErrInvalidInput
 	}
 	flow := domain.ActivityFlow{Activity: activity, RewardGroups: make([]domain.RewardGroup, 0, len(input.RewardGroups))}
@@ -78,10 +80,11 @@ func prepareActivityFlow(id string, input ActivityFlowInput) (domain.ActivityFlo
 }
 
 func prepareActivitySummary(id string, input ActivitySummaryInput) (domain.ActivitySummary, error) {
-	start, startErr := recommendations.ParseLocalDate(input.EffectiveFrom)
-	end, endErr := recommendations.ParseLocalDate(input.EffectiveTo)
+	start, startErr := parseActivityLocalDate(input.EffectiveFrom)
+	end, endErr := parseActivityLocalDate(input.EffectiveTo)
 	if id == "" || input.BankID == "" || input.CardProductID == "" || strings.TrimSpace(input.Title) == "" ||
 		startErr != nil || endErr != nil || end.Before(start.Time) {
+		println("prepareActivitySummary error: invalid input - id:", id, "bankID:", input.BankID, "cardProductID:", input.CardProductID, "title:", input.Title, "startErr:", startErr, "endErr:", endErr)
 		return domain.ActivitySummary{}, domain.ErrInvalidInput
 	}
 	return domain.ActivitySummary{
@@ -92,12 +95,35 @@ func prepareActivitySummary(id string, input ActivitySummaryInput) (domain.Activ
 	}, nil
 }
 
+func parseActivityLocalDate(value string) (recommendations.LocalDate, error) {
+	if !isYYYYMMDD(value) {
+		return recommendations.LocalDate{}, domain.ErrInvalidInput
+	}
+	return recommendations.ParseLocalDate(value)
+}
+
+func isYYYYMMDD(value string) bool {
+	if len(value) != len("2006-01-02") || value[4] != '-' || value[7] != '-' {
+		return false
+	}
+	for index, char := range value {
+		if index == 4 || index == 7 {
+			continue
+		}
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func prepareRewardGroup(activityID string, input RewardGroupInput, activityFrom, activityTo string) (domain.RewardGroup, error) {
 	id := input.ID
 	if id == "" {
 		id = secure.UUID()
 	}
 	if strings.TrimSpace(input.Name) == "" || len(input.Components) == 0 {
+		println("prepareRewardGroup error: invalid input - name:", input.Name, "components count:", len(input.Components))
 		return domain.RewardGroup{}, domain.ErrInvalidInput
 	}
 	group := domain.RewardGroup{
@@ -107,6 +133,7 @@ func prepareRewardGroup(activityID string, input RewardGroupInput, activityFrom,
 	for _, componentInput := range input.Components {
 		component, err := prepareRewardComponent(id, componentInput, activityFrom, activityTo)
 		if err != nil {
+			println("prepareRewardGroup error:", err.Error())
 			return domain.RewardGroup{}, err
 		}
 		group.Components = append(group.Components, component)
@@ -127,11 +154,12 @@ func prepareRewardComponent(groupID string, input RewardComponentInput, activity
 	if to == "" {
 		to = activityTo
 	}
-	start, startErr := recommendations.ParseLocalDate(from)
-	end, endErr := recommendations.ParseLocalDate(to)
+	start, startErr := parseActivityLocalDate(from)
+	end, endErr := parseActivityLocalDate(to)
 	stackMode := normalizeStackMode(input.StackMode)
 	if strings.TrimSpace(input.Name) == "" || input.Layer <= 0 || strings.TrimSpace(input.StackGroup) == "" || stackMode == "" ||
 		startErr != nil || endErr != nil || end.Before(start.Time) || len(input.Requirements) == 0 || len(input.Benefits) == 0 {
+		println("prepareRewardComponent error: invalid input - name:", input.Name, "layer:", input.Layer, "stackGroup:", input.StackGroup, "stackMode:", stackMode, "startErr:", startErr, "endErr:", endErr)
 		return domain.RewardComponent{}, domain.ErrInvalidInput
 	}
 	component := domain.RewardComponent{
@@ -143,6 +171,7 @@ func prepareRewardComponent(groupID string, input RewardComponentInput, activity
 	for _, requirementInput := range input.Requirements {
 		requirement, err := prepareRewardRequirement(id, requirementInput)
 		if err != nil {
+			println("prepareRewardComponent error:", err.Error())
 			return domain.RewardComponent{}, err
 		}
 		component.Requirements = append(component.Requirements, requirement)
@@ -150,6 +179,7 @@ func prepareRewardComponent(groupID string, input RewardComponentInput, activity
 	for _, benefitInput := range input.Benefits {
 		benefit, err := prepareRewardBenefit(id, benefitInput)
 		if err != nil {
+			println("prepareRewardComponent error:", err.Error())
 			return domain.RewardComponent{}, err
 		}
 		component.Benefits = append(component.Benefits, benefit)
@@ -168,6 +198,13 @@ func prepareRewardRequirement(componentID string, input RewardRequirementInput) 
 	}
 	if id == "" || strings.TrimSpace(input.RequirementType) == "" || normalizeRequirementOperator(input.Operator) == "" ||
 		!json.Valid(configuration) || !validRequirementConfiguration(input.RequirementType, configuration) {
+		bytes, _ := configuration.MarshalJSON()
+		println("prepareRewardRequirement error: invalid input - id:", id, "requirementType:", input.RequirementType, "operator:", input.Operator, "configuration:", string(bytes))
+		println("id == \"\""+id == "")
+		println("strings.TrimSpace(input.RequirementType) == \"\""+strings.TrimSpace(input.RequirementType) == "")
+		println("normalizeRequirementOperator(input.Operator) == \"\""+normalizeRequirementOperator(input.Operator) == "")
+		println("!json.Valid(configuration)", !json.Valid(configuration))
+		println("!validRequirementConfiguration(input.RequirementType, configuration))", !validRequirementConfiguration(input.RequirementType, configuration))
 		return domain.RewardRequirement{}, domain.ErrInvalidInput
 	}
 	return domain.RewardRequirement{
@@ -184,6 +221,7 @@ func prepareRewardBenefit(componentID string, input RewardBenefitInput) (domain.
 	value := strings.TrimSpace(input.Value)
 	parsedValue, valueErr := recommendations.ParseDecimal(value)
 	if id == "" || strings.TrimSpace(input.BenefitType) == "" || input.RewardUnitID == "" || valueErr != nil || parsedValue.Sign() <= 0 {
+		println("prepareRewardBenefit error: invalid input - id:", id, "benefitType:", input.BenefitType, "rewardUnitID:", input.RewardUnitID, "value:", value, "valueErr:", valueErr.Error(), "parsedValue:", parsedValue.String())
 		return domain.RewardBenefit{}, domain.ErrInvalidInput
 	}
 	if input.CapAmount != nil {
@@ -193,6 +231,7 @@ func prepareRewardBenefit(componentID string, input RewardBenefitInput) (domain.
 		} else {
 			parsedCap, capErr := recommendations.ParseDecimal(cap)
 			if capErr != nil || parsedCap.Sign() <= 0 {
+				println("prepareRewardBenefit error: invalid input - id:", id, "capAmount:", cap, "capErr:", capErr.Error(), "parsedCap:", parsedCap.String())
 				return domain.RewardBenefit{}, domain.ErrInvalidInput
 			}
 			input.CapAmount = &cap
@@ -237,14 +276,19 @@ func normalizeRequirementOperator(value string) string {
 
 func validRequirementConfiguration(requirementType string, raw json.RawMessage) bool {
 	var config map[string]any
-	if json.Unmarshal(raw, &config) != nil {
+	if err := json.Unmarshal(raw, &config); err != nil {
+		println("validRequirementConfiguration error: failed to unmarshal configuration, error:", err.Error())
 		return false
 	}
 	key := requiredRequirementKey(requirementType)
 	if key == "" {
-		return true
+		println("validRequirementConfiguration error: unknown requirement type:", requirementType)
+		return false
 	}
 	_, ok := config[key]
+	if !ok {
+		println("validRequirementConfiguration error: missing required key in configuration for requirement type:", requirementType, "required key:", key)
+	}
 	return ok
 }
 

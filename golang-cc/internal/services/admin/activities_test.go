@@ -67,4 +67,18 @@ func TestPrepareActivityFlowRejectsInvalidStackModeOrDecimal(t *testing.T) {
 	}
 }
 
+func TestPrepareActivityFlowRejectsNonYYYYMMDDDates(t *testing.T) {
+	input := validActivityFlowInput()
+	input.Activity.EffectiveFrom = "2026-07-01T00:00:00Z"
+	if _, err := prepareActivityFlow("activity", input); !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("activity date error=%v", err)
+	}
+
+	input = validActivityFlowInput()
+	input.RewardGroups[0].Components[0].EffectiveTo = "2026/09/30"
+	if _, err := prepareActivityFlow("activity", input); !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("component date error=%v", err)
+	}
+}
+
 func stringPtr(value string) *string { return &value }

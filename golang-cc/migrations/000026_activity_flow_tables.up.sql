@@ -57,6 +57,7 @@ CREATE TABLE reward.activity_requirements (
     operator TEXT NOT NULL CHECK (operator IN ('IN','NOT_IN','EQ','GTE','LTE','BETWEEN')),
     configuration_json JSONB NOT NULL DEFAULT '{}',
     description TEXT NOT NULL DEFAULT '',
+    is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -73,6 +74,7 @@ CREATE TABLE reward.activity_benefits (
     cap_amount NUMERIC(18,6),
     cap_period TEXT,
     description TEXT NOT NULL DEFAULT '',
+    is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

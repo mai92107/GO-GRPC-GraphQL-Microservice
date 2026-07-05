@@ -4745,6 +4745,51 @@ input::placeholder {
 
 .compact-form-section .button { justify-self: start; }
 
+.requirement-value-picker {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.requirement-value-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.requirement-value-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  border: 1px solid color-mix(in srgb, var(--forest) 30%, var(--line));
+  border-radius: 999px;
+  background: var(--mist);
+  padding: 4px 6px 4px 10px;
+  color: var(--forest-dark);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.requirement-value-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--forest) 16%, transparent);
+  color: inherit;
+  padding: 0;
+}
+
+.requirement-value-chip button:hover {
+  background: color-mix(in srgb, var(--forest) 26%, transparent);
+}
+
 .selected-editor {
   border-color: color-mix(in srgb, var(--forest) 36%, var(--line)) !important;
   background: color-mix(in srgb, var(--mist) 26%, #fff) !important;

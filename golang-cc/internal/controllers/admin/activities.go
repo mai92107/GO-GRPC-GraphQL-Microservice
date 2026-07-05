@@ -204,6 +204,7 @@ func (c *Controller) CreateActivity(ctx *gin.Context) {
 	}
 	id, err := c.service.CreateActivity(ctx.Request.Context(), request.serviceInput())
 	if err != nil {
+		println("CreateActivity error:", err.Error())
 		failure(ctx, http.StatusBadRequest, "validation_failed", "活動資料無效")
 		return
 	}
@@ -270,7 +271,7 @@ func (c *Controller) ActivityRequirementOptions(ctx *gin.Context) {
 }
 
 func mapActivitySummary(item domain.ActivitySummary) activitySummaryResponse {
-	return activitySummaryResponse{ID: item.ID, BankID: item.BankID, BankName: item.BankName, CardProductID: item.CardProductID, CardName: item.CardName, Title: item.Title, Description: item.Description, SourceURL: item.SourceURL, EffectiveFrom: item.EffectiveFrom, EffectiveTo: item.EffectiveTo, IsActive: item.IsActive, GroupCount: item.GroupCount, ComponentCount: item.ComponentCount, CreatedAt: item.CreatedAt.Format("2006-01-02T15:04:05Z07:00"), UpdatedAt: item.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")}
+	return activitySummaryResponse{ID: item.ID, BankID: item.BankID, BankName: item.BankName, CardProductID: item.CardProductID, CardName: item.CardName, Title: item.Title, Description: item.Description, SourceURL: item.SourceURL, EffectiveFrom: item.EffectiveFrom, EffectiveTo: item.EffectiveTo, IsActive: item.IsActive, GroupCount: item.GroupCount, ComponentCount: item.ComponentCount, CreatedAt: item.CreatedAt.Format("2006-01-02"), UpdatedAt: item.UpdatedAt.Format("2006-01-02")}
 }
 
 func mapActivityFlow(item domain.ActivityFlow) activityFlowResponse {

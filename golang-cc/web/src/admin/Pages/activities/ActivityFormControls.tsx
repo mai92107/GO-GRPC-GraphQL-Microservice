@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { X } from "lucide-react";
 import type { ActivityRequirementOptions, RequirementTypeOption } from "../../AdminApi";
 import type { Unit } from "../../../models";
 import { Field } from "../../../components";
@@ -44,8 +45,103 @@ type RequirementOptionProps = {
   requirementTypes?: RequirementTypeOption[];
 };
 
+type CodeNameOption = { code: string; name: string };
+
 function operatorOptions(options?: ActivityRequirementOptions | null) {
   return options?.operators?.length ? options.operators : requirementOperatorOptions;
+}
+
+function selectedRequirementValues(value: string) {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function formatRequirementValues(values: string[]) {
+  return values.join(", ");
+}
+
+function requirementValueOptions(
+  type: ActivityRequirementType,
+  options?: ActivityRequirementOptions | null,
+): CodeNameOption[] {
+  if (!options) return [];
+  if (type === "PAYMENT_METHOD") return options.payment_methods;
+  if (type === "CARD_NETWORK") return options.card_networks;
+  if (type === "CARD_PLAN")
+    return options.card_plans.map((plan) => ({ code: plan.id, name: plan.name }));
+  if (type === "CARD_PRODUCT") return options.card_products;
+  if (type === "MERCHANT") return options.merchants;
+  if (type === "MERCHANT_CATEGORY" || type === "CONSUMPTION_CATEGORY")
+    return options.categories;
+  if (type === "ACCOUNT_TIER") return options.account_tiers;
+  if (type === "USER_QUALIFICATION") return options.user_qualifications;
+  if (type === "CHANNEL") return options.channels;
+  if (type === "REGION") return options.regions;
+  if (type === "CURRENCY") return options.currencies;
+  return [];
+}
+
+function RequirementValuePicker({
+  disabled,
+  onChange,
+  options,
+  value,
+}: {
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  options: CodeNameOption[];
+  value: string;
+}) {
+  const selectedValues = selectedRequirementValues(value);
+  const availableOptions = options.filter(
+    (option) => !selectedValues.includes(option.code),
+  );
+  const optionName = (code: string) =>
+    options.find((option) => option.code === code)?.name || code;
+  const removeValue = (code: string) =>
+    onChange(formatRequirementValues(selectedValues.filter((item) => item !== code)));
+
+  return (
+    <div className="requirement-value-picker">
+      <select
+        value=""
+        disabled={disabled || !availableOptions.length}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          if (!nextValue) return;
+          onChange(formatRequirementValues([...selectedValues, nextValue]));
+        }}
+      >
+        <option value="">
+          {availableOptions.length ? "選擇值" : "沒有可選值"}
+        </option>
+        {availableOptions.map((option) => (
+          <option value={option.code} key={option.code}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+      {selectedValues.length > 0 && (
+        <div className="requirement-value-chips">
+          {selectedValues.map((code) => (
+            <span className="requirement-value-chip" key={code}>
+              {optionName(code)}
+              <button
+                type="button"
+                aria-label={`移除 ${optionName(code)}`}
+                disabled={disabled}
+                onClick={() => removeValue(code)}
+              >
+                <X size={13} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ActiveToggle({
@@ -176,6 +272,10 @@ export function RequirementFields({
   onChange: (form: ActivityRequirementForm) => void;
 } & RequirementOptionProps) {
   const isUnconditional = isUnconditionalRequirement(form.requirement_type);
+  const valueOptions = requirementValueOptions(
+    form.requirement_type,
+    requirementOptions,
+  );
 
   return (
     <>
@@ -218,14 +318,26 @@ export function RequirementFields({
             ))}
           </select>
         </Field>
-        <Field label="值" hint="多值用逗號，例如 VISA, MASTERCARD">
-          <input
-            value={form.values}
-            disabled={isUnconditional}
-            onChange={(event) =>
-              onChange({ ...form, values: event.target.value })
-            }
-          />
+        <Field
+          label="值"
+          hint={valueOptions.length ? undefined : "多值用逗號，例如 VISA, MASTERCARD"}
+        >
+          {valueOptions.length ? (
+            <RequirementValuePicker
+              disabled={isUnconditional}
+              options={valueOptions}
+              value={form.values}
+              onChange={(values) => onChange({ ...form, values })}
+            />
+          ) : (
+            <input
+              value={form.values}
+              disabled={isUnconditional}
+              onChange={(event) =>
+                onChange({ ...form, values: event.target.value })
+              }
+            />
+          )}
         </Field>
       </div>
       <Field label="描述">
@@ -252,6 +364,11 @@ export function RequirementDirectFields({
   const isUnconditional = isUnconditionalRequirement(
     requirement.requirement_type,
   );
+  const valueOptions = requirementValueOptions(
+    requirement.requirement_type,
+    requirementOptions,
+  );
+  const requirementValues = displayRequirementValues(requirement);
 
   return (
     <>
@@ -306,20 +423,40 @@ export function RequirementDirectFields({
             ))}
           </select>
         </Field>
-        <Field label="值">
-          <input
-            value={displayRequirementValues(requirement)}
-            disabled={isUnconditional}
-            onChange={(event) =>
-              onChange({
-                ...requirement,
-                configuration_json: configForRequirement(
-                  requirement.requirement_type,
-                  event.target.value,
-                ),
-              })
-            }
-          />
+        <Field
+          label="值"
+          hint={valueOptions.length ? undefined : "多值用逗號，例如 VISA, MASTERCARD"}
+        >
+          {valueOptions.length ? (
+            <RequirementValuePicker
+              disabled={isUnconditional}
+              options={valueOptions}
+              value={requirementValues}
+              onChange={(values) =>
+                onChange({
+                  ...requirement,
+                  configuration_json: configForRequirement(
+                    requirement.requirement_type,
+                    values,
+                  ),
+                })
+              }
+            />
+          ) : (
+            <input
+              value={requirementValues}
+              disabled={isUnconditional}
+              onChange={(event) =>
+                onChange({
+                  ...requirement,
+                  configuration_json: configForRequirement(
+                    requirement.requirement_type,
+                    event.target.value,
+                  ),
+                })
+              }
+            />
+          )}
         </Field>
       </div>
       <div className="two-col">

@@ -132,7 +132,12 @@ func (r *Repository) GetActivity(ctx context.Context, id string) (domain.Activit
 	}
 	flow := flowFromModel(model)
 	var names struct{ BankName, CardName string }
-	if err := r.db.WithContext(ctx).Table("banks AS b").Select("b.name AS bank_name,cp.name AS card_name").Joins("JOIN card_products AS cp ON cp.id=?", model.CardProductID).Where("b.id=?", model.BankID).Scan(&names).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Table("banks AS b").
+		Select("b.name AS bank_name,cp.name AS card_name").
+		Joins("JOIN catalog.card_products AS cp ON cp.id=?", model.CardProductID).
+		Where("b.id=?", model.BankID).
+		Scan(&names).Error; err != nil {
 		return domain.ActivityFlow{}, err
 	}
 	flow.Activity.BankName = names.BankName
@@ -142,7 +147,8 @@ func (r *Repository) GetActivity(ctx context.Context, id string) (domain.Activit
 
 func (r *Repository) CreateActivity(ctx context.Context, flow domain.ActivityFlow) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return tx.Create(modelFromFlow(flow)).Error
+		model := modelFromFlow(flow)
+		return tx.Create(&model).Error
 	})
 }
 

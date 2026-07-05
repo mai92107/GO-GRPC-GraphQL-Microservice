@@ -283,15 +283,69 @@ export const getActivityRequirementOptions = (
   );
 };
 export const createActivity = (flow: ActivityFlow) =>
-  post<{ id: string }>("/admin/activities", flow);
+  post<{ id: string }>("/admin/activities", activityCreatePayload(flow));
 export const activateActivity = (activity: ActivitySummary) =>
   patch<{ updated: boolean }>(`/admin/activities/${activity.id}/status`, {
     is_active: !activity.is_active,
   });
 export const updateActivity = (flow: ActivityFlow) =>
-  put<{ updated: boolean }>(`/admin/activities/${flow.activity.id}`, flow);
+  put<{ updated: boolean }>(
+    `/admin/activities/${flow.activity.id}`,
+    activityDatePayload(flow),
+  );
 export const deleteActivity = (id: string) =>
   del<{ deleted: boolean }>(`/admin/activities/${id}`);
+
+function activityCreatePayload(flow: ActivityFlow): ActivityFlow {
+  const next = activityDatePayload(flow);
+  return {
+    ...next,
+    activity: { ...next.activity, id: "" },
+    reward_groups: next.reward_groups.map((group) => ({
+      ...group,
+      id: "",
+      activity_id: "",
+      components: group.components.map((component) => ({
+        ...component,
+        id: "",
+        reward_group_id: "",
+        requirements: component.requirements.map((requirement) => ({
+          ...requirement,
+          id: "",
+          reward_component_id: "",
+        })),
+        benefits: component.benefits.map((benefit) => ({
+          ...benefit,
+          id: "",
+          reward_component_id: "",
+        })),
+      })),
+    })),
+  };
+}
+
+function activityDatePayload(flow: ActivityFlow): ActivityFlow {
+  return {
+    ...flow,
+    activity: {
+      ...flow.activity,
+      effective_from: dateOnly(flow.activity.effective_from),
+      effective_to: dateOnly(flow.activity.effective_to),
+    },
+    reward_groups: flow.reward_groups.map((group) => ({
+      ...group,
+      components: group.components.map((component) => ({
+        ...component,
+        effective_from: dateOnly(component.effective_from),
+        effective_to: dateOnly(component.effective_to),
+      })),
+    })),
+  };
+}
+
+function dateOnly(value: string) {
+  return value.slice(0, 10);
+}
 export const publishRewardComponentVersion = (
   componentID: string,
   input: RewardVersionInput,

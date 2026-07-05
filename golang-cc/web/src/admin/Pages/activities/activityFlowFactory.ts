@@ -182,14 +182,29 @@ function configurationForRequirement(form: ActivityRequirementForm) {
       return { network_codes: values };
     case "PAYMENT_METHOD":
       return { payment_method_codes: values.length ? values : ["any_payment"] };
+    case "CARD_PLAN":
+      return { card_plan_ids: values };
+    case "CARD_PRODUCT":
+      return { card_product_ids: values };
     case "MERCHANT":
       return { merchant_ids: values };
+    case "MERCHANT_CATEGORY":
+    case "CONSUMPTION_CATEGORY":
+      return { category_ids: values };
     case "AMOUNT":
       return { amount: Number(values[0] || 0), currency: values[1] || "TWD" };
     case "ACCOUNT_TIER":
       return { tiers: values };
     case "USER_QUALIFICATION":
       return { qualification_codes: values };
+    case "CHANNEL":
+      return { channels: values };
+    case "REGION":
+      return { regions: values };
+    case "CURRENCY":
+      return { currency_codes: values };
+    case "WEEKDAY":
+      return { weekdays: values };
     case "ACTION_REQUIRED":
       return { action_codes: values };
     default:
@@ -212,7 +227,6 @@ function updateComponent(
     })),
   };
 }
-
 
 
 

@@ -27,6 +27,10 @@ import type {
 type CapPeriodOption = { code: string; name: string };
 type CatalogCardOption = { bank_id: string; bank_name: string; card_product_id: string; card_name: string };
 
+function dateOnly(value: string) {
+  return value.slice(0, 10);
+}
+
 export function ActivityEditor({
   activityCardOptions,
   bankOptions,
@@ -84,10 +88,10 @@ export function ActivityEditor({
       </Field>
       <div className="two-col">
         <Field label="開始日期">
-          <input type="date" value={flow.activity.effective_from} onChange={(event) => onChange({ ...flow, activity: { ...flow.activity, effective_from: event.target.value } })} />
+          <input type="date" value={dateOnly(flow.activity.effective_from)} onChange={(event) => onChange({ ...flow, activity: { ...flow.activity, effective_from: dateOnly(event.target.value) } })} />
         </Field>
         <Field label="結束日期">
-          <input type="date" value={flow.activity.effective_to} onChange={(event) => onChange({ ...flow, activity: { ...flow.activity, effective_to: event.target.value } })} />
+          <input type="date" value={dateOnly(flow.activity.effective_to)} onChange={(event) => onChange({ ...flow, activity: { ...flow.activity, effective_to: dateOnly(event.target.value) } })} />
         </Field>
       </div>
       <Field label="狀態">
