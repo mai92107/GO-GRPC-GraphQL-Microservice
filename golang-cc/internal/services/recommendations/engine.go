@@ -224,9 +224,27 @@ func matchRules(card Card, rules []RewardRule, input RecommendationInput, paymen
 		if !ruleMatches(rule, card, input.CategoryID, input.MerchantID, paymentMethod, input.Date) {
 			continue
 		}
+		resolvedCap, ok := resolveMonthlyCap(rule, card)
+		if !ok {
+			continue
+		}
+		rule.MonthlyCap = resolvedCap
 		candidates = append(candidates, evaluateRule(rule, input, amountTWD))
 	}
 	return candidates
+}
+
+func resolveMonthlyCap(rule RewardRule, card Card) (*Decimal, bool) {
+	if strings.TrimSpace(rule.MonthlyCapFormula) == "" {
+		return rule.MonthlyCap, true
+	}
+	value, err := evaluateCapFormula(rule.MonthlyCapFormula, formulaVariables{
+		MemberCardCreditLimit: card.CreditLimit,
+	})
+	if err != nil {
+		return nil, false
+	}
+	return &value, true
 }
 
 func evaluateRule(rule RewardRule, input RecommendationInput, amountTWD Decimal) RuleEvaluation {
@@ -264,7 +282,7 @@ func evaluateRule(rule RewardRule, input RecommendationInput, amountTWD Decimal)
 		EffectType:          effectType,
 		RewardValue:         rewardValue,
 		ActionRequired:      rule.ActionRequired,
-		ActionMessage:       rule.ActionMessage,
+		ActionMessage:       selectableActionMessage(rule),
 		RewardUnit:          rule.RewardUnit,
 		RewardRate:          rewardRate,
 		UncappedReward:      uncapped,
@@ -277,6 +295,22 @@ func evaluateRule(rule RewardRule, input RecommendationInput, amountTWD Decimal)
 		SuggestedCardPlanID: rule.SuggestedCardPlanID,
 		SuggestedPlanName:   rule.SuggestedPlanName,
 	}
+}
+
+func selectableActionMessage(rule RewardRule) string {
+	if rule.SuggestedPlanName == "" {
+		return rule.ActionMessage
+	}
+	base := fmt.Sprintf(
+		"需至 APP 切換卡片方案：%s，對應優惠：%s %s",
+		rule.SuggestedPlanName,
+		rule.Name,
+		FormatDecimal(normalizedRewardValue(rule), 8),
+	)
+	if strings.TrimSpace(rule.ActionMessage) == "" || strings.TrimSpace(rule.ActionMessage) == base {
+		return base
+	}
+	return base + "；" + strings.TrimSpace(rule.ActionMessage)
 }
 
 // resolveLayeredRules applies bank-rule precedence inside each layer before recommendation scoring.

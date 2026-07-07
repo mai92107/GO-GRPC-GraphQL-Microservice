@@ -29,6 +29,7 @@ type CardInput struct {
 	PaymentDueDay *int
 	AccountTier   string
 	CardNetworkID string
+	CreditLimit   string
 }
 
 type PreferenceInput struct {
@@ -89,25 +90,32 @@ func (s *Service) GetCard(ctx context.Context, userID, id string) (domain.Member
 }
 
 func (s *Service) CreateCard(ctx context.Context, userID string, input CardInput) (string, error) {
-	if input.CardID == "" {
+	creditLimit, err := recommendations.ParseDecimal(input.CreditLimit)
+	if input.CardID == "" || err != nil || creditLimit.Sign() <= 0 {
 		return "", domain.ErrInvalidInput
 	}
 	id := newID()
-	err := s.repository.CreateCard(ctx, id, userID, input.CardID, memberrepo.CardWrite{
+	err = s.repository.CreateCard(ctx, id, userID, input.CardID, memberrepo.CardWrite{
 		Nickname: input.Nickname, LastFour: input.LastFour, IsActive: input.IsActive,
 		StatementDay: input.StatementDay, PaymentDueDay: input.PaymentDueDay,
 		AccountTier:   input.AccountTier,
 		CardNetworkID: input.CardNetworkID,
+		CreditLimit:   input.CreditLimit,
 	})
 	return id, err
 }
 
 func (s *Service) UpdateCard(ctx context.Context, userID, id string, input CardInput) error {
+	creditLimit, err := recommendations.ParseDecimal(input.CreditLimit)
+	if err != nil || creditLimit.Sign() <= 0 {
+		return domain.ErrInvalidInput
+	}
 	return s.repository.UpdateCard(ctx, id, userID, memberrepo.CardWrite{
 		Nickname: input.Nickname, LastFour: input.LastFour, IsActive: input.IsActive,
 		StatementDay: input.StatementDay, PaymentDueDay: input.PaymentDueDay,
 		AccountTier:   input.AccountTier,
 		CardNetworkID: input.CardNetworkID,
+		CreditLimit:   input.CreditLimit,
 	})
 }
 

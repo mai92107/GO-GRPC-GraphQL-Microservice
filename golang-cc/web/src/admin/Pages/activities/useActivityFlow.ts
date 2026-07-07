@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createActivity,
   getActivities,
@@ -79,6 +79,7 @@ export function useActivityFlow() {
   const [catalogCards, setCatalogCards] = useState<CatalogCardOption[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const previousActivityDates = useRef({ effective_from: "", effective_to: "" });
 
   const refreshOverview = async () => {
     const rows = await getActivities({
@@ -130,15 +131,38 @@ export function useActivityFlow() {
     const firstGroup = flow.reward_groups[0];
     if (!firstGroup) return;
     if (
-      componentForm.reward_group_id &&
-      flow.reward_groups.some((group) => group.id === componentForm.reward_group_id)
+      componentForm.reward_group_ids.length > 0 &&
+      componentForm.reward_group_ids.every((groupID) =>
+        flow.reward_groups.some((group) => group.id === groupID),
+      )
     )
       return;
     setComponentForm((current) => ({
       ...current,
-      reward_group_id: firstGroup.id,
+      reward_group_ids: [firstGroup.id],
+      effective_from: current.effective_from || flow.activity.effective_from,
+      effective_to: current.effective_to || flow.activity.effective_to,
     }));
-  }, [flow.reward_groups, componentForm.reward_group_id]);
+  }, [flow.reward_groups, componentForm.reward_group_ids, flow.activity.effective_from, flow.activity.effective_to]);
+
+  useEffect(() => {
+    const previous = previousActivityDates.current;
+    setComponentForm((current) => ({
+      ...current,
+      effective_from:
+        !current.effective_from || current.effective_from === previous.effective_from
+          ? flow.activity.effective_from
+          : current.effective_from,
+      effective_to:
+        !current.effective_to || current.effective_to === previous.effective_to
+          ? flow.activity.effective_to
+          : current.effective_to,
+    }));
+    previousActivityDates.current = {
+      effective_from: flow.activity.effective_from,
+      effective_to: flow.activity.effective_to,
+    };
+  }, [flow.activity.effective_from, flow.activity.effective_to]);
 
   useEffect(() => {
     const firstComponent = components[0];
@@ -272,7 +296,13 @@ export function useActivityFlow() {
 
   const resetForms = (componentID = "", groupID = "") => {
     setGroupForm(emptyGroupForm());
-    setComponentForm(emptyComponentForm(groupID));
+    setComponentForm(
+      emptyComponentForm(
+        groupID,
+        flow.activity.effective_from,
+        flow.activity.effective_to,
+      ),
+    );
     setRequirementFormState(emptyRequirementForm(componentID));
     setBenefitFormState(emptyBenefitForm(componentID));
   };
@@ -294,8 +324,11 @@ export function useActivityFlow() {
       setBenefitFormState(emptyBenefitForm(nextSelection.id));
     }
   };
-  const deleteSelected = (nextSelection: ActivityFlowSelection) => {
-    setFlow((current) => deleteSelection(current, selection));
+  const deleteSelected = (
+    target: ActivityFlowSelection,
+    nextSelection: ActivityFlowSelection,
+  ) => {
+    setFlow((current) => deleteSelection(current, target));
     setSelection(nextSelection);
   };
   const setBank = (nextBank: string) => {
@@ -308,9 +341,15 @@ export function useActivityFlow() {
     setGroupForm(emptyGroupForm());
   };
   const addComponent = () => {
-    if (!componentForm.reward_group_id || !componentForm.name.trim()) return;
+    if (!componentForm.reward_group_ids.length || !componentForm.name.trim()) return;
     setFlow((current) => withComponent(current, componentForm));
-    setComponentForm(emptyComponentForm(componentForm.reward_group_id));
+    setComponentForm(
+      emptyComponentForm(
+        componentForm.reward_group_ids[0],
+        flow.activity.effective_from,
+        flow.activity.effective_to,
+      ),
+    );
   };
   const addRequirement = () => {
     if (
@@ -370,6 +409,10 @@ export function useActivityFlow() {
         card_name: firstCard.card_name,
       });
     setFlow(next);
+    previousActivityDates.current = {
+      effective_from: next.activity.effective_from,
+      effective_to: next.activity.effective_to,
+    };
     setEditorMode("create");
     setSelection({ type: "activity", id: next.activity.id });
     resetForms();

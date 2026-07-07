@@ -39,6 +39,7 @@ export type RequirementType =
   | "REGION"
   | "CURRENCY"
   | "AMOUNT"
+  | "INSTALLMENT"
   | "ACCOUNT_TIER"
   | "USER_QUALIFICATION"
   | "DATE_RANGE"
@@ -93,12 +94,13 @@ export type RewardBenefit = {
   value: string;
   reward_unit_id: string;
   cap_amount: string | null;
+  cap_formula: string | null;
   cap_period: string | null;
   description: string;
 };
 export type RewardComponent = {
   id: string;
-  reward_group_id: string;
+  reward_group_ids: string[];
   name: string;
   description: string;
   layer: number;
@@ -303,12 +305,12 @@ function activityCreatePayload(flow: ActivityFlow): ActivityFlow {
     activity: { ...next.activity, id: "" },
     reward_groups: next.reward_groups.map((group) => ({
       ...group,
-      id: "",
+      id: group.id,
       activity_id: "",
       components: group.components.map((component) => ({
         ...component,
-        id: "",
-        reward_group_id: "",
+        id: component.id,
+        reward_group_ids: component.reward_group_ids,
         requirements: component.requirements.map((requirement) => ({
           ...requirement,
           id: "",

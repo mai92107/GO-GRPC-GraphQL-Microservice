@@ -96,18 +96,19 @@ type RewardGroupInput struct {
 }
 
 type RewardComponentInput struct {
-	ID            string
-	Name          string
-	Description   string
-	Layer         int
-	StackGroup    string
-	StackMode     string
-	Priority      int
-	EffectiveFrom string
-	EffectiveTo   string
-	IsActive      bool
-	Requirements  []RewardRequirementInput
-	Benefits      []RewardBenefitInput
+	ID             string
+	RewardGroupIDs []string
+	Name           string
+	Description    string
+	Layer          int
+	StackGroup     string
+	StackMode      string
+	Priority       int
+	EffectiveFrom  string
+	EffectiveTo    string
+	IsActive       bool
+	Requirements   []RewardRequirementInput
+	Benefits       []RewardBenefitInput
 }
 
 type RewardRequirementInput struct {
@@ -125,6 +126,7 @@ type RewardBenefitInput struct {
 	Value        string
 	RewardUnitID string
 	CapAmount    *string
+	CapFormula   *string
 	CapPeriod    *string
 	Description  string
 	IsActive     bool

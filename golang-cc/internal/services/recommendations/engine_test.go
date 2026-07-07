@@ -87,7 +87,8 @@ func TestSelectablePlanAddsSnapshotMetadataWithoutBlocking(t *testing.T) {
 	input.Rules = []RewardRule{selectable}
 
 	card := recommendOK(t, input).Recommendations[0]
-	if len(card.Reminders) != 1 || card.Reminders[0] != selectable.ActionMessage {
+	expected := "需至 APP 切換卡片方案：玩旅刷，對應優惠：travel 0.03；請切換為玩旅刷"
+	if len(card.Reminders) != 1 || card.Reminders[0] != expected {
 		t.Fatalf("reminders = %v", card.Reminders)
 	}
 	if card.Allocations[0].SuggestedCardPlanID != "travel-plan" {
@@ -116,6 +117,30 @@ func TestCapStates(t *testing.T) {
 			allocation := recommendOK(t, input).Recommendations[0].Allocations[0]
 			assertDecimal(t, allocation.AllocatedReward, test.expected)
 		})
+	}
+}
+
+func TestDynamicMonthlyCapUsesMemberCardCreditLimit(t *testing.T) {
+	input := baseInput()
+	creditLimit := MustDecimal("100")
+	input.Cards[0].CreditLimit = &creditLimit
+	input.Rules = []RewardRule{rule("dynamic", "card-a", cash, "0.1", nil, "general")}
+	input.Rules[0].MonthlyCapFormula = "member_card.credit_limit + 5"
+	input.MonthlyUsage["dynamic"] = MustDecimal("100")
+
+	allocation := recommendOK(t, input).Recommendations[0].Allocations[0]
+	assertDecimal(t, *allocation.MonthlyCap, "105")
+	assertDecimal(t, *allocation.RemainingBefore, "5.00")
+	assertDecimal(t, allocation.AllocatedReward, "5.00")
+}
+
+func TestDynamicMonthlyCapMissingCreditLimitExcludesRule(t *testing.T) {
+	input := baseInput()
+	input.Rules = []RewardRule{rule("dynamic", "card-a", cash, "0.1", nil, "general")}
+	input.Rules[0].MonthlyCapFormula = "member_card.credit_limit + 5"
+
+	if got := len(recommendOK(t, input).Recommendations); got != 0 {
+		t.Fatalf("recommendations=%d,want 0", got)
 	}
 }
 

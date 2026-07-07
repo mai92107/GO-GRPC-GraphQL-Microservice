@@ -62,6 +62,10 @@ function formatRequirementValues(values: string[]) {
   return values.join(", ");
 }
 
+function isInstallmentRequirement(type: ActivityRequirementType) {
+  return type === "INSTALLMENT";
+}
+
 function requirementValueOptions(
   type: ActivityRequirementType,
   options?: ActivityRequirementOptions | null,
@@ -144,6 +148,63 @@ function RequirementValuePicker({
   );
 }
 
+function GroupValuePicker({
+  onChange,
+  options,
+  value,
+}: {
+  onChange: (value: string[]) => void;
+  options: CodeNameOption[];
+  value: string[];
+}) {
+  const availableOptions = options.filter(
+    (option) => !value.includes(option.code),
+  );
+  const optionName = (code: string) =>
+    options.find((option) => option.code === code)?.name || code;
+  const removeValue = (code: string) =>
+    onChange(value.filter((item) => item !== code));
+
+  return (
+    <div className="requirement-value-picker">
+      <select
+        value=""
+        disabled={!availableOptions.length}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          if (!nextValue) return;
+          onChange([...value, nextValue]);
+        }}
+      >
+        <option value="">
+          {availableOptions.length ? "選擇 Group" : "沒有可選 Group"}
+        </option>
+        {availableOptions.map((option) => (
+          <option value={option.code} key={option.code}>
+            {option.name}
+          </option>
+        ))}
+      </select>
+      {value.length > 0 && (
+        <div className="requirement-value-chips">
+          {value.map((code) => (
+            <span className="requirement-value-chip" key={code}>
+              {optionName(code)}
+              <button
+                type="button"
+                aria-label={`移除 ${optionName(code)}`}
+                onClick={() => removeValue(code)}
+              >
+                <X size={13} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ActiveToggle({
   checked,
   onChange,
@@ -176,18 +237,19 @@ export function ComponentFields({
     <>
       <div className="two-col">
         <Field label="所屬 Group">
-          <select
-            value={form.reward_group_id}
-            onChange={(event) =>
-              onChange({ ...form, reward_group_id: event.target.value })
+          <GroupValuePicker
+            value={form.reward_group_ids}
+            options={flow.reward_groups.map((group) => ({
+              code: group.id,
+              name: group.name,
+            }))}
+            onChange={(reward_group_ids) =>
+              onChange({
+                ...form,
+                reward_group_ids,
+              })
             }
-          >
-            {flow.reward_groups.map((group) => (
-              <option value={group.id} key={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
+          />
         </Field>
         <Field label="Component 名稱">
           <input
@@ -195,6 +257,26 @@ export function ComponentFields({
             placeholder="例如：新戶加碼"
             onChange={(event) =>
               onChange({ ...form, name: event.target.value })
+            }
+          />
+        </Field>
+      </div>
+      <div className="two-col">
+        <Field label="Component 開始日期">
+          <input
+            type="date"
+            value={form.effective_from.slice(0, 10)}
+            onChange={(event) =>
+              onChange({ ...form, effective_from: event.target.value })
+            }
+          />
+        </Field>
+        <Field label="Component 結束日期">
+          <input
+            type="date"
+            value={form.effective_to.slice(0, 10)}
+            onChange={(event) =>
+              onChange({ ...form, effective_to: event.target.value })
             }
           />
         </Field>
@@ -272,6 +354,7 @@ export function RequirementFields({
   onChange: (form: ActivityRequirementForm) => void;
 } & RequirementOptionProps) {
   const isUnconditional = isUnconditionalRequirement(form.requirement_type);
+  const isInstallment = isInstallmentRequirement(form.requirement_type);
   const valueOptions = requirementValueOptions(
     form.requirement_type,
     requirementOptions,
@@ -303,7 +386,7 @@ export function RequirementFields({
             value={
               isUnconditional ? unconditionalRequirementOperator : form.operator
             }
-            disabled={isUnconditional}
+            disabled={isUnconditional || isInstallment}
             onChange={(event) =>
               onChange({
                 ...form,
@@ -320,9 +403,27 @@ export function RequirementFields({
         </Field>
         <Field
           label="值"
-          hint={valueOptions.length ? undefined : "多值用逗號，例如 VISA, MASTERCARD"}
+          hint={
+            valueOptions.length || isInstallment
+              ? undefined
+              : "多值用逗號，例如 VISA, MASTERCARD"
+          }
         >
-          {valueOptions.length ? (
+          {isInstallment ? (
+            <select
+              value={form.values || "true"}
+              onChange={(event) =>
+                onChange({
+                  ...form,
+                  operator: unconditionalRequirementOperator,
+                  values: event.target.value,
+                })
+              }
+            >
+              <option value="true">是</option>
+              <option value="false">否</option>
+            </select>
+          ) : valueOptions.length ? (
             <RequirementValuePicker
               disabled={isUnconditional}
               options={valueOptions}
@@ -380,13 +481,16 @@ export function RequirementDirectFields({
               const requirement_type = event.target.value as ActivityRequirementType;
               const nextIsUnconditional =
                 isUnconditionalRequirement(requirement_type);
+              const nextIsInstallment = isInstallmentRequirement(requirement_type);
               onChange({
                 ...requirement,
                 requirement_type,
-                operator: nextIsUnconditional
+                operator: nextIsUnconditional || nextIsInstallment
                   ? unconditionalRequirementOperator
                   : requirement.operator,
-                configuration_json: {},
+                configuration_json: nextIsInstallment
+                  ? configForRequirement(requirement_type, "true")
+                  : {},
                 description:
                   isUnconditional || nextIsUnconditional
                     ? ""
@@ -425,9 +529,32 @@ export function RequirementDirectFields({
         </Field>
         <Field
           label="值"
-          hint={valueOptions.length ? undefined : "多值用逗號，例如 VISA, MASTERCARD"}
+          hint={
+            valueOptions.length ||
+            isInstallmentRequirement(requirement.requirement_type)
+              ? undefined
+              : "多值用逗號，例如 VISA, MASTERCARD"
+          }
         >
-          {valueOptions.length ? (
+          {isInstallmentRequirement(requirement.requirement_type) ? (
+            <select
+              value={requirementValues || "true"}
+              disabled={isUnconditional}
+              onChange={(event) =>
+                onChange({
+                  ...requirement,
+                  operator: unconditionalRequirementOperator,
+                  configuration_json: configForRequirement(
+                    requirement.requirement_type,
+                    event.target.value,
+                  ),
+                })
+              }
+            >
+              <option value="true">是</option>
+              <option value="false">否</option>
+            </select>
+          ) : valueOptions.length ? (
             <RequirementValuePicker
               disabled={isUnconditional}
               options={valueOptions}
@@ -547,6 +674,17 @@ export function BenefitFields<T extends ActivityBenefit | ActivityBenefitForm>({
             }
           />
         </Field>
+        <Field label="上限公式">
+          <input
+            value={form.cap_formula || ""}
+            placeholder="member_card.credit_limit + 500000"
+            onChange={(event) =>
+              onChange({ ...form, cap_formula: event.target.value })
+            }
+          />
+        </Field>
+      </div>
+      <div className="two-col">
         <Field label="上限週期">
           <select
             value={form.cap_period || "NONE"}

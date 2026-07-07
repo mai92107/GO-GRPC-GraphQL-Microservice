@@ -259,6 +259,7 @@ type RewardConditionVersionInput struct {
 type RewardCapVersionInput struct {
 	CapType       string
 	LimitValue    string
+	LimitFormula  string
 	RewardUnitID  *string
 	PeriodType    string
 	EffectiveFrom time.Time
@@ -299,19 +300,19 @@ type RewardGroup struct {
 }
 
 type RewardComponent struct {
-	ID            string
-	RewardGroupID string
-	Name          string
-	Description   string
-	Layer         int
-	StackGroup    string
-	StackMode     string
-	Priority      int
-	EffectiveFrom string
-	EffectiveTo   string
-	IsActive      bool
-	Requirements  []RewardRequirement
-	Benefits      []RewardBenefit
+	ID             string
+	RewardGroupIDs []string
+	Name           string
+	Description    string
+	Layer          int
+	StackGroup     string
+	StackMode      string
+	Priority       int
+	EffectiveFrom  string
+	EffectiveTo    string
+	IsActive       bool
+	Requirements   []RewardRequirement
+	Benefits       []RewardBenefit
 }
 
 type RewardRequirement struct {
@@ -331,6 +332,7 @@ type RewardBenefit struct {
 	Value             string
 	RewardUnitID      string
 	CapAmount         *string
+	CapFormula        *string
 	CapPeriod         *string
 	Description       string
 	IsActive          bool

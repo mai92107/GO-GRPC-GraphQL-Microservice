@@ -37,8 +37,23 @@ func (s *Service) PublishConditionVersion(ctx context.Context, conditionID strin
 }
 
 func (s *Service) PublishCapVersion(ctx context.Context, capID string, input domain.RewardCapVersionInput) (string, error) {
-	limit, err := recommendations.ParseDecimal(input.LimitValue)
-	if err != nil || limit.Sign() <= 0 || capID == "" || input.EffectiveFrom.IsZero() ||
+	input.LimitValue = strings.TrimSpace(input.LimitValue)
+	input.LimitFormula = strings.TrimSpace(input.LimitFormula)
+	if input.LimitValue == "" && input.LimitFormula == "" {
+		return "", domain.ErrInvalidInput
+	}
+	if input.LimitValue != "" {
+		limit, err := recommendations.ParseDecimal(input.LimitValue)
+		if err != nil || limit.Sign() <= 0 {
+			return "", domain.ErrInvalidInput
+		}
+	}
+	if input.LimitFormula != "" {
+		if err := recommendations.ValidateCapFormula(input.LimitFormula); err != nil {
+			return "", domain.ErrInvalidInput
+		}
+	}
+	if capID == "" || input.EffectiveFrom.IsZero() ||
 		(input.EffectiveTo != nil && !input.EffectiveTo.After(input.EffectiveFrom)) {
 		return "", domain.ErrInvalidInput
 	}

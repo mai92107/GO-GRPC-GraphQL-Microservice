@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -420,7 +421,10 @@ func (r *Repository) listRewardRequirementTexts(
 			merchant_text.value,
 			cp.id,
 			cp.plan_type,
+			pv.name,
 			pv.reminder_text,
+			component_version.name,
+			component_version.reward_value::text,
 			reminder_text.value
 		FROM reward.requirements rr
 		JOIN reward.conditions condition
@@ -443,6 +447,15 @@ func (r *Repository) listRewardRequirementTexts(
 			ORDER BY v.effective_from DESC
 			LIMIT 1
 		) pv ON true
+		LEFT JOIN LATERAL (
+			SELECT name, reward_value
+			FROM reward.component_versions v
+			WHERE v.reward_component_id = rr.reward_component_id
+			  AND v.effective_from <= $2
+			  AND (v.effective_to IS NULL OR v.effective_to > $2)
+			ORDER BY v.effective_from DESC
+			LIMIT 1
+		) component_version ON true
 		LEFT JOIN LATERAL (
 			SELECT string_agg(category.name, '、' ORDER BY category.name) AS value
 			FROM jsonb_array_elements_text(x.configuration_json->'category_ids') category_id
@@ -484,7 +497,10 @@ func (r *Repository) listRewardRequirementTexts(
 		var merchantText *string
 		var cardPlanID *string
 		var planType *string
+		var planName *string
 		var planReminder *string
+		var benefitName *string
+		var rewardValue *string
 		var channelReminder *string
 
 		if err := rows.Scan(
@@ -496,7 +512,10 @@ func (r *Repository) listRewardRequirementTexts(
 			&merchantText,
 			&cardPlanID,
 			&planType,
+			&planName,
 			&planReminder,
+			&benefitName,
+			&rewardValue,
 			&channelReminder,
 		); err != nil {
 			return nil, nil, err
@@ -508,9 +527,10 @@ func (r *Repository) listRewardRequirementTexts(
 
 		if planType != nil &&
 			*planType == "selectable" &&
-			planReminder != nil &&
-			*planReminder != "" {
-			appendUnique(&reminders, componentID, *planReminder)
+			planName != nil &&
+			benefitName != nil &&
+			rewardValue != nil {
+			appendUnique(&reminders, componentID, selectablePlanReminder(*planName, *benefitName, *rewardValue, stringValue(planReminder)))
 		}
 
 		if cardPlanID != nil || channelReminder != nil {
@@ -542,11 +562,12 @@ func (r *Repository) listRewardCaps(
 		SELECT
 			c.id,
 			cap.cap_type,
-			cap.limit_value::text,
+			COALESCE(cap.limit_value::text, cap.limit_formula),
 			cap.period_type,
 			CASE
 				WHEN cap.cap_type = 'reward_amount'
 				     AND component_version.reward_value > 0
+				     AND cap.limit_value IS NOT NULL
 				THEN (cap.limit_value / component_version.reward_value)::text
 				ELSE NULL
 			END
@@ -564,6 +585,7 @@ func (r *Repository) listRewardCaps(
 			SELECT
 				cv.cap_type,
 				cv.limit_value,
+				cv.limit_formula,
 				cv.period_type
 			FROM reward.component_caps cc
 			JOIN reward.cap_versions cv
@@ -690,4 +712,33 @@ func firstNonEmpty(values ...*string) string {
 		}
 	}
 	return ""
+}
+
+func selectablePlanReminder(planName, benefitName, rewardValue, reminderText string) string {
+	base := fmt.Sprintf(
+		"需至 APP 切換卡片方案：%s，對應優惠：%s %s",
+		planName,
+		benefitName,
+		trimNumericText(rewardValue),
+	)
+	reminderText = strings.TrimSpace(reminderText)
+	if reminderText == "" || reminderText == base {
+		return base
+	}
+	return base + "；" + reminderText
+}
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func trimNumericText(value string) string {
+	value = strings.TrimRight(strings.TrimRight(value, "0"), ".")
+	if value == "" {
+		return "0"
+	}
+	return value
 }

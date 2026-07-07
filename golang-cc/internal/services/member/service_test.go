@@ -16,6 +16,22 @@ func TestCreateCardRejectsMissingCatalogCard(t *testing.T) {
 	}
 }
 
+func TestCreateCardRejectsInvalidCreditLimit(t *testing.T) {
+	service := &Service{}
+	_, err := service.CreateCard(context.Background(), "member-id", CardInput{CardID: "card-id", CreditLimit: "0"})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("expected invalid input, got %v", err)
+	}
+}
+
+func TestUpdateCardRejectsInvalidCreditLimit(t *testing.T) {
+	service := &Service{}
+	err := service.UpdateCard(context.Background(), "member-id", "member-card-id", CardInput{CreditLimit: ""})
+	if !errors.Is(err, domain.ErrInvalidInput) {
+		t.Fatalf("expected invalid input, got %v", err)
+	}
+}
+
 func TestUpdatePreferencesRejectsInvalidWeight(t *testing.T) {
 	service := &Service{}
 	err := service.UpdatePreferences(context.Background(), "member-id", []PreferenceInput{

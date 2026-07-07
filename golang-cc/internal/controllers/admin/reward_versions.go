@@ -105,6 +105,7 @@ func (c *Controller) PublishCapVersion(ctx *gin.Context) {
 	var request struct {
 		CapType       string  `json:"cap_type"`
 		LimitValue    string  `json:"limit_value"`
+		LimitFormula  string  `json:"limit_formula"`
 		RewardUnitID  *string `json:"reward_unit_id"`
 		PeriodType    string  `json:"period_type"`
 		EffectiveFrom string  `json:"effective_from"`
@@ -129,7 +130,7 @@ func (c *Controller) PublishCapVersion(ctx *gin.Context) {
 		effectiveTo = &value
 	}
 	id, err := c.service.PublishCapVersion(ctx, ctx.Param("capId"), domain.RewardCapVersionInput{
-		CapType: request.CapType, LimitValue: request.LimitValue, RewardUnitID: request.RewardUnitID,
+		CapType: request.CapType, LimitValue: request.LimitValue, LimitFormula: request.LimitFormula, RewardUnitID: request.RewardUnitID,
 		PeriodType: request.PeriodType, EffectiveFrom: effectiveFrom, EffectiveTo: effectiveTo,
 	})
 	versionResponse(ctx, id, err, "找不到回饋上限")

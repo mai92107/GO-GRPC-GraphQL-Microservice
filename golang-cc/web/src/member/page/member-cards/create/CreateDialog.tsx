@@ -47,6 +47,7 @@ export function CreateDialog({
                 last_four: form.last_four,
                 statement_day: form.statement_day,
                 payment_due_day: form.payment_due_day,
+                credit_limit: form.credit_limit,
                 is_active: form.is_active,
               })
             }
@@ -97,6 +98,20 @@ export function CreateDialog({
           />
         </Field>
         <div className="two-col">
+          <Field label="信用額度">
+            <input
+              required
+              type="number"
+              min="1"
+              step="1"
+              inputMode="decimal"
+              value={form.credit_limit}
+              disabled={saving || catalogLoading}
+              onChange={(event) =>
+                onChange({ ...form, credit_limit: event.target.value })
+              }
+            />
+          </Field>
           <Field label="結帳日">
             <input
               type="number"

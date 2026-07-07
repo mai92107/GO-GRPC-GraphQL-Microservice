@@ -1,10 +1,34 @@
 CREATE SCHEMA IF NOT EXISTS reward;
+CREATE SCHEMA IF NOT EXISTS catalog;
+CREATE SCHEMA IF NOT EXISTS identity;
 
-ALTER TABLE public.banks
-ADD CONSTRAINT banks_pkey PRIMARY KEY (id);
+ALTER TABLE IF EXISTS public.users SET SCHEMA identity;
+ALTER TABLE IF EXISTS public.sessions SET SCHEMA identity;
+ALTER TABLE IF EXISTS public.invitations SET SCHEMA identity;
+ALTER TABLE IF EXISTS public.password_reset_tokens SET SCHEMA identity;
+ALTER TABLE IF EXISTS public.card_products SET SCHEMA catalog;
 
-ALTER TABLE catalog.card_products
-ADD CONSTRAINT card_products_pkey PRIMARY KEY (id);
+CREATE OR REPLACE VIEW public.users AS SELECT * FROM identity.users;
+CREATE OR REPLACE VIEW public.sessions AS SELECT * FROM identity.sessions;
+CREATE OR REPLACE VIEW public.invitations AS SELECT * FROM identity.invitations;
+CREATE OR REPLACE VIEW public.password_reset_tokens AS SELECT * FROM identity.password_reset_tokens;
+CREATE OR REPLACE VIEW public.card_products AS SELECT * FROM catalog.card_products;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'banks_pkey' AND conrelid = to_regclass('public.banks')
+    ) THEN
+        ALTER TABLE public.banks ADD CONSTRAINT banks_pkey PRIMARY KEY (id);
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'card_products_pkey' AND conrelid = to_regclass('catalog.card_products')
+    ) THEN
+        ALTER TABLE catalog.card_products ADD CONSTRAINT card_products_pkey PRIMARY KEY (id);
+    END IF;
+END $$;
 
 CREATE TABLE reward.activities (
     id UUID PRIMARY KEY,
@@ -62,8 +86,15 @@ CREATE TABLE reward.activity_requirements (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.reward_units
-ADD CONSTRAINT reward_units_pkey PRIMARY KEY (id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'reward_units_pkey' AND conrelid = to_regclass('public.reward_units')
+    ) THEN
+        ALTER TABLE public.reward_units ADD CONSTRAINT reward_units_pkey PRIMARY KEY (id);
+    END IF;
+END $$;
 
 CREATE TABLE reward.activity_benefits (
     id UUID PRIMARY KEY,
@@ -89,5 +120,3 @@ CREATE INDEX reward_activity_requirements_component_type_idx
     ON reward.activity_requirements(reward_component_id, requirement_type);
 CREATE INDEX reward_activity_benefits_component_type_idx
     ON reward.activity_benefits(reward_component_id, benefit_type);
-
-

@@ -7,6 +7,7 @@ type MemberCard struct {
 	Name           string `json:"name"`
 	Issuer         string `json:"issuer"`
 	LastFour       string `json:"last_four"`
+	CreditLimit    string `json:"credit_limit"`
 	IsActive       bool   `json:"is_active"`
 	CardImageURL   string `json:"card_image_url"`
 	PrimaryColor   string `json:"primary_color"`
@@ -18,12 +19,15 @@ type MemberCard struct {
 type MemberCardInfo struct {
 	MemberCardId   string `json:"memberCardID"`
 	Name           string `json:"name"`
+	Nickname       string `json:"nickname"`
 	Issuer         string `json:"issuer"`
 	LastFour       string `json:"last_four"`
 	IsActive       bool   `json:"is_active"`
 	StatementDay   *int   `json:"statement_day"`
 	PaymentDueDay  *int   `json:"payment_due_day"`
 	AccountTier    string `json:"account_tier"`
+	CreditLimit    string `json:"credit_limit"`
+	CardNetworkID  string `json:"card_network_id"`
 	CardImageURL   string `json:"card_image_url"`
 	PrimaryColor   string `json:"primary_color"`
 	QualifiedType  string `json:"qualified_type"`

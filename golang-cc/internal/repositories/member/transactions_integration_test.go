@@ -135,6 +135,100 @@ func TestConcurrentCreatesDoNotExceedCap(t *testing.T) {
 	}
 }
 
+func TestMemberCardCreditLimitHistoryOnUpdate(t *testing.T) {
+	pool, gormDB := integrationPool(t)
+	ctx := context.Background()
+	repo := New(pool, gormDB)
+	cardID := "26000000-0000-0000-0000-000000000001"
+	if err := repo.CreateCard(ctx, cardID, string(userA), "50000000-0000-0000-0000-000000000002", CardWrite{
+		IsActive:    true,
+		CreditLimit: "100000",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpdateCard(ctx, cardID, string(userA), CardWrite{
+		IsActive:    true,
+		CreditLimit: "150000",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := pool.Query(ctx, `SELECT credit_limit::text, effective_to IS NULL
+		FROM member_card_credit_limits
+		WHERE member_card_id=$1
+		ORDER BY effective_from`, cardID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	type historyRow struct {
+		limit   string
+		current bool
+	}
+	var history []historyRow
+	for rows.Next() {
+		var row historyRow
+		if err := rows.Scan(&row.limit, &row.current); err != nil {
+			t.Fatal(err)
+		}
+		history = append(history, row)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if len(history) != 2 {
+		t.Fatalf("history count=%d,want 2: %+v", len(history), history)
+	}
+	if history[0].limit != "100000.00" || history[0].current {
+		t.Fatalf("old history row=%+v,want closed 100000.00", history[0])
+	}
+	if history[1].limit != "150000.00" || !history[1].current {
+		t.Fatalf("current history row=%+v,want open 150000.00", history[1])
+	}
+}
+
+func TestRecommendationUsesCreditLimitEffectiveOnTransactionDate(t *testing.T) {
+	pool, _ := integrationPool(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `UPDATE member_cards SET credit_limit=15 WHERE id=$1`, cardA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO member_card_credit_limits(member_card_id, credit_limit, effective_from, effective_to) VALUES
+		($1, 5, '2026-06-01 00:00:00+08', '2026-06-15 12:00:00+08'),
+		($1, 15, '2026-06-15 12:00:00+08', NULL)`, cardA); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE reward.cap_versions
+		SET limit_value=NULL, limit_formula='member_card.credit_limit'
+		WHERE reward_cap_id=md5('cap:'||$1::text)::uuid`, ruleA); err != nil {
+		t.Fatal(err)
+	}
+	txRepo := NewTransactionRepository(pool)
+	tests := []struct {
+		name string
+		date string
+		want string
+	}{
+		{name: "before limit change", date: "2026-06-10", want: "5"},
+		{name: "same day as limit change uses current limit", date: "2026-06-15", want: "10"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := txRepo.Recommend(ctx, userA, 10000, "dining", "px_mart", "全聯福利中心", recommendations.MustLocalDate(test.date))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Recommendations) != 1 || len(result.Recommendations[0].Allocations) != 1 {
+				t.Fatalf("recommendations=%+v", result.Recommendations)
+			}
+			got := result.Recommendations[0].Allocations[0].AllocatedReward
+			if got.Cmp(recommendations.MustDecimal(test.want)) != 0 {
+				t.Fatalf("allocated=%s,want %s", got.String(), test.want)
+			}
+		})
+	}
+}
+
 func TestNormalizedCatalogConstraints(t *testing.T) {
 	pool, gormDB := integrationPool(t)
 	ctx := context.Background()
@@ -175,7 +269,7 @@ func TestRewardVersionAndQualificationHistoryConstraints(t *testing.T) {
 	repo := New(pool, gormDB)
 	cardID := "25000000-0000-0000-0000-000000000001"
 	if err := repo.CreateCard(ctx, cardID, string(userA), "51000000-0000-0000-0000-000000000001", CardWrite{
-		IsActive: true, AccountTier: "大戶",
+		IsActive: true, AccountTier: "大戶", CreditLimit: "100000",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +311,7 @@ func TestCoreCardRepresentativeRewards(t *testing.T) {
 		{"23000000-0000-0000-0000-000000000004", "51000000-0000-0000-0000-000000000004", ""},
 	}
 	for _, c := range cards {
-		if err := repo.CreateCard(ctx, c.id, string(userA), c.product, CardWrite{IsActive: true, AccountTier: c.tier}); err != nil {
+		if err := repo.CreateCard(ctx, c.id, string(userA), c.product, CardWrite{IsActive: true, AccountTier: c.tier, CreditLimit: "100000"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -278,7 +372,7 @@ func TestDAWHO2026AccountTierRewards(t *testing.T) {
 			if _, err := pool.Exec(ctx, `DELETE FROM member_cards WHERE user_id=$1 AND card_product_id=$2`, userA, "51000000-0000-0000-0000-000000000001"); err != nil {
 				t.Fatal(err)
 			}
-			if err := repo.CreateCard(ctx, cardID, string(userA), "51000000-0000-0000-0000-000000000001", CardWrite{IsActive: true, AccountTier: tc.tier}); err != nil {
+			if err := repo.CreateCard(ctx, cardID, string(userA), "51000000-0000-0000-0000-000000000001", CardWrite{IsActive: true, AccountTier: tc.tier, CreditLimit: "100000"}); err != nil {
 				t.Fatal(err)
 			}
 			for _, scenario := range []struct {
@@ -325,7 +419,7 @@ func TestRecommendationDisambiguatesSameNicknameAndRanksEachCardOnce(t *testing.
 		{"25000000-0000-0000-0000-000000000001", "51000000-0000-0000-0000-000000000001", "大大"},
 		{"25000000-0000-0000-0000-000000000002", "51000000-0000-0000-0000-000000000007", ""},
 	} {
-		if err := repo.CreateCard(ctx, card.id, string(userA), card.product, CardWrite{Nickname: "LOL", IsActive: true, AccountTier: card.tier}); err != nil {
+		if err := repo.CreateCard(ctx, card.id, string(userA), card.product, CardWrite{Nickname: "LOL", IsActive: true, AccountTier: card.tier, CreditLimit: "100000"}); err != nil {
 			t.Fatal(err)
 		}
 	}

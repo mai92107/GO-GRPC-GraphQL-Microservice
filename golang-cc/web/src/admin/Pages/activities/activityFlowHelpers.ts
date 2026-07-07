@@ -20,18 +20,20 @@ export function deleteSelection(
       ...flow,
       reward_groups: flow.reward_groups.filter(
         (group) => group.id !== selection.id,
-      ),
-    };
-  if (selection.type === "component")
-    return {
-      ...flow,
-      reward_groups: flow.reward_groups.map((group) => ({
+      ).map((group) => ({
         ...group,
-        components: group.components.filter(
-          (component) => component.id !== selection.id,
-        ),
+        components: group.components
+          .map((component) => ({
+            ...component,
+            reward_group_ids: component.reward_group_ids.filter(
+              (groupID) => groupID !== selection.id,
+            ),
+          }))
+          .filter((component) => component.reward_group_ids.length > 0),
       })),
     };
+  if (selection.type === "component")
+    return removeComponentFromGroup(flow, selection.id, selection.groupID);
   if (selection.type === "requirement")
     return removeComponentChild(
       flow,
@@ -71,26 +73,26 @@ export function updateComponent(
     (component) => component.id === componentID,
   );
   if (!current) return flow;
-  const nextGroupID = patch.reward_group_id || current.reward_group_id;
+  const nextGroupIDs = patch.reward_group_ids || current.reward_group_ids;
+  const nextComponent = {
+    ...current,
+    ...patch,
+    reward_group_ids: nextGroupIDs,
+  };
   return {
     ...flow,
     reward_groups: flow.reward_groups.map((group) => {
       const existing = group.components.find(
         (component) => component.id === componentID,
       );
-      if (existing && group.id !== nextGroupID)
+      if (existing && !nextGroupIDs.includes(group.id))
         return {
           ...group,
           components: group.components.filter(
             (component) => component.id !== componentID,
           ),
         };
-      if (group.id !== nextGroupID) return group;
-      const nextComponent = {
-        ...current,
-        ...patch,
-        reward_group_id: nextGroupID,
-      };
+      if (!nextGroupIDs.includes(group.id)) return group;
       return {
         ...group,
         components: existing
@@ -100,6 +102,36 @@ export function updateComponent(
           : [...group.components, nextComponent],
       };
     }),
+  };
+}
+
+function removeComponentFromGroup(
+  flow: ActivityFlowModel,
+  componentID: string,
+  groupID?: string,
+) {
+  const current = allComponents(flow).find(
+    (component) => component.id === componentID,
+  );
+  if (!current) return flow;
+  const nextGroupIDs = groupID
+    ? current.reward_group_ids.filter((id) => id !== groupID)
+    : [];
+  return {
+    ...flow,
+    reward_groups: flow.reward_groups.map((group) => ({
+      ...group,
+      components: group.components
+        .filter(
+          (component) =>
+            component.id !== componentID || nextGroupIDs.includes(group.id),
+        )
+        .map((component) =>
+          component.id === componentID
+            ? { ...component, reward_group_ids: nextGroupIDs }
+            : component,
+        ),
+    })),
   };
 }
 
@@ -160,6 +192,8 @@ export function displayRequirementValues(requirement: ActivityRequirement) {
     config.weekdays ||
     config.values;
   if (Array.isArray(value)) return value.join(", ");
+  if (typeof config.is_installment === "boolean")
+    return config.is_installment ? "true" : "false";
   if (typeof config.amount === "number")
     return `${config.amount}, ${config.currency || "TWD"}`;
   return "";
@@ -184,6 +218,7 @@ export function configForRequirement(
     return { category_ids: values };
   if (type === "AMOUNT")
     return { amount: Number(values[0] || 0), currency: values[1] || "TWD" };
+  if (type === "INSTALLMENT") return { is_installment: values[0] !== "false" };
   if (type === "ACCOUNT_TIER") return { tiers: values };
   if (type === "USER_QUALIFICATION") return { qualification_codes: values };
   if (type === "CHANNEL") return { channels: values };

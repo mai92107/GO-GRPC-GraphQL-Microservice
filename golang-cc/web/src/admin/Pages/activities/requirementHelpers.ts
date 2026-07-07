@@ -8,6 +8,13 @@ export function isUnconditionalRequirement(type: string) {
 }
 
 export function normalizeRequirementFormType(type: ActivityRequirementType) {
+  if (type === "INSTALLMENT")
+    return {
+      requirement_type: type,
+      operator: unconditionalRequirementOperator,
+      values: "true",
+      description: "",
+    };
   return isUnconditionalRequirement(type)
     ? {
         requirement_type: type,

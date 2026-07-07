@@ -40,8 +40,12 @@ export const emptyGroupForm = (): ActivityGroupForm => ({
   is_active: true,
 });
 
-export const emptyComponentForm = (groupID = ""): ActivityComponentForm => ({
-  reward_group_id: groupID,
+export const emptyComponentForm = (
+  groupID = "",
+  effectiveFrom = "",
+  effectiveTo = "",
+): ActivityComponentForm => ({
+  reward_group_ids: groupID ? [groupID] : [],
   name: "",
   description: "",
   layer: 1,
@@ -50,8 +54,8 @@ export const emptyComponentForm = (groupID = ""): ActivityComponentForm => ({
   priority: 10,
   is_exclusive: false,
   is_best_only: false,
-  effective_from: "2026-04-01",
-  effective_to: "2026-06-30",
+  effective_from: effectiveFrom,
+  effective_to: effectiveTo,
   is_active: true,
 });
 
@@ -69,7 +73,8 @@ export const emptyBenefitForm = (componentID = ""): ActivityBenefitForm => ({
   value: "1",
   reward_unit_id: "",
   cap_amount: "",
-  cap_period: "MONTHLY",
+  cap_formula: "",
+  cap_period: null,
   description: "",
   is_active: true,
 });
@@ -97,7 +102,7 @@ export function withComponent(flow: ActivityFlowModel, form: ActivityComponentFo
   return {
     ...flow,
     reward_groups: flow.reward_groups.map((group) =>
-      group.id === form.reward_group_id
+      form.reward_group_ids.includes(group.id)
         ? { ...group, components: [...group.components, component] }
         : group,
     ),
@@ -130,6 +135,7 @@ export function withBenefit(flow: ActivityFlowModel, form: ActivityBenefitForm) 
     ...form,
     id: nextID("benefit"),
     cap_amount: form.cap_amount || null,
+    cap_formula: form.cap_formula || null,
     cap_period: form.cap_period || null,
   };
   return updateComponent(flow, form.reward_component_id, (component) => ({
@@ -151,22 +157,73 @@ export function removeComponentChild(
 }
 
 export function allComponents(flow: ActivityFlowModel) {
-  return flow.reward_groups.flatMap((group) => group.components);
+  const seen = new Set<string>();
+  return flow.reward_groups.flatMap((group) =>
+    group.components.filter((component) => {
+      if (seen.has(component.id)) return false;
+      seen.add(component.id);
+      return true;
+    }),
+  );
 }
 
 export function validateActivityFlow(flow: ActivityFlowModel) {
   const components = allComponents(flow);
   const requirements = components.flatMap((component) => component.requirements);
   const benefits = components.flatMap((component) => component.benefits);
-
-  return [
-    { label: "Activity 已選銀行與卡別", pass: Boolean(flow.activity.bank_id && flow.activity.card_product_id) },
-    { label: "Activity 日期與名稱完整", pass: Boolean(flow.activity.title && flow.activity.effective_from && flow.activity.effective_to) },
+  const checks = [
+    {
+      label: "Activity 已選銀行與卡別",
+      pass: Boolean(flow.activity.bank_id && flow.activity.card_product_id),
+    },
+    {
+      label: "Activity 日期與名稱完整",
+      pass: Boolean(
+        flow.activity.title &&
+          flow.activity.effective_from &&
+          flow.activity.effective_to &&
+          !dateBefore(flow.activity.effective_to, flow.activity.effective_from),
+      ),
+    },
     { label: "至少 1 個 Group", pass: flow.reward_groups.length > 0 },
     { label: "至少 1 個 Component", pass: components.length > 0 },
     { label: "至少 1 個 Requirement", pass: requirements.length > 0 },
     { label: "至少 1 個 Benefit", pass: benefits.length > 0 },
   ];
+
+  components.forEach((component, index) => {
+    const name = component.name.trim() || `#${index + 1}`;
+    checks.push({
+      label: `Component「${name}」已填名稱與所屬 Group`,
+      pass: Boolean(component.name.trim() && component.reward_group_ids.length),
+    });
+    checks.push({
+      label: `Component「${name}」起訖日完整`,
+      pass: Boolean(component.effective_from && component.effective_to),
+    });
+    checks.push({
+      label: `Component「${name}」結束日期不可早於開始日期`,
+      pass: Boolean(
+        component.effective_from &&
+          component.effective_to &&
+          !dateBefore(component.effective_to, component.effective_from),
+      ),
+    });
+    checks.push({
+      label: `Component「${name}」至少 1 個 Requirement`,
+      pass: component.requirements.length > 0,
+    });
+    checks.push({
+      label: `Component「${name}」至少 1 個 Benefit`,
+      pass: component.benefits.length > 0,
+    });
+  });
+
+  return checks;
+}
+
+function dateBefore(left: string, right: string) {
+  return Boolean(left && right && left < right);
 }
 
 function configurationForRequirement(form: ActivityRequirementForm) {
@@ -193,6 +250,8 @@ function configurationForRequirement(form: ActivityRequirementForm) {
       return { category_ids: values };
     case "AMOUNT":
       return { amount: Number(values[0] || 0), currency: values[1] || "TWD" };
+    case "INSTALLMENT":
+      return { is_installment: values[0] !== "false" };
     case "ACCOUNT_TIER":
       return { tiers: values };
     case "USER_QUALIFICATION":
@@ -227,8 +286,3 @@ function updateComponent(
     })),
   };
 }
-
-
-
-
-

@@ -2,6 +2,7 @@ package admin
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -35,18 +36,19 @@ type rewardGroupRequest struct {
 }
 
 type rewardComponentRequest struct {
-	ID            string                     `json:"id"`
-	Name          string                     `json:"name" binding:"required"`
-	Description   string                     `json:"description"`
-	Layer         int                        `json:"layer" binding:"required,min=1"`
-	StackGroup    string                     `json:"stack_group" binding:"required"`
-	StackMode     string                     `json:"stack_mode" binding:"required"`
-	Priority      int                        `json:"priority"`
-	EffectiveFrom string                     `json:"effective_from"`
-	EffectiveTo   string                     `json:"effective_to"`
-	IsActive      bool                       `json:"is_active"`
-	Requirements  []rewardRequirementRequest `json:"requirements" binding:"required,min=1"`
-	Benefits      []rewardBenefitRequest     `json:"benefits" binding:"required,min=1"`
+	ID             string                     `json:"id"`
+	RewardGroupIDs []string                   `json:"reward_group_ids" binding:"required,min=1"`
+	Name           string                     `json:"name" binding:"required"`
+	Description    string                     `json:"description"`
+	Layer          int                        `json:"layer" binding:"required,min=1"`
+	StackGroup     string                     `json:"stack_group" binding:"required"`
+	StackMode      string                     `json:"stack_mode" binding:"required"`
+	Priority       int                        `json:"priority"`
+	EffectiveFrom  string                     `json:"effective_from"`
+	EffectiveTo    string                     `json:"effective_to"`
+	IsActive       bool                       `json:"is_active"`
+	Requirements   []rewardRequirementRequest `json:"requirements" binding:"required,min=1"`
+	Benefits       []rewardBenefitRequest     `json:"benefits" binding:"required,min=1"`
 }
 
 type rewardRequirementRequest struct {
@@ -64,6 +66,7 @@ type rewardBenefitRequest struct {
 	Value        string  `json:"value" binding:"required"`
 	RewardUnitID string  `json:"reward_unit_id" binding:"required"`
 	CapAmount    *string `json:"cap_amount"`
+	CapFormula   *string `json:"cap_formula"`
 	CapPeriod    *string `json:"cap_period"`
 	Description  string  `json:"description"`
 	IsActive     bool    `json:"is_active"`
@@ -107,19 +110,19 @@ type rewardGroupResponse struct {
 }
 
 type rewardComponentResponse struct {
-	ID            string                      `json:"id"`
-	RewardGroupID string                      `json:"reward_group_id"`
-	Name          string                      `json:"name"`
-	Description   string                      `json:"description"`
-	Layer         int                         `json:"layer"`
-	StackGroup    string                      `json:"stack_group"`
-	StackMode     string                      `json:"stack_mode"`
-	Priority      int                         `json:"priority"`
-	EffectiveFrom string                      `json:"effective_from"`
-	EffectiveTo   string                      `json:"effective_to"`
-	IsActive      bool                        `json:"is_active"`
-	Requirements  []rewardRequirementResponse `json:"requirements"`
-	Benefits      []rewardBenefitResponse     `json:"benefits"`
+	ID             string                      `json:"id"`
+	RewardGroupIDs []string                    `json:"reward_group_ids"`
+	Name           string                      `json:"name"`
+	Description    string                      `json:"description"`
+	Layer          int                         `json:"layer"`
+	StackGroup     string                      `json:"stack_group"`
+	StackMode      string                      `json:"stack_mode"`
+	Priority       int                         `json:"priority"`
+	EffectiveFrom  string                      `json:"effective_from"`
+	EffectiveTo    string                      `json:"effective_to"`
+	IsActive       bool                        `json:"is_active"`
+	Requirements   []rewardRequirementResponse `json:"requirements"`
+	Benefits       []rewardBenefitResponse     `json:"benefits"`
 }
 
 type rewardRequirementResponse struct {
@@ -139,6 +142,7 @@ type rewardBenefitResponse struct {
 	Value             string  `json:"value"`
 	RewardUnitID      string  `json:"reward_unit_id"`
 	CapAmount         *string `json:"cap_amount"`
+	CapFormula        *string `json:"cap_formula"`
 	CapPeriod         *string `json:"cap_period"`
 	Description       string  `json:"description"`
 	IsActive          bool    `json:"is_active"`
@@ -155,9 +159,9 @@ func (r activityFlowRequest) serviceInput() service.ActivityFlowInput {
 			}
 			benefits := make([]service.RewardBenefitInput, 0, len(component.Benefits))
 			for _, benefit := range component.Benefits {
-				benefits = append(benefits, service.RewardBenefitInput{ID: benefit.ID, BenefitType: benefit.BenefitType, Value: benefit.Value, RewardUnitID: benefit.RewardUnitID, CapAmount: benefit.CapAmount, CapPeriod: benefit.CapPeriod, Description: benefit.Description, IsActive: benefit.IsActive})
+				benefits = append(benefits, service.RewardBenefitInput{ID: benefit.ID, BenefitType: benefit.BenefitType, Value: benefit.Value, RewardUnitID: benefit.RewardUnitID, CapAmount: benefit.CapAmount, CapFormula: benefit.CapFormula, CapPeriod: benefit.CapPeriod, Description: benefit.Description, IsActive: benefit.IsActive})
 			}
-			components = append(components, service.RewardComponentInput{ID: component.ID, Name: component.Name, Description: component.Description, Layer: component.Layer, StackGroup: component.StackGroup, StackMode: component.StackMode, Priority: component.Priority, EffectiveFrom: component.EffectiveFrom, EffectiveTo: component.EffectiveTo, IsActive: component.IsActive, Requirements: requirements, Benefits: benefits})
+			components = append(components, service.RewardComponentInput{ID: component.ID, RewardGroupIDs: component.RewardGroupIDs, Name: component.Name, Description: component.Description, Layer: component.Layer, StackGroup: component.StackGroup, StackMode: component.StackMode, Priority: component.Priority, EffectiveFrom: component.EffectiveFrom, EffectiveTo: component.EffectiveTo, IsActive: component.IsActive, Requirements: requirements, Benefits: benefits})
 		}
 		groups = append(groups, service.RewardGroupInput{ID: group.ID, Name: group.Name, Description: group.Description, DisplayOrder: group.DisplayOrder, IsActive: group.IsActive, Components: components})
 	}
@@ -198,14 +202,14 @@ func (c *Controller) GetActivity(ctx *gin.Context) {
 
 func (c *Controller) CreateActivity(ctx *gin.Context) {
 	var request activityFlowRequest
-	if ctx.ShouldBindJSON(&request) != nil {
-		failure(ctx, http.StatusBadRequest, "validation_failed", "活動資料無效")
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		failure(ctx, http.StatusBadRequest, "validation_failed", "活動資料無效："+err.Error())
 		return
 	}
 	id, err := c.service.CreateActivity(ctx.Request.Context(), request.serviceInput())
 	if err != nil {
 		println("CreateActivity error:", err.Error())
-		failure(ctx, http.StatusBadRequest, "validation_failed", "活動資料無效")
+		failure(ctx, http.StatusBadRequest, "validation_failed", activityValidationMessage(err))
 		return
 	}
 	data(ctx, http.StatusCreated, gin.H{"id": id})
@@ -213,8 +217,8 @@ func (c *Controller) CreateActivity(ctx *gin.Context) {
 
 func (c *Controller) UpdateActivity(ctx *gin.Context) {
 	var request activityFlowRequest
-	if ctx.ShouldBindJSON(&request) != nil {
-		failure(ctx, http.StatusBadRequest, "validation_failed", "活動資料無效")
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		failure(ctx, http.StatusBadRequest, "validation_failed", "活動資料無效："+err.Error())
 		return
 	}
 	err := c.service.UpdateActivity(ctx.Request.Context(), ctx.Param("id"), request.serviceInput())
@@ -223,10 +227,20 @@ func (c *Controller) UpdateActivity(ctx *gin.Context) {
 		return
 	}
 	if err != nil {
-		failure(ctx, http.StatusBadRequest, "validation_failed", "活動資料無效")
+		failure(ctx, http.StatusBadRequest, "validation_failed", activityValidationMessage(err))
 		return
 	}
 	data(ctx, http.StatusOK, gin.H{"updated": true})
+}
+
+func activityValidationMessage(err error) string {
+	if err == nil {
+		return "活動資料無效"
+	}
+	if errors.Is(err, domain.ErrInvalidInput) && err.Error() != domain.ErrInvalidInput.Error() {
+		return err.Error()
+	}
+	return "活動資料無效"
 }
 
 func (c *Controller) SetActivityStatus(ctx *gin.Context) {
@@ -285,9 +299,9 @@ func mapActivityFlow(item domain.ActivityFlow) activityFlowResponse {
 			}
 			benefits := make([]rewardBenefitResponse, 0, len(component.Benefits))
 			for _, benefit := range component.Benefits {
-				benefits = append(benefits, rewardBenefitResponse{ID: benefit.ID, RewardComponentID: benefit.RewardComponentID, BenefitType: benefit.BenefitType, Value: benefit.Value, RewardUnitID: benefit.RewardUnitID, CapAmount: benefit.CapAmount, CapPeriod: benefit.CapPeriod, Description: benefit.Description, IsActive: benefit.IsActive})
+				benefits = append(benefits, rewardBenefitResponse{ID: benefit.ID, RewardComponentID: benefit.RewardComponentID, BenefitType: benefit.BenefitType, Value: benefit.Value, RewardUnitID: benefit.RewardUnitID, CapAmount: benefit.CapAmount, CapFormula: benefit.CapFormula, CapPeriod: benefit.CapPeriod, Description: benefit.Description, IsActive: benefit.IsActive})
 			}
-			components = append(components, rewardComponentResponse{ID: component.ID, RewardGroupID: component.RewardGroupID, Name: component.Name, Description: component.Description, Layer: component.Layer, StackGroup: component.StackGroup, StackMode: component.StackMode, Priority: component.Priority, EffectiveFrom: component.EffectiveFrom, EffectiveTo: component.EffectiveTo, IsActive: component.IsActive, Requirements: requirements, Benefits: benefits})
+			components = append(components, rewardComponentResponse{ID: component.ID, RewardGroupIDs: component.RewardGroupIDs, Name: component.Name, Description: component.Description, Layer: component.Layer, StackGroup: component.StackGroup, StackMode: component.StackMode, Priority: component.Priority, EffectiveFrom: component.EffectiveFrom, EffectiveTo: component.EffectiveTo, IsActive: component.IsActive, Requirements: requirements, Benefits: benefits})
 		}
 		groups = append(groups, rewardGroupResponse{ID: group.ID, ActivityID: group.ActivityID, Name: group.Name, Description: group.Description, DisplayOrder: group.DisplayOrder, IsActive: group.IsActive, Components: components})
 	}

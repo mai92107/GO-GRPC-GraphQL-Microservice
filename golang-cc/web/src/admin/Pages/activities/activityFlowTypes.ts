@@ -14,6 +14,7 @@ export type ActivityRequirementType =
   | "REGION"
   | "CURRENCY"
   | "AMOUNT"
+  | "INSTALLMENT"
   | "ACCOUNT_TIER"
   | "USER_QUALIFICATION"
   | "DATE_RANGE"
@@ -54,6 +55,7 @@ export type ActivityBenefit = {
   value: string;
   reward_unit_id: string;
   cap_amount: string | null;
+  cap_formula: string | null;
   cap_period: string | null;
   description: string;
   is_active: boolean;
@@ -61,7 +63,7 @@ export type ActivityBenefit = {
 
 export type ActivityRewardComponent = {
   id: string;
-  reward_group_id: string;
+  reward_group_ids: string[];
   name: string;
   description: string;
   layer: number;
@@ -111,9 +113,9 @@ export type ActivityGroupForm = Omit<
 
 export type ActivityComponentForm = Omit<
   ActivityRewardComponent,
-  "id" | "reward_group_id" | "requirements" | "benefits"
+  "id" | "reward_group_ids" | "requirements" | "benefits"
 > & {
-  reward_group_id: string;
+  reward_group_ids: string[];
 };
 
 export type ActivityRequirementForm = {
@@ -131,7 +133,7 @@ export type ActivityFlowViewMode = "overview" | "editor";
 export type ActivityFlowSelection =
   | { type: "activity"; id: string }
   | { type: "group"; id: string }
-  | { type: "component"; id: string }
+  | { type: "component"; id: string; groupID?: string }
   | { type: "requirement"; id: string; componentID: string }
   | { type: "benefit"; id: string; componentID: string };
 

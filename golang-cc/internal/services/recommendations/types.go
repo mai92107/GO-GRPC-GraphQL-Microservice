@@ -62,6 +62,7 @@ type Card struct {
 	Name                 string
 	AccountTier          string
 	NetworkID            ID
+	CreditLimit          *Decimal
 	QualifiedCardPlanIDs []ID
 	IsActive             bool
 }
@@ -97,6 +98,7 @@ type RewardRule struct {
 	Name                 string
 	RewardUnit           RewardUnit
 	MonthlyCap           *Decimal
+	MonthlyCapFormula    string
 	StartDate            *LocalDate
 	EndDate              *LocalDate
 	IsActive             bool

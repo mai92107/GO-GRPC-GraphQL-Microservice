@@ -115,8 +115,8 @@ func (r *Repository) PublishCapVersion(ctx context.Context, capID string, input 
 	}
 	id := secure.UUID()
 	if _, err := tx.Exec(ctx, `INSERT INTO reward.cap_versions(
-		id,reward_cap_id,cap_type,limit_value,reward_unit_id,period_type,effective_from,effective_to,supersedes_version_id)
-		VALUES($1,$2,$3,$4::numeric,$5,$6,$7,$8,$9)`, id, capID, input.CapType, input.LimitValue,
+		id,reward_cap_id,cap_type,limit_value,limit_formula,reward_unit_id,period_type,effective_from,effective_to,supersedes_version_id)
+		VALUES($1,$2,$3,NULLIF($4,'')::numeric,NULLIF($5,''),$6,$7,$8,$9,$10)`, id, capID, input.CapType, input.LimitValue, input.LimitFormula,
 		input.RewardUnitID, input.PeriodType, input.EffectiveFrom, input.EffectiveTo, previousID); err != nil {
 		return "", err
 	}

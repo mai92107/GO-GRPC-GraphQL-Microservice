@@ -23,6 +23,7 @@ export type MemberCardInput = {
   account_tier: string;
   is_active: boolean;
   card_network_id: string;
+  credit_limit: string;
 };
 
 export type QualificationStatus = {

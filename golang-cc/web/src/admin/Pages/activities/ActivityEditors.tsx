@@ -172,7 +172,7 @@ export function ComponentEditor({
   onChange: (flow: ActivityFlowModel) => void;
 }) {
   const form: ActivityComponentForm = {
-    reward_group_id: component.reward_group_id,
+    reward_group_ids: component.reward_group_ids,
     name: component.name,
     description: component.description,
     layer: component.layer,

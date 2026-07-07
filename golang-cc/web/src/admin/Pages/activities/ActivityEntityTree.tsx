@@ -12,7 +12,10 @@ export function ActivityEntityTree({
 }: {
   flow: ActivityFlowModel;
   selection: ActivityFlowSelection;
-  onDelete: (nextSelection: ActivityFlowSelection) => void;
+  onDelete: (
+    target: ActivityFlowSelection,
+    nextSelection: ActivityFlowSelection,
+  ) => void;
   onSelect: (selection: ActivityFlowSelection) => void;
 }) {
   return (
@@ -40,24 +43,31 @@ export function ActivityEntityTree({
             meta={`Group · ${group.components.length} components`}
             onClick={() => onSelect({ type: "group", id: group.id })}
             onDelete={() =>
-              onDelete({ type: "activity", id: flow.activity.id })
+              onDelete(
+                { type: "group", id: group.id },
+                { type: "activity", id: flow.activity.id },
+              )
             }
           />
           {group.components.map((component) => (
-            <div className="entity-tree-component" key={component.id}>
+            <div className="entity-tree-component" key={`${group.id}:${component.id}`}>
               <TreeButton
                 active={
                   selection.type === "component" &&
-                  selection.id === component.id
+                  selection.id === component.id &&
+                  selection.groupID === group.id
                 }
                 enabled={component.is_active}
                 label={component.name}
                 meta={`L${component.layer} · ${component.stack_group} · ${component.stack_mode}`}
                 onClick={() =>
-                  onSelect({ type: "component", id: component.id })
+                  onSelect({ type: "component", id: component.id, groupID: group.id })
                 }
                 onDelete={() =>
-                  onDelete({ type: "group", id: component.reward_group_id })
+                  onDelete(
+                    { type: "component", id: component.id, groupID: group.id },
+                    { type: "group", id: group.id },
+                  )
                 }
               />
               <div className="entity-tree-child-list">
@@ -81,7 +91,14 @@ export function ActivityEntityTree({
                       })
                     }
                     onDelete={() =>
-                      onDelete({ type: "component", id: component.id })
+                      onDelete(
+                        {
+                          type: "requirement",
+                          id: requirement.id,
+                          componentID: component.id,
+                        },
+                        { type: "component", id: component.id, groupID: group.id },
+                      )
                     }
                   />
                 ))}
@@ -103,7 +120,14 @@ export function ActivityEntityTree({
                       })
                     }
                     onDelete={() =>
-                      onDelete({ type: "component", id: component.id })
+                      onDelete(
+                        {
+                          type: "benefit",
+                          id: benefit.id,
+                          componentID: component.id,
+                        },
+                        { type: "component", id: component.id, groupID: group.id },
+                      )
                     }
                   />
                 ))}
@@ -150,4 +174,3 @@ function TreeButton({
     </div>
   );
 }
-

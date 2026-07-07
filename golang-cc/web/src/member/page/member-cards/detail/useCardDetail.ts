@@ -6,6 +6,7 @@ import {
   getRewardOverview,
   RewardOverview,
   setQualificationStatus,
+  updateCard,
 } from "../../../MemberApi";
 
 type Options = {
@@ -20,6 +21,7 @@ export function useCardDetail({ onDeleted }: Options) {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [qualificationSaving, setQualificationSaving] = useState("");
+  const [creditLimitSaving, setCreditLimitSaving] = useState(false);
 
   async function open(memberCardID: string) {
     setLoadingCardID(memberCardID);
@@ -73,6 +75,33 @@ export function useCardDetail({ onDeleted }: Options) {
     }
   }
 
+  async function updateCreditLimit(cardID: string, creditLimit: string) {
+    if (!card) return;
+    setCreditLimitSaving(true);
+    setError("");
+    try {
+      await updateCard(cardID, {
+        card_id: "",
+        nickname: card.nickname || "",
+        last_four: card.last_four || "",
+        statement_day: card.statement_day,
+        payment_due_day: card.payment_due_day,
+        account_tier: card.account_tier || "",
+        is_active: card.is_active,
+        card_network_id: card.card_network_id || "",
+        credit_limit: creditLimit,
+      });
+      const nextCard = await getCard(cardID);
+      setCard(nextCard);
+      setOverview(await getRewardOverview(cardID));
+    } catch (requestError) {
+      setError((requestError as Error).message);
+      throw requestError;
+    } finally {
+      setCreditLimitSaving(false);
+    }
+  }
+
   async function remove(id: string) {
     if (!confirm("確定刪除這張卡？已有交易的卡片將無法刪除。")) return;
     setDeletingID(id);
@@ -91,6 +120,7 @@ export function useCardDetail({ onDeleted }: Options) {
   return {
     card,
     close,
+    creditLimitSaving,
     deletingID,
     error,
     expanded,
@@ -101,5 +131,6 @@ export function useCardDetail({ onDeleted }: Options) {
     remove,
     toggleGroup,
     toggleQualification,
+    updateCreditLimit,
   };
 }

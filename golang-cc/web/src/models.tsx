@@ -19,8 +19,11 @@ export type TelegramBinding = {
 export type Card = {
   member_card_id: string;
   name: string;
+  nickname?: string;
   issuer: string;
   last_four: string;
+  credit_limit: string;
+  card_network_id?: string;
   is_active: boolean;
   statement_day: number | null;
   payment_due_day: number | null;

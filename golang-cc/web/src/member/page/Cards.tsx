@@ -39,7 +39,9 @@ export default function Cards() {
           overview={detail.overview}
           overviewLoading={detail.loadingCardID === detail.card.member_card_id}
           qualificationSaving={detail.qualificationSaving}
+          creditLimitSaving={detail.creditLimitSaving}
           onDelete={(id) => void detail.remove(id)}
+          onUpdateCreditLimit={detail.updateCreditLimit}
           onToggleGroup={detail.toggleGroup}
           onToggleQualification={detail.toggleQualification}
         />

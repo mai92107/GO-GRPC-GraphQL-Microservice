@@ -56,11 +56,20 @@ func (s *TransactionRepository) Recommend(ctx context.Context, userID recommenda
 	}
 	rows, err := tx.Query(ctx, `SELECT mc.id, mc.user_id,
 		CASE WHEN NULLIF(mc.nickname,'') IS NULL THEN cp.name ELSE mc.nickname || '（' || cp.name || '）' END,
-		COALESCE(mc.account_tier,''),COALESCE(mc.card_network_id::text,''),mc.is_active,
+		COALESCE(mc.account_tier,''),COALESCE(mc.card_network_id::text,''),COALESCE(limit_at_date.credit_limit, mc.credit_limit::text),mc.is_active,
 		ARRAY(SELECT q.card_plan_id FROM catalog.member_card_qualification_statuses q
 			WHERE q.member_card_id=mc.id AND q.is_qualified
 			AND q.effective_from <= $2 AND (q.effective_to IS NULL OR q.effective_to > $2))
 		FROM member_cards mc JOIN card_products cp ON cp.id=mc.card_product_id
+		LEFT JOIN LATERAL (
+			SELECT h.credit_limit::text AS credit_limit
+			FROM member_card_credit_limits h
+			WHERE h.member_card_id=mc.id
+			AND (h.effective_from AT TIME ZONE 'Asia/Taipei')::date <= $2::date
+			AND (h.effective_to IS NULL OR (h.effective_to AT TIME ZONE 'Asia/Taipei')::date > $2::date)
+			ORDER BY h.effective_from DESC, h.created_at DESC
+			LIMIT 1
+		) limit_at_date ON true
 		WHERE mc.user_id = $1 AND mc.is_active AND cp.is_active`, userID, date.Time)
 	if err != nil {
 		return recommendations.Result{}, err
@@ -68,9 +77,14 @@ func (s *TransactionRepository) Recommend(ctx context.Context, userID recommenda
 	var cards []recommendations.Card
 	for rows.Next() {
 		var card recommendations.Card
-		if err := rows.Scan(&card.ID, &card.UserID, &card.Name, &card.AccountTier, &card.NetworkID, &card.IsActive, &card.QualifiedCardPlanIDs); err != nil {
+		var creditLimit *string
+		if err := rows.Scan(&card.ID, &card.UserID, &card.Name, &card.AccountTier, &card.NetworkID, &creditLimit, &card.IsActive, &card.QualifiedCardPlanIDs); err != nil {
 			rows.Close()
 			return recommendations.Result{}, err
+		}
+		if creditLimit != nil {
+			value := recommendations.MustDecimal(*creditLimit)
+			card.CreditLimit = &value
 		}
 		cards = append(cards, card)
 	}
@@ -274,19 +288,33 @@ func buildRecommendation(ctx context.Context, tx pgx.Tx, userID recommendations.
 
 func loadCard(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID, date recommendations.LocalDate) ([]recommendations.Card, error) {
 	var card recommendations.Card
+	var creditLimit *string
 	if err := tx.QueryRow(ctx, `SELECT mc.id, mc.user_id,
 		CASE WHEN NULLIF(mc.nickname,'') IS NULL THEN cp.name ELSE mc.nickname || '（' || cp.name || '）' END,
-		COALESCE(mc.account_tier,''),COALESCE(mc.card_network_id::text,''),mc.is_active,
+		COALESCE(mc.account_tier,''),COALESCE(mc.card_network_id::text,''),COALESCE(limit_at_date.credit_limit, mc.credit_limit::text),mc.is_active,
 		ARRAY(SELECT q.card_plan_id FROM catalog.member_card_qualification_statuses q
 			WHERE q.member_card_id=mc.id AND q.is_qualified
 			AND q.effective_from <= $3 AND (q.effective_to IS NULL OR q.effective_to > $3))
 		FROM member_cards mc JOIN card_products cp ON cp.id=mc.card_product_id
+		LEFT JOIN LATERAL (
+			SELECT h.credit_limit::text AS credit_limit
+			FROM member_card_credit_limits h
+			WHERE h.member_card_id=mc.id
+			AND (h.effective_from AT TIME ZONE 'Asia/Taipei')::date <= $3::date
+			AND (h.effective_to IS NULL OR (h.effective_to AT TIME ZONE 'Asia/Taipei')::date > $3::date)
+			ORDER BY h.effective_from DESC, h.created_at DESC
+			LIMIT 1
+		) limit_at_date ON true
 		WHERE mc.id = $1 AND mc.user_id = $2 AND mc.is_active AND cp.is_active`, cardID, userID, date.Time).
-		Scan(&card.ID, &card.UserID, &card.Name, &card.AccountTier, &card.NetworkID, &card.IsActive, &card.QualifiedCardPlanIDs); err != nil {
+		Scan(&card.ID, &card.UserID, &card.Name, &card.AccountTier, &card.NetworkID, &creditLimit, &card.IsActive, &card.QualifiedCardPlanIDs); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("active card not found")
 		}
 		return nil, fmt.Errorf("load card: %w", err)
+	}
+	if creditLimit != nil {
+		value := recommendations.MustDecimal(*creditLimit)
+		card.CreditLimit = &value
 	}
 	return []recommendations.Card{card}, nil
 }
@@ -294,6 +322,7 @@ func loadCard(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID,
 func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID, date recommendations.LocalDate) ([]recommendations.RewardRule, error) {
 	rows, err := tx.Query(ctx, `SELECT c.id,p.id,p.name,$1::uuid,mc.id,cv.name,
 		cap.limit_value::text,
+		COALESCE(cap.limit_formula,''),
 		COALESCE((cv.effective_from AT TIME ZONE 'Asia/Taipei')::date,DATE '2000-01-01'),
 		CASE WHEN cv.effective_to IS NULL THEN NULL ELSE ((cv.effective_to-interval '1 microsecond') AT TIME ZONE 'Asia/Taipei')::date END,
 		(p.status='published' AND c.is_active),c.stack_group,c.priority,
@@ -314,7 +343,7 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 		) cv ON true
 		JOIN reward_units u ON u.id=cv.reward_unit_id
 		LEFT JOIN LATERAL (
-			SELECT v.limit_value FROM reward.component_caps cc
+			SELECT v.limit_value,v.limit_formula FROM reward.component_caps cc
 			JOIN reward.cap_versions v ON v.reward_cap_id=cc.reward_cap_id
 			WHERE cc.reward_component_id=c.id AND cc.effective_from <= $3
 			AND (cc.effective_to IS NULL OR cc.effective_to > $3)
@@ -327,7 +356,12 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 				CASE WHEN count(*) FILTER (WHERE cp.plan_type='selectable')>0 THEN 'app_switch'
 				     WHEN count(rem.value)>0 THEN 'account_setup'
 				     ELSE 'none' END AS action_required,
-				COALESCE(max(spv.reminder_text) FILTER (WHERE cp.plan_type='selectable' AND spv.reminder_text<>''), max(rem.value),'') AS action_message,
+				COALESCE(max(
+					CASE WHEN cp.plan_type='selectable' THEN
+						concat('需至 APP 切換卡片方案：',spv.name,'，對應優惠：',cv.name,' ',trim(trailing '.' from trim(trailing '0' from cv.reward_value::text)),
+							CASE WHEN spv.reminder_text<>'' THEN '；'||spv.reminder_text ELSE '' END)
+					END
+				), max(rem.value),'') AS action_message,
 				array_remove(array_agg(DISTINCT pm.value),NULL) AS payment_methods,
 				array_remove(array_agg(DISTINCT cn.value::uuid),NULL) AS card_network_ids,
 				array_remove(array_agg(DISTINCT cat.value),NULL) AS categories,
@@ -344,7 +378,7 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 				ORDER BY pv.effective_from DESC LIMIT 1
 			) qpv ON cp.plan_type='qualified'
 			LEFT JOIN LATERAL (
-				SELECT reminder_text FROM catalog.card_plan_versions pv WHERE pv.card_plan_id=cp.id
+				SELECT name,reminder_text FROM catalog.card_plan_versions pv WHERE pv.card_plan_id=cp.id
 				AND pv.effective_from <= $3 AND (pv.effective_to IS NULL OR pv.effective_to > $3)
 				ORDER BY pv.effective_from DESC LIMIT 1
 			) spv ON cp.plan_type='selectable'
@@ -371,7 +405,7 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 		var rewardValue string
 		var start, end *time.Time
 		if err := rows.Scan(&rule.ID, &rule.ActivityID, &rule.ActivityName, &rule.UserID, &rule.CardID, &rule.Name,
-			&cap, &start, &end, &rule.IsActive, &rule.StackGroup, &rule.Priority,
+			&cap, &rule.MonthlyCapFormula, &start, &end, &rule.IsActive, &rule.StackGroup, &rule.Priority,
 			&rule.Layer, &rule.DisplayOrder, &rule.EffectType, &rewardValue,
 			&rule.QualifiedType, &rule.ActionRequired, &rule.ActionMessage, &rule.PaymentMethods, &sharedCap, &rule.RewardUnit.ID, &rule.RewardUnit.ID,
 			&rule.RewardUnit.Name, &rule.RewardUnit.Symbol, &rule.RewardUnit.SymbolPosition, &twdRate, &rule.RewardUnit.Precision,

@@ -36,14 +36,12 @@ type activityGroupModel struct {
 	IsActive     bool   `gorm:"column:is_active"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
-	Components   []activityComponentModel `gorm:"foreignKey:RewardGroupID"`
 }
 
 func (activityGroupModel) TableName() string { return "reward.activity_groups" }
 
 type activityComponentModel struct {
 	ID            string `gorm:"column:id;primaryKey"`
-	RewardGroupID string `gorm:"column:reward_group_id"`
 	Name          string `gorm:"column:name"`
 	Description   string `gorm:"column:description"`
 	Layer         int    `gorm:"column:layer"`
@@ -60,6 +58,13 @@ type activityComponentModel struct {
 }
 
 func (activityComponentModel) TableName() string { return "reward.activity_components" }
+
+type activityComponentGroupModel struct {
+	RewardComponentID string `gorm:"column:reward_component_id;primaryKey"`
+	RewardGroupID     string `gorm:"column:reward_group_id;primaryKey"`
+}
+
+func (activityComponentGroupModel) TableName() string { return "reward.activity_component_groups" }
 
 type activityRequirementModel struct {
 	ID                string          `gorm:"column:id;primaryKey"`
@@ -82,6 +87,7 @@ type activityBenefitModel struct {
 	Value             string  `gorm:"column:value"`
 	RewardUnitID      string  `gorm:"column:reward_unit_id"`
 	CapAmount         *string `gorm:"column:cap_amount"`
+	CapFormula        *string `gorm:"column:cap_formula"`
 	CapPeriod         *string `gorm:"column:cap_period"`
 	Description       string  `gorm:"column:description"`
 	IsActive          bool    `gorm:"column:is_active"`
@@ -100,7 +106,8 @@ func (r *Repository) ListActivities(ctx context.Context, filters service.Activit
 		Joins("JOIN banks AS b ON b.id=a.bank_id").
 		Joins("JOIN catalog.card_products AS cp ON cp.id=a.card_product_id").
 		Joins("LEFT JOIN reward.activity_groups AS g ON g.activity_id=a.id").
-		Joins("LEFT JOIN reward.activity_components AS c ON c.reward_group_id=g.id").
+		Joins("LEFT JOIN reward.activity_component_groups AS cg ON cg.reward_group_id=g.id").
+		Joins("LEFT JOIN reward.activity_components AS c ON c.id=cg.reward_component_id").
 		Group("a.id,b.name,cp.name")
 	if filters.BankID != "" {
 		query = query.Where("a.bank_id = ?", filters.BankID)
@@ -120,9 +127,6 @@ func (r *Repository) GetActivity(ctx context.Context, id string) (domain.Activit
 	var model activityModel
 	err := r.db.WithContext(ctx).
 		Preload("Groups", func(db *gorm.DB) *gorm.DB { return db.Order("display_order,name") }).
-		Preload("Groups.Components", func(db *gorm.DB) *gorm.DB { return db.Order("layer,priority,name") }).
-		Preload("Groups.Components.Requirements", func(db *gorm.DB) *gorm.DB { return db.Order("requirement_type,id") }).
-		Preload("Groups.Components.Benefits", func(db *gorm.DB) *gorm.DB { return db.Order("benefit_type,id") }).
 		Where("id = ?", id).First(&model).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -131,6 +135,9 @@ func (r *Repository) GetActivity(ctx context.Context, id string) (domain.Activit
 		return domain.ActivityFlow{}, err
 	}
 	flow := flowFromModel(model)
+	if err := r.loadFlowComponents(ctx, &flow); err != nil {
+		return domain.ActivityFlow{}, err
+	}
 	var names struct{ BankName, CardName string }
 	if err := r.db.WithContext(ctx).
 		Table("banks AS b").
@@ -148,7 +155,10 @@ func (r *Repository) GetActivity(ctx context.Context, id string) (domain.Activit
 func (r *Repository) CreateActivity(ctx context.Context, flow domain.ActivityFlow) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		model := modelFromFlow(flow)
-		return tx.Create(&model).Error
+		if err := tx.Create(&model).Error; err != nil {
+			return err
+		}
+		return saveFlowChildren(tx, flow)
 	})
 }
 
@@ -173,27 +183,15 @@ func (r *Repository) UpdateActivity(ctx context.Context, flow domain.ActivityFlo
 		if err := deactivateMissing(tx, flow.Activity.ID, groupIDs, componentIDs, requirementIDs, benefitIDs); err != nil {
 			return err
 		}
+		if err := clearCurrentComponentLinks(tx, flow.Activity.ID, componentIDs); err != nil {
+			return err
+		}
 		for _, group := range model.Groups {
 			if err := tx.Save(&group).Error; err != nil {
 				return err
 			}
-			for _, component := range group.Components {
-				if err := tx.Save(&component).Error; err != nil {
-					return err
-				}
-				for _, requirement := range component.Requirements {
-					if err := tx.Save(&requirement).Error; err != nil {
-						return err
-					}
-				}
-				for _, benefit := range component.Benefits {
-					if err := tx.Save(&benefit).Error; err != nil {
-						return err
-					}
-				}
-			}
 		}
-		return nil
+		return saveFlowChildren(tx, flow)
 	})
 }
 
@@ -220,13 +218,13 @@ func (r *Repository) DeleteActivity(ctx context.Context, id string) error {
 		if err := tx.Exec(`UPDATE reward.activity_groups g SET is_active=false,updated_at=now() WHERE g.activity_id=?`, id).Error; err != nil {
 			return err
 		}
-		if err := tx.Exec(`UPDATE reward.activity_components c SET is_active=false,updated_at=now() FROM reward.activity_groups g WHERE c.reward_group_id=g.id AND g.activity_id=?`, id).Error; err != nil {
+		if err := tx.Exec(`DELETE FROM reward.activity_component_groups cg USING reward.activity_groups g WHERE cg.reward_group_id=g.id AND g.activity_id=?`, id).Error; err != nil {
 			return err
 		}
-		if err := tx.Exec(`UPDATE reward.activity_requirements r SET is_active=false,updated_at=now() FROM reward.activity_components c JOIN reward.activity_groups g ON g.id=c.reward_group_id WHERE r.reward_component_id=c.id AND g.activity_id=?`, id).Error; err != nil {
+		if err := tx.Exec(`DELETE FROM reward.activity_components c WHERE NOT EXISTS (SELECT 1 FROM reward.activity_component_groups cg WHERE cg.reward_component_id=c.id)`).Error; err != nil {
 			return err
 		}
-		return tx.Exec(`UPDATE reward.activity_benefits b SET is_active=false,updated_at=now() FROM reward.activity_components c JOIN reward.activity_groups g ON g.id=c.reward_group_id WHERE b.reward_component_id=c.id AND g.activity_id=?`, id).Error
+		return nil
 	})
 }
 
@@ -268,11 +266,27 @@ func (r *Repository) ActivityRequirementOptions(ctx context.Context, filters ser
 			return out, err
 		}
 	case "CARD_PLAN":
-		if err := r.db.WithContext(ctx).Table("catalog.card_plans AS p").Select("p.id,p.card_product_id,p.plan_type,pv.name").Joins("JOIN LATERAL (SELECT name FROM catalog.card_plan_versions v WHERE v.card_plan_id=p.id ORDER BY v.effective_from DESC LIMIT 1) pv ON true").Where("p.is_active").Order("pv.name").Scan(&out.CardPlans).Error; err != nil {
+		if filters.CardProductID == "" {
+			return out, nil
+		}
+		if err := r.db.WithContext(ctx).Table("catalog.card_plans AS p").
+			Select("p.id,p.card_product_id,p.plan_type,pv.name").
+			Joins("JOIN LATERAL (SELECT name FROM catalog.card_plan_versions v WHERE v.card_plan_id=p.id ORDER BY v.effective_from DESC LIMIT 1) pv ON true").
+			Where("p.is_active AND p.card_product_id = ? AND p.plan_type = ?", filters.CardProductID, "selectable").
+			Order("pv.name").
+			Scan(&out.CardPlans).Error; err != nil {
 			return out, err
 		}
 	case "ACCOUNT_TIER":
-		if err := r.scanCodeNames(ctx, "SELECT DISTINCT trim(value) AS code,trim(value) AS name FROM catalog.card_products cp CROSS JOIN LATERAL regexp_split_to_table(COALESCE(cp.qualified_type,''), ',') value WHERE trim(value)<>'' ORDER BY name", &out.AccountTiers); err != nil {
+		if filters.CardProductID == "" {
+			return out, nil
+		}
+		if err := r.db.WithContext(ctx).Raw(`
+			SELECT DISTINCT trim(value) AS code,trim(value) AS name
+			FROM catalog.card_products cp
+			CROSS JOIN LATERAL regexp_split_to_table(COALESCE(cp.qualified_type,''), ',') value
+			WHERE cp.id = ? AND trim(value)<>''
+			ORDER BY name`, filters.CardProductID).Scan(&out.AccountTiers).Error; err != nil {
 			return out, err
 		}
 	case "REGION":
@@ -294,16 +308,6 @@ func modelFromFlow(flow domain.ActivityFlow) activityModel {
 	model := activityModel{ID: flow.Activity.ID, BankID: flow.Activity.BankID, CardProductID: flow.Activity.CardProductID, Title: flow.Activity.Title, Description: flow.Activity.Description, SourceURL: flow.Activity.SourceURL, EffectiveFrom: flow.Activity.EffectiveFrom, EffectiveTo: flow.Activity.EffectiveTo, IsActive: flow.Activity.IsActive}
 	for _, group := range flow.RewardGroups {
 		groupModel := activityGroupModel{ID: group.ID, ActivityID: flow.Activity.ID, Name: group.Name, Description: group.Description, DisplayOrder: group.DisplayOrder, IsActive: group.IsActive}
-		for _, component := range group.Components {
-			componentModel := activityComponentModel{ID: component.ID, RewardGroupID: group.ID, Name: component.Name, Description: component.Description, Layer: component.Layer, StackGroup: component.StackGroup, StackMode: component.StackMode, Priority: component.Priority, EffectiveFrom: component.EffectiveFrom, EffectiveTo: component.EffectiveTo, IsActive: component.IsActive}
-			for _, requirement := range component.Requirements {
-				componentModel.Requirements = append(componentModel.Requirements, activityRequirementModel{ID: requirement.ID, RewardComponentID: component.ID, RequirementType: requirement.RequirementType, Operator: requirement.Operator, Configuration: requirement.Configuration, Description: requirement.Description, IsActive: requirement.IsActive})
-			}
-			for _, benefit := range component.Benefits {
-				componentModel.Benefits = append(componentModel.Benefits, activityBenefitModel{ID: benefit.ID, RewardComponentID: component.ID, BenefitType: benefit.BenefitType, Value: benefit.Value, RewardUnitID: benefit.RewardUnitID, CapAmount: benefit.CapAmount, CapPeriod: benefit.CapPeriod, Description: benefit.Description, IsActive: benefit.IsActive})
-			}
-			groupModel.Components = append(groupModel.Components, componentModel)
-		}
 		model.Groups = append(model.Groups, groupModel)
 	}
 	return model
@@ -313,26 +317,143 @@ func flowFromModel(model activityModel) domain.ActivityFlow {
 	flow := domain.ActivityFlow{Activity: domain.ActivitySummary{ID: model.ID, BankID: model.BankID, CardProductID: model.CardProductID, Title: model.Title, Description: model.Description, SourceURL: model.SourceURL, EffectiveFrom: model.EffectiveFrom, EffectiveTo: model.EffectiveTo, IsActive: model.IsActive, CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt}}
 	for _, group := range model.Groups {
 		outGroup := domain.RewardGroup{ID: group.ID, ActivityID: group.ActivityID, Name: group.Name, Description: group.Description, DisplayOrder: group.DisplayOrder, IsActive: group.IsActive}
-		for _, component := range group.Components {
-			outComponent := domain.RewardComponent{ID: component.ID, RewardGroupID: component.RewardGroupID, Name: component.Name, Description: component.Description, Layer: component.Layer, StackGroup: component.StackGroup, StackMode: component.StackMode, Priority: component.Priority, EffectiveFrom: component.EffectiveFrom, EffectiveTo: component.EffectiveTo, IsActive: component.IsActive}
-			for _, requirement := range component.Requirements {
-				outComponent.Requirements = append(outComponent.Requirements, domain.RewardRequirement{ID: requirement.ID, RewardComponentID: requirement.RewardComponentID, RequirementType: requirement.RequirementType, Operator: requirement.Operator, Configuration: requirement.Configuration, Description: requirement.Description, IsActive: requirement.IsActive})
-			}
-			for _, benefit := range component.Benefits {
-				outComponent.Benefits = append(outComponent.Benefits, domain.RewardBenefit{ID: benefit.ID, RewardComponentID: benefit.RewardComponentID, BenefitType: benefit.BenefitType, Value: benefit.Value, RewardUnitID: benefit.RewardUnitID, CapAmount: benefit.CapAmount, CapPeriod: benefit.CapPeriod, Description: benefit.Description, IsActive: benefit.IsActive})
-			}
-			outGroup.Components = append(outGroup.Components, outComponent)
-		}
 		flow.RewardGroups = append(flow.RewardGroups, outGroup)
 	}
 	return flow
 }
 
+type activityComponentLinkRow struct {
+	RewardGroupID string `gorm:"column:reward_group_id"`
+	ID            string `gorm:"column:id"`
+	Name          string `gorm:"column:name"`
+	Description   string `gorm:"column:description"`
+	Layer         int    `gorm:"column:layer"`
+	StackGroup    string `gorm:"column:stack_group"`
+	StackMode     string `gorm:"column:stack_mode"`
+	Priority      int    `gorm:"column:priority"`
+	EffectiveFrom string `gorm:"column:effective_from"`
+	EffectiveTo   string `gorm:"column:effective_to"`
+	IsActive      bool   `gorm:"column:is_active"`
+}
+
+func (r *Repository) loadFlowComponents(ctx context.Context, flow *domain.ActivityFlow) error {
+	if len(flow.RewardGroups) == 0 {
+		return nil
+	}
+	rows := []activityComponentLinkRow{}
+	if err := r.db.WithContext(ctx).
+		Table("reward.activity_component_groups AS cg").
+		Select(`cg.reward_group_id,c.id,c.name,c.description,c.layer,c.stack_group,c.stack_mode,c.priority,
+			c.effective_from::text AS effective_from,c.effective_to::text AS effective_to,c.is_active`).
+		Joins("JOIN reward.activity_components AS c ON c.id=cg.reward_component_id").
+		Joins("JOIN reward.activity_groups AS g ON g.id=cg.reward_group_id").
+		Where("g.activity_id = ?", flow.Activity.ID).
+		Order("g.display_order,g.name,c.layer,c.priority,c.name").
+		Scan(&rows).Error; err != nil {
+		return err
+	}
+	componentIDs := []string{}
+	components := map[string]domain.RewardComponent{}
+	for _, row := range rows {
+		component := components[row.ID]
+		if component.ID == "" {
+			component = domain.RewardComponent{
+				ID: row.ID, Name: row.Name, Description: row.Description, Layer: row.Layer, StackGroup: row.StackGroup,
+				StackMode: row.StackMode, Priority: row.Priority, EffectiveFrom: row.EffectiveFrom, EffectiveTo: row.EffectiveTo, IsActive: row.IsActive,
+			}
+			componentIDs = append(componentIDs, row.ID)
+		}
+		component.RewardGroupIDs = appendUnique(component.RewardGroupIDs, row.RewardGroupID)
+		components[row.ID] = component
+	}
+	if len(componentIDs) > 0 {
+		requirements := []activityRequirementModel{}
+		if err := r.db.WithContext(ctx).Where("reward_component_id IN ?", componentIDs).Order("requirement_type,id").Find(&requirements).Error; err != nil {
+			return err
+		}
+		for _, requirement := range requirements {
+			component := components[requirement.RewardComponentID]
+			component.Requirements = append(component.Requirements, domain.RewardRequirement{ID: requirement.ID, RewardComponentID: requirement.RewardComponentID, RequirementType: requirement.RequirementType, Operator: requirement.Operator, Configuration: requirement.Configuration, Description: requirement.Description, IsActive: requirement.IsActive})
+			components[requirement.RewardComponentID] = component
+		}
+		benefits := []activityBenefitModel{}
+		if err := r.db.WithContext(ctx).Where("reward_component_id IN ?", componentIDs).Order("benefit_type,id").Find(&benefits).Error; err != nil {
+			return err
+		}
+		for _, benefit := range benefits {
+			component := components[benefit.RewardComponentID]
+			component.Benefits = append(component.Benefits, domain.RewardBenefit{ID: benefit.ID, RewardComponentID: benefit.RewardComponentID, BenefitType: benefit.BenefitType, Value: benefit.Value, RewardUnitID: benefit.RewardUnitID, CapAmount: benefit.CapAmount, CapFormula: benefit.CapFormula, CapPeriod: benefit.CapPeriod, Description: benefit.Description, IsActive: benefit.IsActive})
+			components[benefit.RewardComponentID] = component
+		}
+	}
+	for index := range flow.RewardGroups {
+		for _, row := range rows {
+			if row.RewardGroupID == flow.RewardGroups[index].ID {
+				flow.RewardGroups[index].Components = append(flow.RewardGroups[index].Components, components[row.ID])
+			}
+		}
+	}
+	return nil
+}
+
+func saveFlowChildren(tx *gorm.DB, flow domain.ActivityFlow) error {
+	components := uniqueFlowComponents(flow)
+	for _, component := range components {
+		componentModel := activityComponentModel{ID: component.ID, Name: component.Name, Description: component.Description, Layer: component.Layer, StackGroup: component.StackGroup, StackMode: component.StackMode, Priority: component.Priority, EffectiveFrom: component.EffectiveFrom, EffectiveTo: component.EffectiveTo, IsActive: component.IsActive}
+		if err := tx.Save(&componentModel).Error; err != nil {
+			return err
+		}
+		for _, groupID := range component.RewardGroupIDs {
+			if err := tx.Save(&activityComponentGroupModel{RewardComponentID: component.ID, RewardGroupID: groupID}).Error; err != nil {
+				return err
+			}
+		}
+		for _, requirement := range component.Requirements {
+			if err := tx.Save(&activityRequirementModel{ID: requirement.ID, RewardComponentID: component.ID, RequirementType: requirement.RequirementType, Operator: requirement.Operator, Configuration: requirement.Configuration, Description: requirement.Description, IsActive: requirement.IsActive}).Error; err != nil {
+				return err
+			}
+		}
+		for _, benefit := range component.Benefits {
+			if err := tx.Save(&activityBenefitModel{ID: benefit.ID, RewardComponentID: component.ID, BenefitType: benefit.BenefitType, Value: benefit.Value, RewardUnitID: benefit.RewardUnitID, CapAmount: benefit.CapAmount, CapFormula: benefit.CapFormula, CapPeriod: benefit.CapPeriod, Description: benefit.Description, IsActive: benefit.IsActive}).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func clearCurrentComponentLinks(tx *gorm.DB, activityID string, componentIDs []string) error {
+	if len(componentIDs) == 0 {
+		return nil
+	}
+	return tx.Exec("DELETE FROM reward.activity_component_groups cg USING reward.activity_groups g WHERE cg.reward_group_id=g.id AND g.activity_id=? AND cg.reward_component_id IN ?", activityID, componentIDs).Error
+}
+
+func uniqueFlowComponents(flow domain.ActivityFlow) []domain.RewardComponent {
+	components := []domain.RewardComponent{}
+	seen := map[string]bool{}
+	for _, group := range flow.RewardGroups {
+		for _, component := range group.Components {
+			if seen[component.ID] {
+				continue
+			}
+			seen[component.ID] = true
+			components = append(components, component)
+		}
+	}
+	return components
+}
+
 func collectFlowIDs(flow domain.ActivityFlow) ([]string, []string, []string, []string) {
 	groups, components, requirements, benefits := []string{}, []string{}, []string{}, []string{}
+	seenComponents := map[string]bool{}
 	for _, group := range flow.RewardGroups {
 		groups = append(groups, group.ID)
 		for _, component := range group.Components {
+			if seenComponents[component.ID] {
+				continue
+			}
+			seenComponents[component.ID] = true
 			components = append(components, component.ID)
 			for _, requirement := range component.Requirements {
 				requirements = append(requirements, requirement.ID)
@@ -346,14 +467,29 @@ func collectFlowIDs(flow domain.ActivityFlow) ([]string, []string, []string, []s
 }
 
 func deactivateMissing(tx *gorm.DB, activityID string, groupIDs, componentIDs, requirementIDs, benefitIDs []string) error {
-	if err := tx.Exec("UPDATE reward.activity_groups SET is_active=false,updated_at=now() WHERE activity_id=? AND id NOT IN ?", activityID, groupIDs).Error; err != nil {
+	if err := tx.Exec("DELETE FROM reward.activity_groups WHERE activity_id=? AND id NOT IN ?", activityID, groupIDs).Error; err != nil {
 		return err
 	}
-	if err := tx.Exec("UPDATE reward.activity_components c SET is_active=false,updated_at=now() FROM reward.activity_groups g WHERE c.reward_group_id=g.id AND g.activity_id=? AND c.id NOT IN ?", activityID, componentIDs).Error; err != nil {
+	if err := tx.Exec("DELETE FROM reward.activity_component_groups cg USING reward.activity_groups g WHERE cg.reward_group_id=g.id AND g.activity_id=? AND (cg.reward_group_id NOT IN ? OR cg.reward_component_id NOT IN ?)", activityID, groupIDs, componentIDs).Error; err != nil {
 		return err
 	}
-	if err := tx.Exec("UPDATE reward.activity_requirements r SET is_active=false,updated_at=now() FROM reward.activity_components c JOIN reward.activity_groups g ON g.id=c.reward_group_id WHERE r.reward_component_id=c.id AND g.activity_id=? AND r.id NOT IN ?", activityID, requirementIDs).Error; err != nil {
+	if err := tx.Exec("DELETE FROM reward.activity_component_groups cg USING reward.activity_groups g WHERE cg.reward_group_id=g.id AND g.activity_id=? AND NOT EXISTS (SELECT 1 FROM reward.activity_components c WHERE c.id=cg.reward_component_id)", activityID).Error; err != nil {
 		return err
 	}
-	return tx.Exec("UPDATE reward.activity_benefits b SET is_active=false,updated_at=now() FROM reward.activity_components c JOIN reward.activity_groups g ON g.id=c.reward_group_id WHERE b.reward_component_id=c.id AND g.activity_id=? AND b.id NOT IN ?", activityID, benefitIDs).Error
+	if err := tx.Exec("DELETE FROM reward.activity_components c WHERE c.id NOT IN ? AND NOT EXISTS (SELECT 1 FROM reward.activity_component_groups cg WHERE cg.reward_component_id=c.id)", componentIDs).Error; err != nil {
+		return err
+	}
+	if err := tx.Exec("DELETE FROM reward.activity_requirements r WHERE r.reward_component_id IN ? AND r.id NOT IN ?", componentIDs, requirementIDs).Error; err != nil {
+		return err
+	}
+	return tx.Exec("DELETE FROM reward.activity_benefits b WHERE b.reward_component_id IN ? AND b.id NOT IN ?", componentIDs, benefitIDs).Error
+}
+
+func appendUnique(values []string, next string) []string {
+	for _, value := range values {
+		if value == next {
+			return values
+		}
+	}
+	return append(values, next)
 }

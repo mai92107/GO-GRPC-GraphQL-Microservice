@@ -107,7 +107,12 @@ func (r *Repository) catalogBenefits(ctx context.Context, activityID string) ([]
 				CASE WHEN count(*) FILTER (WHERE cp.plan_type='selectable')>0 THEN 'app_switch'
 				     WHEN count(rem.value)>0 THEN 'account_setup'
 				     ELSE 'none' END AS action_required,
-				COALESCE(max(spv.reminder_text) FILTER (WHERE cp.plan_type='selectable' AND spv.reminder_text<>''), max(rem.value),'') AS action_message,
+				COALESCE(max(
+					CASE WHEN cp.plan_type='selectable' THEN
+						concat('需至 APP 切換卡片方案：',spv.name,'，對應優惠：',cv.name,' ',trim(trailing '.' from trim(trailing '0' from cv.reward_value::text)),
+							CASE WHEN spv.reminder_text<>'' THEN '；'||spv.reminder_text ELSE '' END)
+					END
+				), max(rem.value),'') AS action_message,
 				array_remove(array_agg(DISTINCT pm.value),NULL) AS payment_methods,
 				array_remove(array_agg(DISTINCT cat.value),NULL) AS categories,
 				array_remove(array_agg(DISTINCT mer.value),NULL) AS merchants
@@ -120,7 +125,7 @@ func (r *Repository) catalogBenefits(ctx context.Context, activityID string) ([]
 				SELECT name FROM catalog.card_plan_versions pv WHERE pv.card_plan_id=cp.id ORDER BY pv.effective_from DESC LIMIT 1
 			) qpv ON cp.plan_type='qualified'
 			LEFT JOIN LATERAL (
-				SELECT reminder_text FROM catalog.card_plan_versions pv WHERE pv.card_plan_id=cp.id ORDER BY pv.effective_from DESC LIMIT 1
+				SELECT name,reminder_text FROM catalog.card_plan_versions pv WHERE pv.card_plan_id=cp.id ORDER BY pv.effective_from DESC LIMIT 1
 			) spv ON cp.plan_type='selectable'
 			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'payment_method_ids') pm(value) ON rc.condition_type='payment_method'
 			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'category_ids') cat(value) ON rc.condition_type='category'
