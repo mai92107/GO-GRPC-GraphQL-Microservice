@@ -2,13 +2,14 @@ package member
 
 import (
 	"context"
+	"strings"
 
 	"github.com/rafa/golang-cc/internal/domain"
 )
 
 func (r *Repository) Catalog(ctx context.Context) ([]domain.CatalogCard, error) {
 	rows, err := r.pool.Query(ctx, `SELECT cp.id,cp.bank_id,b.name,cp.name,COALESCE(cp.card_image_url,''),COALESCE(cp.primary_color,''),cp.is_active,
-		COALESCE(cp.qualified_type,''),COALESCE(cp.selectable_type,'')
+		COALESCE(cp.account_tiers,'{}'::text[]),COALESCE(cp.qualified_type,''),COALESCE(cp.selectable_type,''),COALESCE(cp.networks,'')
 		FROM catalog.card_products cp JOIN banks b ON b.id=cp.bank_id WHERE cp.is_active AND b.is_active ORDER BY b.name,cp.name`)
 	if err != nil {
 		return nil, err
@@ -17,9 +18,11 @@ func (r *Repository) Catalog(ctx context.Context) ([]domain.CatalogCard, error) 
 	out := []domain.CatalogCard{}
 	for rows.Next() {
 		var x domain.CatalogCard
-		if err := rows.Scan(&x.ID, &x.BankID, &x.BankName, &x.Name, &x.CardImageURL, &x.PrimaryColor, &x.IsActive, &x.QualifiedType, &x.SelectableType); err != nil {
+		var networks string
+		if err := rows.Scan(&x.ID, &x.BankID, &x.BankName, &x.Name, &x.CardImageURL, &x.PrimaryColor, &x.IsActive, &x.AccountTiers, &x.QualifiedType, &x.SelectableType, &networks); err != nil {
 			return nil, err
 		}
+		x.Networks = splitNetworks(networks)
 		out = append(out, x)
 	}
 	return out, rows.Err()
@@ -27,34 +30,34 @@ func (r *Repository) Catalog(ctx context.Context) ([]domain.CatalogCard, error) 
 
 func (r *Repository) CatalogCard(ctx context.Context, id string) (domain.CatalogCard, error) {
 	var x domain.CatalogCard
+	var networks string
 	err := r.pool.QueryRow(ctx, `SELECT cp.id,cp.bank_id,b.name,cp.name,COALESCE(cp.card_image_url,''),COALESCE(cp.primary_color,''),cp.is_active,
-		COALESCE(cp.qualified_type,''),COALESCE(cp.selectable_type,'')
+		COALESCE(cp.account_tiers,'{}'::text[]),COALESCE(cp.qualified_type,''),COALESCE(cp.selectable_type,''),COALESCE(cp.networks,'')
 		FROM catalog.card_products cp JOIN banks b ON b.id=cp.bank_id WHERE cp.id=$1 AND cp.is_active AND b.is_active`, id).
-		Scan(&x.ID, &x.BankID, &x.BankName, &x.Name, &x.CardImageURL, &x.PrimaryColor, &x.IsActive, &x.QualifiedType, &x.SelectableType)
+		Scan(&x.ID, &x.BankID, &x.BankName, &x.Name, &x.CardImageURL, &x.PrimaryColor, &x.IsActive, &x.AccountTiers, &x.QualifiedType, &x.SelectableType, &networks)
 	if err != nil {
 		return x, err
 	}
-	networkRows, err := r.pool.Query(ctx, `SELECT n.id,n.id,n.name FROM catalog.card_product_networks pn
-		JOIN catalog.card_networks n ON n.id=pn.card_network_id
-		WHERE pn.card_product_id=$1 AND n.is_active ORDER BY n.name`, x.ID)
-	if err != nil {
-		return x, err
-	}
-	for networkRows.Next() {
-		var network string
-		if err := networkRows.Scan(&network); err != nil {
-			networkRows.Close()
-			return x, err
-		}
-		x.Networks = append(x.Networks, network)
-	}
-	networkRows.Close()
+	x.Networks = splitNetworks(networks)
 	acts, err := r.catalogActivities(ctx, x.ID)
 	if err != nil {
 		return x, err
 	}
 	x.Activities = acts
 	return x, nil
+}
+
+func splitNetworks(value string) []string {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, item := range strings.Split(value, ",") {
+		item = strings.TrimSpace(item)
+		if item != "" && !seen[item] {
+			seen[item] = true
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func (r *Repository) catalogActivities(ctx context.Context, productID string) ([]domain.CardProductActivity, error) {

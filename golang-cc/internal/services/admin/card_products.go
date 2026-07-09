@@ -28,6 +28,9 @@ func (s *Service) CreateCard(ctx context.Context, input CardProductInput) (strin
 	if input.BankID == "" || input.Name == "" || len(input.Networks) == 0 {
 		return "", domain.ErrInvalidInput
 	}
+	if err := s.repository.ValidateNetworks(ctx, input.Networks); err != nil {
+		return "", err
+	}
 	id := secure.UUID()
 	return id, s.repository.CreateCard(ctx, id, domain.CardInput(input))
 }
@@ -39,6 +42,9 @@ func (s *Service) UpdateCard(ctx context.Context, id string, input CardProductIn
 	input.Networks = normalizeNetworkNames(input.Networks)
 	if id == "" || input.BankID == "" || input.Name == "" || len(input.Networks) == 0 {
 		return domain.ErrInvalidInput
+	}
+	if err := s.repository.ValidateNetworks(ctx, input.Networks); err != nil {
+		return err
 	}
 	return s.repository.UpdateCard(ctx, id, domain.CardInput(input))
 }

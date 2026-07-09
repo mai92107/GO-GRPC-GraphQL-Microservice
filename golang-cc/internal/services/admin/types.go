@@ -33,7 +33,6 @@ type ActivityInput struct {
 	IsActive          *bool
 	SourceURL         string
 	VerifiedAt        *string
-	NetworkIDs        []string
 	SharedMonthlyCaps map[string]string
 	Benefits          []ActivityBenefitInput
 }

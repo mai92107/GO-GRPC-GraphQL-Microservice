@@ -68,7 +68,7 @@ func TestPrepareActivityFlowNormalizesAndAcceptsMultipleBenefits(t *testing.T) {
 
 func TestPrepareActivityFlowRejectsInvalidRequirementConfig(t *testing.T) {
 	input := validActivityFlowInput()
-	input.RewardGroups[0].Components[0].Requirements[0].Configuration = []byte(`{"network_codes":["VISA"]}`)
+	input.RewardGroups[0].Components[0].Requirements[0].Configuration = []byte(`{"network_codes":["Visa"]}`)
 	if _, err := prepareActivityFlow("activity", input); !errors.Is(err, domain.ErrInvalidInput) {
 		t.Fatalf("error=%v", err)
 	} else if err.Error() != "Group[1].Component[1].Requirement[1].configuration_json 與 requirement_type 不相符" {

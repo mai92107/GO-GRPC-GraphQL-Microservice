@@ -243,7 +243,7 @@ function configurationForRequirement(form: ActivityRequirementForm) {
 
   switch (form.requirement_type) {
     case "CARD_NETWORK":
-      return { network_codes: values };
+      return { networks: values };
     case "PAYMENT_METHOD":
       return { payment_method_codes: values.length ? values : ["any_payment"] };
     case "CARD_PLAN":

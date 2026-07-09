@@ -6,7 +6,7 @@ export type CardForm = {
   payment_due_day: string;
   account_tier: string;
   is_active: boolean;
-  card_network_id: string;
+  network: string;
   credit_limit: string;
 };
 
@@ -18,6 +18,6 @@ export const emptyForm = (cardID = ""): CardForm => ({
   payment_due_day: "",
   account_tier: "",
   is_active: true,
-  card_network_id: "",
+  network: "",
   credit_limit: "",
 });

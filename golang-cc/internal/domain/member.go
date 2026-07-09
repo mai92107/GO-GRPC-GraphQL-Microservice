@@ -27,7 +27,6 @@ type MemberCardInfo struct {
 	PaymentDueDay  *int   `json:"payment_due_day"`
 	AccountTier    string `json:"account_tier"`
 	CreditLimit    string `json:"credit_limit"`
-	CardNetworkID  string `json:"card_network_id"`
 	CardImageURL   string `json:"card_image_url"`
 	PrimaryColor   string `json:"primary_color"`
 	QualifiedType  string `json:"qualified_type"`
@@ -43,6 +42,7 @@ type CatalogCard struct {
 	CardImageURL   string
 	PrimaryColor   string
 	IsActive       bool
+	AccountTiers   []string
 	QualifiedType  string
 	SelectableType string
 	Activities     []CardProductActivity

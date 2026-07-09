@@ -24,7 +24,7 @@ export function useCreateCard({ onCreated }: Options) {
     const card = cards.find((item) => item.id === cardID);
     return {
       ...emptyForm(cardID),
-      card_network_id: card?.networks[0] || "",
+      network: card?.networks[0] || "",
     };
   }
 

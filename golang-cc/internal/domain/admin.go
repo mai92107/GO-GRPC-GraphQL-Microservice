@@ -152,7 +152,7 @@ type CardProductActivity struct {
 	IsActive   bool              `json:"is_active"`
 	SourceURL  string            `json:"source_url"`
 	VerifiedAt *string           `json:"verified_at"`
-	NetworkIDs []string          `json:"network_ids"`
+	Networks   []string          `json:"networks"`
 	Benefits   []ActivityBenefit `json:"benefits"`
 }
 
@@ -210,7 +210,6 @@ type Activity struct {
 	IsActive          bool
 	SourceURL         string
 	VerifiedAt        *string
-	NetworkIDs        []string
 	SharedMonthlyCaps map[string]string
 	Benefits          []ActivityBenefit
 }

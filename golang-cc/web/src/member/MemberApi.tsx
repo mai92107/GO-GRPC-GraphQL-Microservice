@@ -22,7 +22,7 @@ export type MemberCardInput = {
   payment_due_day: number | null;
   account_tier: string;
   is_active: boolean;
-  card_network_id: string;
+  network: string;
   credit_limit: string;
 };
 
@@ -109,10 +109,38 @@ export type Transaction = TransactionSummary & {
 };
 
 export const getCatalogCards = () =>
-  api<CatalogCard[]>("/member/catalog/cards");
+  api<CatalogCard[]>("/member/catalog/cards").then((cards) =>
+    (Array.isArray(cards) ? cards : []).map(normalizeCatalogCard),
+  );
 
 export const getCatalogCard = (id: string) =>
-  api<CatalogCard>(`/member/catalog/cards/${id}`);
+  api<CatalogCard>(`/member/catalog/cards/${id}`).then(normalizeCatalogCard);
+
+const stringArray = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+
+export const normalizeCatalogCard = (card: CatalogCard): CatalogCard => ({
+  ...card,
+  account_tiers: stringArray(card.account_tiers),
+  networks: stringArray(card.networks),
+  activities: (Array.isArray(card.activities) ? card.activities : []).map(
+    (activity) => ({
+      ...activity,
+      networks: stringArray(activity.networks),
+      benefits: (Array.isArray(activity.benefits)
+        ? activity.benefits
+        : []
+      ).map((benefit) => ({
+        ...benefit,
+        payment_methods: stringArray(benefit.payment_methods),
+        category_ids: stringArray(benefit.category_ids),
+        merchant_ids: stringArray(benefit.merchant_ids),
+      })),
+    }),
+  ),
+});
 
 export const getCards = () => api<Card[]>("/member/cards");
 

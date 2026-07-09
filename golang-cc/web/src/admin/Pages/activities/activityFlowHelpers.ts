@@ -178,7 +178,7 @@ export function displayRequirementValues(requirement: ActivityRequirement) {
 
   const config = requirement.configuration_json;
   const value =
-    config.network_codes ||
+    config.networks ||
     config.payment_method_codes ||
     config.card_plan_ids ||
     config.card_product_ids ||
@@ -209,7 +209,7 @@ export function configForRequirement(
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
-  if (type === "CARD_NETWORK") return { network_codes: values };
+  if (type === "CARD_NETWORK") return { networks: values };
   if (type === "PAYMENT_METHOD") return { payment_method_codes: values };
   if (type === "CARD_PLAN") return { card_plan_ids: values };
   if (type === "CARD_PRODUCT") return { card_product_ids: values };

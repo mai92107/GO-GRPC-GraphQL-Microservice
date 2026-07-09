@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -49,11 +50,9 @@ func (r *Repository) GetCardInfo(
 			cp.is_active,
 			COALESCE(cp.qualified_type, '') AS qualified_type,
 			COALESCE(cp.selectable_type, '') AS selectable_type,
-			COALESCE(string_agg(n.name, ',' ORDER BY n.name), '') AS networks
+			COALESCE(cp.networks, '') AS networks
 		`).
 		Joins("JOIN banks AS b ON b.id = cp.bank_id").
-		Joins("LEFT JOIN catalog.card_product_networks pn ON pn.card_product_id=cp.id").
-		Joins("LEFT JOIN catalog.card_networks n ON n.id=pn.card_network_id").
 		Where("cp.id = ?", id).
 		Group("cp.id,b.name").
 		Scan(&x).Error
@@ -84,6 +83,31 @@ func (r *Repository) ListNetworks(ctx context.Context) ([]string, error) {
 	return networks, rows.Err()
 }
 
+func (r *Repository) ValidateNetworks(ctx context.Context, networks []string) error {
+	rows, err := r.pool.Query(ctx, `SELECT name FROM catalog.card_networks WHERE is_active`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	valid := map[string]bool{}
+	for rows.Next() {
+		var network string
+		if err := rows.Scan(&network); err != nil {
+			return err
+		}
+		valid[network] = true
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, network := range networks {
+		if !valid[network] {
+			return domain.ErrInvalidInput
+		}
+	}
+	return nil
+}
+
 func (r *Repository) CreateCard(ctx context.Context, id string, input domain.CardInput) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Table("catalog.card_products").Create(map[string]any{
@@ -93,10 +117,11 @@ func (r *Repository) CreateCard(ctx context.Context, id string, input domain.Car
 			"is_active":       input.IsActive,
 			"qualified_type":  nullString(input.QualifiedType),
 			"selectable_type": nullString(input.SelectableType),
+			"networks":        joinNetworks(input.Networks),
 		}).Error; err != nil {
 			return err
 		}
-		return replaceCardNetworks(tx, id, input.Networks)
+		return nil
 	})
 }
 
@@ -108,6 +133,7 @@ func (r *Repository) UpdateCard(ctx context.Context, id string, input domain.Car
 			"is_active":       input.IsActive,
 			"qualified_type":  nullString(input.QualifiedType),
 			"selectable_type": nullString(input.SelectableType),
+			"networks":        joinNetworks(input.Networks),
 			"updated_at":      time.Now(),
 		}
 
@@ -122,7 +148,7 @@ func (r *Repository) UpdateCard(ctx context.Context, id string, input domain.Car
 		if result.RowsAffected == 0 {
 			return domain.ErrNotFound
 		}
-		return replaceCardNetworks(tx, id, input.Networks)
+		return nil
 	})
 }
 
@@ -173,15 +199,14 @@ func nullString(value string) *string {
 	return &value
 }
 
-func replaceCardNetworks(tx *gorm.DB, cardProductID string, networks []string) error {
-	if err := tx.Exec(`DELETE FROM catalog.card_product_networks WHERE card_product_id=?`, cardProductID).Error; err != nil {
-		return err
-	}
+func joinNetworks(networks []string) string {
+	out := make([]string, 0, len(networks))
+	seen := map[string]bool{}
 	for _, network := range networks {
-		if err := tx.Exec(`INSERT INTO catalog.card_product_networks(card_product_id,card_network_id)
-			SELECT ?::uuid,id FROM catalog.card_networks WHERE name=? AND is_active`, cardProductID, network).Error; err != nil {
-			return err
+		if network != "" && !seen[network] {
+			seen[network] = true
+			out = append(out, network)
 		}
 	}
-	return nil
+	return strings.Join(out, ",")
 }

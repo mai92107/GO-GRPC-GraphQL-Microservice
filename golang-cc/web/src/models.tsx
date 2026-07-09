@@ -23,7 +23,6 @@ export type Card = {
   issuer: string;
   last_four: string;
   credit_limit: string;
-  card_network_id?: string;
   is_active: boolean;
   statement_day: number | null;
   payment_due_day: number | null;
@@ -79,7 +78,7 @@ export type CatalogCard = {
     is_active: boolean;
     source_url: string;
     verified_at: string | null;
-    network_ids: string[];
+    networks: string[];
     benefits: Benefit[];
   }[];
 };

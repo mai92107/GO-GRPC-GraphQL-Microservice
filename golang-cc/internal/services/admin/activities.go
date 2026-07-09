@@ -519,8 +519,13 @@ func validRequirementConfiguration(requirementType string, raw json.RawMessage) 
 	_, ok := config[key]
 	if !ok {
 		println("validRequirementConfiguration error: missing required key in configuration for requirement type:", requirementType, "required key:", key)
+		return false
 	}
-	return ok
+	if strings.TrimSpace(requirementType) == "CARD_NETWORK" {
+		values, ok := config[key].([]any)
+		return ok && len(values) > 0
+	}
+	return true
 }
 
 func requiredRequirementKey(requirementType string) string {
@@ -528,7 +533,7 @@ func requiredRequirementKey(requirementType string) string {
 	case "PAYMENT_METHOD":
 		return "payment_method_codes"
 	case "CARD_NETWORK":
-		return "network_codes"
+		return "networks"
 	case "CARD_PLAN":
 		return "card_plan_ids"
 	case "CARD_PRODUCT":

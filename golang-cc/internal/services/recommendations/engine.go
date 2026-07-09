@@ -539,10 +539,10 @@ func ruleMatches(rule RewardRule, card Card, category, merchantID, paymentMethod
 		return false
 	}
 
-	if len(rule.CardNetworkIDs) > 0 {
+	if len(rule.Networks) > 0 {
 		matched := false
-		for _, networkID := range rule.CardNetworkIDs {
-			if networkID == card.NetworkID {
+		for _, network := range rule.Networks {
+			if network == card.Network {
 				matched = true
 				break
 			}

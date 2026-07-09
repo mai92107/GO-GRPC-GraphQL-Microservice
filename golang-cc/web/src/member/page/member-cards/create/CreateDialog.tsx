@@ -28,6 +28,8 @@ export function CreateDialog({
   saving,
   selectedCard,
 }: Props) {
+  const selectedNetworks = selectedCard?.networks ?? [];
+
   return (
     <Dialog title="加入卡片夾" onClose={onClose}>
       <form className="stack" onSubmit={onSubmit}>
@@ -59,17 +61,17 @@ export function CreateDialog({
             ))}
           </select>
         </Field>
-        {selectedCard && selectedCard.networks.length > 0 && (
+        {selectedNetworks.length > 0 && (
           <Field label="卡組織">
             <select
               required
-              value={form.card_network_id}
+              value={form.network}
               disabled={saving || catalogLoading}
               onChange={(event) =>
-                onChange({ ...form, card_network_id: event.target.value })
+                onChange({ ...form, network: event.target.value })
               }
             >
-              {selectedCard.networks.map((network) => (
+              {selectedNetworks.map((network) => (
                 <option value={network} key={network}>
                   {network}
                 </option>

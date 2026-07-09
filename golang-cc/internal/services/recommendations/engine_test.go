@@ -58,9 +58,9 @@ func TestDateBoundariesAndInactiveEntries(t *testing.T) {
 
 func TestCardNetworkAndQualifiedPlanConditions(t *testing.T) {
 	input := baseInput()
-	input.Cards[0].NetworkID = "visa"
+	input.Cards[0].Network = "Visa"
 	qualified := rule("qualified", "card-a", cash, "0.05", nil, "general")
-	qualified.CardNetworkIDs = []ID{"visa", "mastercard"}
+	qualified.Networks = []string{"Visa", "Mastercard"}
 	qualified.QualifiedCardPlanIDs = []ID{"dawho"}
 	input.Rules = []RewardRule{qualified}
 
@@ -71,7 +71,7 @@ func TestCardNetworkAndQualifiedPlanConditions(t *testing.T) {
 	if got := len(recommendOK(t, input).Recommendations); got != 1 {
 		t.Fatalf("qualified Visa recommendations = %d, want 1", got)
 	}
-	input.Cards[0].NetworkID = "jcb"
+	input.Cards[0].Network = "JCB"
 	if got := len(recommendOK(t, input).Recommendations); got != 0 {
 		t.Fatalf("JCB recommendations = %d, want 0", got)
 	}

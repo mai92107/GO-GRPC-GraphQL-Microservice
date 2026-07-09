@@ -150,11 +150,11 @@ func TestAuthCSRFEmailAndHorizontalIsolation(t *testing.T) {
 	if publishedRequirements != 2 {
 		t.Fatalf("published requirements=%d,want 2", publishedRequirements)
 	}
-	var networkID string
-	if err := pool.QueryRow(context.Background(), `SELECT card_network_id::text FROM catalog.card_product_networks WHERE card_product_id=$1 LIMIT 1`, productID).Scan(&networkID); err != nil {
+	var network string
+	if err := pool.QueryRow(context.Background(), `SELECT (catalog.card_product_network_values(networks))[1] FROM catalog.card_products WHERE id=$1`, productID).Scan(&network); err != nil {
 		t.Fatal(err)
 	}
-	memberCardPayload := map[string]any{"card_id": productID, "card_network_id": networkID, "nickname": "我的森活卡", "last_four": "8899", "statement_day": 5, "payment_due_day": 20, "account_tier": "尊榮會員", "credit_limit": "100000", "is_active": true}
+	memberCardPayload := map[string]any{"card_id": productID, "network": network, "nickname": "我的森活卡", "last_four": "8899", "statement_day": 5, "payment_due_day": 20, "account_tier": "尊榮會員", "credit_limit": "100000", "is_active": true}
 	response = request(t, handler, "POST", "/api/member/cards", memberCardPayload, memberCookie, "")
 	assertStatus(t, response, 403)
 	response = request(t, handler, "POST", "/api/member/cards", memberCardPayload, memberCookie, memberCSRF)

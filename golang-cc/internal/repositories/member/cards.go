@@ -16,7 +16,7 @@ type CardWrite struct {
 	StatementDay  *int
 	PaymentDueDay *int
 	AccountTier   string
-	CardNetworkID string
+	Network       string
 	CreditLimit   string
 }
 
@@ -36,11 +36,10 @@ func (r *Repository) ListCards(ctx context.Context, userID string) ([]domain.Mem
 			COALESCE(cp.primary_color, '') AS primary_color,
 			COALESCE(cp.qualified_type, '') AS qualified_type,
 			COALESCE(cp.selectable_type, '') AS selectable_type,
-			COALESCE(n.name, '') AS network
+			COALESCE(mc.network, '') AS network
 		`).
 		Joins("JOIN catalog.card_products AS cp ON cp.id = mc.card_product_id").
 		Joins("JOIN public.banks AS b ON b.id = cp.bank_id").
-		Joins("LEFT JOIN catalog.card_networks AS n ON n.id = mc.card_network_id").
 		Where("mc.user_id = ?", userID).
 		Order("cp.name, mc.id").
 		Scan(&result).Error
@@ -62,16 +61,14 @@ func (r *Repository) GetCard(ctx context.Context, userID, id string) (domain.Mem
 			mc.payment_due_day AS payment_due_day,
 			COALESCE(mc.account_tier, '') AS account_tier,
 			COALESCE(mc.credit_limit::text, '') AS credit_limit,
-			COALESCE(mc.card_network_id::text, '') AS card_network_id,
 			COALESCE(cp.card_image_url, '') AS card_image_url,
 			COALESCE(cp.primary_color, '') AS primary_color,
 			COALESCE(cp.qualified_type, '') AS qualified_type,
 			COALESCE(cp.selectable_type, '') AS selectable_type,
-			COALESCE(n.name, '') AS network
+			COALESCE(mc.network, '') AS network
 		`).
 		Joins("JOIN card_products cp ON cp.id = mc.card_product_id").
 		Joins("JOIN banks b ON b.id = cp.bank_id").
-		Joins("LEFT JOIN catalog.card_networks n ON n.id = mc.card_network_id").
 		Where("mc.id = ? AND mc.user_id = ?", id, userID).
 		Scan(&result).Error
 
@@ -84,9 +81,10 @@ func (r *Repository) CreateCard(ctx context.Context, id, userID, cardID string, 
 		return err
 	}
 	defer tx.Rollback(ctx)
-	tag, err := tx.Exec(ctx, `INSERT INTO member_cards(id,user_id,card_product_id,card_network_id,nickname,last_four,is_active,statement_day,payment_due_day,account_tier,credit_limit)
-		SELECT $1,$2,cp.id,NULLIF($4,'')::uuid,NULLIF($5,''),NULLIF($6,''),$7,$8,$9,NULLIF($10,''),$11::numeric FROM card_products cp WHERE cp.id=$3
-		AND ($10='' OR cardinality(cp.account_tiers)=0 OR $10=ANY(cp.account_tiers))`, id, userID, cardID, input.CardNetworkID, input.Nickname, input.LastFour, input.IsActive, input.StatementDay, input.PaymentDueDay, input.AccountTier, input.CreditLimit)
+	tag, err := tx.Exec(ctx, `INSERT INTO member_cards(id,user_id,card_product_id,network,nickname,last_four,is_active,statement_day,payment_due_day,account_tier,credit_limit)
+		SELECT $1,$2,cp.id,$4,NULLIF($5,''),NULLIF($6,''),$7,$8,$9,NULLIF($10,''),$11::numeric FROM card_products cp WHERE cp.id=$3
+		AND $4 = ANY(catalog.card_product_network_values(cp.networks))
+		AND ($10='' OR cardinality(cp.account_tiers)=0 OR $10=ANY(cp.account_tiers))`, id, userID, cardID, input.Network, input.Nickname, input.LastFour, input.IsActive, input.StatementDay, input.PaymentDueDay, input.AccountTier, input.CreditLimit)
 	if err != nil {
 		return err
 	}
@@ -130,7 +128,7 @@ func (r *Repository) UpdateCard(ctx context.Context, id, userID string, input Ca
 	}
 
 	tag, err := tx.Exec(ctx, `UPDATE member_cards mc SET
-		card_network_id=COALESCE(NULLIF($3,'')::uuid, mc.card_network_id),
+		network=$3,
 		nickname=NULLIF($4,''),
 		last_four=NULLIF($5,''),
 		is_active=$6,
@@ -141,7 +139,8 @@ func (r *Repository) UpdateCard(ctx context.Context, id, userID string, input Ca
 		updated_at=now()
 		FROM card_products cp
 		WHERE mc.id=$1 AND mc.user_id=$2 AND cp.id=mc.card_product_id
-		AND ($9='' OR cardinality(cp.account_tiers)=0 OR $9=ANY(cp.account_tiers))`, id, userID, input.CardNetworkID, input.Nickname, input.LastFour, input.IsActive, input.StatementDay, input.PaymentDueDay, input.AccountTier, input.CreditLimit)
+		AND $3 = ANY(catalog.card_product_network_values(cp.networks))
+		AND ($9='' OR cardinality(cp.account_tiers)=0 OR $9=ANY(cp.account_tiers))`, id, userID, input.Network, input.Nickname, input.LastFour, input.IsActive, input.StatementDay, input.PaymentDueDay, input.AccountTier, input.CreditLimit)
 	if err != nil {
 		return err
 	}

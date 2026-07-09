@@ -1,5 +1,12 @@
-ALTER TABLE identity.users
-ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'users_pkey' AND conrelid = to_regclass('identity.users')
+    ) THEN
+        ALTER TABLE identity.users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+    END IF;
+END $$;
 
 ALTER TABLE reward.activities
     ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ,

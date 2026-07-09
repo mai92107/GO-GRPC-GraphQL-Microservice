@@ -143,12 +143,14 @@ func TestMemberCardCreditLimitHistoryOnUpdate(t *testing.T) {
 	cardID := "26000000-0000-0000-0000-000000000001"
 	if err := repo.CreateCard(ctx, cardID, string(userA), "50000000-0000-0000-0000-000000000002", CardWrite{
 		IsActive:    true,
+		Network:     "Visa",
 		CreditLimit: "100000",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := repo.UpdateCard(ctx, cardID, string(userA), CardWrite{
 		IsActive:    true,
+		Network:     "Visa",
 		CreditLimit: "150000",
 	}); err != nil {
 		t.Fatal(err)
@@ -250,22 +252,19 @@ func TestNormalizedCatalogConstraints(t *testing.T) {
 }
 
 func TestQualificationHistoryConstraints(t *testing.T) {
-	t.Skip("legacy qualified plan fixtures were removed with the old reward catalog")
 	pool, gormDB := integrationPool(t)
 	ctx := context.Background()
+	clearSeedMemberCards(t, pool)
+	seedDAWHOQualifiedPlan(t, pool, "大戶")
 	repo := New(pool, gormDB)
 	cardID := "25000000-0000-0000-0000-000000000001"
 	if err := repo.CreateCard(ctx, cardID, string(userA), "51000000-0000-0000-0000-000000000001", CardWrite{
-		IsActive: true, AccountTier: "大戶", CreditLimit: "100000",
+		IsActive: true, Network: "Visa", AccountTier: "大戶", CreditLimit: "100000",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	var planID string
-	if err := pool.QueryRow(ctx, `SELECT p.id FROM catalog.card_plans p
-		JOIN catalog.card_plan_versions pv ON pv.card_plan_id=p.id
-		WHERE p.card_product_id='51000000-0000-0000-0000-000000000001' AND pv.name='大戶'`).Scan(&planID); err != nil {
-		t.Fatal(err)
-	}
+	planID = "52000000-0000-0000-0000-000000000001"
 	effective := time.Date(2026, 6, 20, 12, 0, 0, 0, time.FixedZone("Asia/Taipei", 8*60*60))
 	if err := repo.SetQualificationStatus(ctx, string(userA), cardID, planID, false, effective); err != nil {
 		t.Fatal(err)
@@ -281,9 +280,9 @@ func TestQualificationHistoryConstraints(t *testing.T) {
 }
 
 func TestCoreCardRepresentativeRewards(t *testing.T) {
-	t.Skip("legacy core reward catalog was removed; rebuild these fixtures with Activity Flow published runtime")
 	pool, gormDB := integrationPool(t)
 	ctx := context.Background()
+	clearSeedMemberCards(t, pool)
 	repo := New(pool, gormDB)
 	cards := []struct{ id, product, tier string }{
 		{"23000000-0000-0000-0000-000000000001", "51000000-0000-0000-0000-000000000001", "大戶Plus"},
@@ -292,7 +291,7 @@ func TestCoreCardRepresentativeRewards(t *testing.T) {
 		{"23000000-0000-0000-0000-000000000004", "51000000-0000-0000-0000-000000000004", ""},
 	}
 	for _, c := range cards {
-		if err := repo.CreateCard(ctx, c.id, string(userA), c.product, CardWrite{IsActive: true, AccountTier: c.tier, CreditLimit: "100000"}); err != nil {
+		if err := repo.CreateCard(ctx, c.id, string(userA), c.product, CardWrite{IsActive: true, Network: "Visa", AccountTier: c.tier, CreditLimit: "100000"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -331,9 +330,9 @@ func TestCoreCardRepresentativeRewards(t *testing.T) {
 }
 
 func TestDAWHO2026AccountTierRewards(t *testing.T) {
-	t.Skip("legacy core reward catalog was removed; rebuild these fixtures with Activity Flow published runtime")
 	pool, gormDB := integrationPool(t)
 	ctx := context.Background()
+	clearSeedMemberCards(t, pool)
 	repo := New(pool, gormDB)
 	txRepo := NewTransactionRepository(pool)
 	date := recommendations.MustLocalDate("2026-06-10")
@@ -354,7 +353,7 @@ func TestDAWHO2026AccountTierRewards(t *testing.T) {
 			if _, err := pool.Exec(ctx, `DELETE FROM member_cards WHERE user_id=$1 AND card_product_id=$2`, userA, "51000000-0000-0000-0000-000000000001"); err != nil {
 				t.Fatal(err)
 			}
-			if err := repo.CreateCard(ctx, cardID, string(userA), "51000000-0000-0000-0000-000000000001", CardWrite{IsActive: true, AccountTier: tc.tier, CreditLimit: "100000"}); err != nil {
+			if err := repo.CreateCard(ctx, cardID, string(userA), "51000000-0000-0000-0000-000000000001", CardWrite{IsActive: true, Network: "Visa", AccountTier: tc.tier, CreditLimit: "100000"}); err != nil {
 				t.Fatal(err)
 			}
 			for _, scenario := range []struct {
@@ -390,9 +389,9 @@ func TestDAWHO2026AccountTierRewards(t *testing.T) {
 }
 
 func TestRecommendationDisambiguatesSameNicknameAndRanksEachCardOnce(t *testing.T) {
-	t.Skip("legacy core reward catalog was removed; rebuild these fixtures with Activity Flow published runtime")
 	pool, gormDB := integrationPool(t)
 	ctx := context.Background()
+	clearSeedMemberCards(t, pool)
 	repo := New(pool, gormDB)
 	for _, card := range []struct {
 		id      string
@@ -402,7 +401,7 @@ func TestRecommendationDisambiguatesSameNicknameAndRanksEachCardOnce(t *testing.
 		{"25000000-0000-0000-0000-000000000001", "51000000-0000-0000-0000-000000000001", "大大"},
 		{"25000000-0000-0000-0000-000000000002", "51000000-0000-0000-0000-000000000007", ""},
 	} {
-		if err := repo.CreateCard(ctx, card.id, string(userA), card.product, CardWrite{Nickname: "LOL", IsActive: true, AccountTier: card.tier, CreditLimit: "100000"}); err != nil {
+		if err := repo.CreateCard(ctx, card.id, string(userA), card.product, CardWrite{Nickname: "LOL", IsActive: true, Network: "Visa", AccountTier: card.tier, CreditLimit: "100000"}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -429,9 +428,9 @@ func TestRecommendationDisambiguatesSameNicknameAndRanksEachCardOnce(t *testing.
 }
 
 func TestLatestCardActivitiesRespectPaymentMethodsAndStacking(t *testing.T) {
-	t.Skip("legacy core reward catalog was removed; rebuild these fixtures with Activity Flow published runtime")
 	pool, _ := integrationPool(t)
 	ctx := context.Background()
+	clearSeedMemberCards(t, pool)
 	for _, card := range []struct{ id, product string }{
 		{"91000000-0000-0000-0000-000000000005", "51000000-0000-0000-0000-000000000005"},
 		{"91000000-0000-0000-0000-000000000006", "51000000-0000-0000-0000-000000000006"},
@@ -440,7 +439,7 @@ func TestLatestCardActivitiesRespectPaymentMethodsAndStacking(t *testing.T) {
 		{"91000000-0000-0000-0000-000000000009", "51000000-0000-0000-0000-000000000009"},
 		{"91000000-0000-0000-0000-000000000010", "51000000-0000-0000-0000-000000000010"},
 	} {
-		if _, err := pool.Exec(ctx, `INSERT INTO member_cards(id,user_id,card_product_id,nickname,is_active) VALUES($1,$2,$3,'',true)`, card.id, userA, card.product); err != nil {
+		if _, err := pool.Exec(ctx, `INSERT INTO member_cards(id,user_id,card_product_id,network,nickname,is_active) VALUES($1,$2,$3,'Visa','',true)`, card.id, userA, card.product); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -564,12 +563,12 @@ func seedIntegrationData(t *testing.T, pool *pgxpool.Pool) {
 			SELECT md5('test-payment:'||$1::text||':'||id)::uuid,$1::uuid,id,true
 			FROM payment_methods WHERE type IN ('mobile_payment','electronic_ticket')`, []any{userA}},
 		{`INSERT INTO banks(id,name) VALUES('40000000-0000-0000-0000-000000000001','虛構銀行')`, nil},
-		{`INSERT INTO card_products(id,bank_id,name) VALUES
-			('50000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','森活卡'),
-			('50000000-0000-0000-0000-000000000002','40000000-0000-0000-0000-000000000001','青雲卡')`, nil},
-		{`INSERT INTO member_cards(id,user_id,card_product_id,nickname,is_active) VALUES
-			($3,$1,'50000000-0000-0000-0000-000000000001','森活卡',true),
-			($4,$2,'50000000-0000-0000-0000-000000000002','青雲卡',true)`,
+		{`INSERT INTO card_products(id,bank_id,name,networks) VALUES
+			('50000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','森活卡','Visa'),
+			('50000000-0000-0000-0000-000000000002','40000000-0000-0000-0000-000000000001','青雲卡','Visa')`, nil},
+		{`INSERT INTO member_cards(id,user_id,card_product_id,network,nickname,is_active) VALUES
+			($3,$1,'50000000-0000-0000-0000-000000000001','Visa','森活卡',true),
+			($4,$2,'50000000-0000-0000-0000-000000000002','Visa','青雲卡',true)`,
 			[]any{userA, userB, cardA, cardB}},
 		{`
 		INSERT INTO reward_preferences (user_id, reward_unit_id, weight)
@@ -631,6 +630,166 @@ func seedIntegrationData(t *testing.T, pool *pgxpool.Pool) {
 		if _, err := pool.Exec(ctx, statement.sql, statement.args...); err != nil {
 			t.Fatalf("seed integration data: %v", err)
 		}
+	}
+	seedCorePublishedRuntime(t, pool)
+}
+
+func seedCorePublishedRuntime(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	rules := []struct {
+		productID     string
+		ruleName      string
+		category      string
+		paymentMethod string
+		rate          string
+		accountTier   string
+		actionMessage string
+	}{
+		{"51000000-0000-0000-0000-000000000001", "DAWHO 大大國內", "dining", "", "0.01", "大大", ""},
+		{"51000000-0000-0000-0000-000000000001", "DAWHO 大大海外", "overseas", "", "0.02", "大大", ""},
+		{"51000000-0000-0000-0000-000000000001", "DAWHO 大戶國內", "dining", "", "0.035", "大戶", "需完成 DAWHO 數位帳戶扣繳信用卡款，並使用電子或行動帳單"},
+		{"51000000-0000-0000-0000-000000000001", "DAWHO 大戶海外", "overseas", "", "0.045", "大戶", "需完成 DAWHO 數位帳戶扣繳信用卡款，並使用電子或行動帳單"},
+		{"51000000-0000-0000-0000-000000000001", "DAWHO 大戶Plus國內", "dining", "", "0.05", "大戶Plus", "需完成 DAWHO 數位帳戶扣繳信用卡款，並使用電子或行動帳單"},
+		{"51000000-0000-0000-0000-000000000001", "DAWHO 大戶Plus海外", "overseas", "", "0.06", "大戶Plus", "需完成 DAWHO 數位帳戶扣繳信用卡款，並使用電子或行動帳單"},
+		{"51000000-0000-0000-0000-000000000001", "DAWHO 交通", "transport", "", "0.01", "大大", ""},
+		{"51000000-0000-0000-0000-000000000002", "SPORT 運動", "sports", "", "0.05", "", "需先完成當期活動登錄"},
+		{"51000000-0000-0000-0000-000000000003", "Richart 餐飲", "dining", "", "0.038", "", "需於 Richart Life APP 切換至符合消費情境的方案"},
+		{"51000000-0000-0000-0000-000000000004", "uniopen 海外", "overseas", "", "0.11", "", ""},
+		{"51000000-0000-0000-0000-000000000005", "U Bear 線上", "online", "", "0.10", "", ""},
+		{"51000000-0000-0000-0000-000000000005", "U Bear 餐飲 LINE Pay", "dining", "line_pay", "0.03", "", ""},
+		{"51000000-0000-0000-0000-000000000006", "Unicard 餐飲實體", "dining", "physical_card", "0.04", "", ""},
+		{"51000000-0000-0000-0000-000000000007", "LOL 海外 Apple Pay", "overseas", "apple_pay", "0.025", "", ""},
+		{"51000000-0000-0000-0000-000000000007", "LOL 海外 LINE Pay", "overseas", "line_pay", "0.01", "", ""},
+		{"51000000-0000-0000-0000-000000000007", "LOL 交通", "transport", "", "0.01", "", ""},
+		{"51000000-0000-0000-0000-000000000008", "Pi 餐飲實體", "dining", "physical_card", "0.01", "", ""},
+		{"51000000-0000-0000-0000-000000000009", "小小兵餐飲", "dining", "physical_card", "0.01234", "", ""},
+		{"51000000-0000-0000-0000-000000000009", "小小兵量販", "grocery", "physical_card", "0.05", "", ""},
+		{"51000000-0000-0000-0000-000000000009", "小小兵旅遊", "travel", "physical_card", "0.10", "", ""},
+		{"51000000-0000-0000-0000-000000000010", "LINE Bank 保險", "insurance", "physical_card", "0.01", "", ""},
+		{"51000000-0000-0000-0000-000000000010", "LINE Bank 海外網路", "overseas", "online_card", "0.025", "", ""},
+		{"51000000-0000-0000-0000-000000000010", "LINE Bank 線上", "online", "online_card", "0.04", "", ""},
+	}
+	for _, rule := range rules {
+		seedPublishedRule(t, pool, rule.productID, rule.ruleName, rule.category, rule.paymentMethod, rule.rate, rule.accountTier, rule.actionMessage)
+	}
+}
+
+func seedPublishedRule(t *testing.T, pool *pgxpool.Pool, productID, ruleName, category, paymentMethod, rate, accountTier, actionMessage string) {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `
+WITH ids AS (
+	SELECT
+		md5('core-activity:' || $1)::uuid AS activity_id,
+		md5('core-group:' || $1)::uuid AS group_id,
+		md5('core-component:' || $1 || ':' || $2)::uuid AS component_id,
+		md5('core-benefit:' || $1 || ':' || $2)::uuid AS benefit_id,
+		md5('core-category-req:' || $1 || ':' || $2)::uuid AS category_req_id,
+		md5('core-payment-req:' || $1 || ':' || $2)::uuid AS payment_req_id,
+		md5('core-tier-req:' || $1 || ':' || $2)::uuid AS tier_req_id,
+		md5('core-action-req:' || $1 || ':' || $2)::uuid AS action_req_id
+), activity AS (
+	INSERT INTO reward.activities(id,bank_id,card_product_id,title,effective_from,effective_to,is_active,published_at,published_checksum)
+	SELECT ids.activity_id,cp.bank_id,cp.id,'核心代表性 published runtime','2026-01-01','2026-12-31',true,now(),'core-seed'
+	FROM ids JOIN catalog.card_products cp ON cp.id=$1::uuid
+	ON CONFLICT(id) DO NOTHING
+	RETURNING id
+), grp AS (
+	INSERT INTO reward.activity_groups(id,activity_id,name,display_order,is_active)
+	SELECT ids.group_id,ids.activity_id,'核心代表性',10,true FROM ids
+	ON CONFLICT(id) DO NOTHING
+	RETURNING id
+), component AS (
+	INSERT INTO reward.activity_components(id,name,layer,stack_group,stack_mode,priority,effective_from,effective_to,is_active)
+	SELECT ids.component_id,$2::text,1,'core-' || $2::text,'ADDITIVE',10,'2026-01-01','2026-12-31',true FROM ids
+	ON CONFLICT(id) DO NOTHING
+	RETURNING id
+), link AS (
+	INSERT INTO reward.activity_component_groups(reward_component_id,reward_group_id)
+	SELECT ids.component_id,ids.group_id FROM ids
+	ON CONFLICT DO NOTHING
+), benefit AS (
+	INSERT INTO reward.activity_benefits(id,reward_component_id,benefit_type,value,reward_unit_id,description,is_active)
+	SELECT ids.benefit_id,ids.component_id,'RATE_CASHBACK',$5::numeric,$8::uuid,$2::text,true FROM ids
+	ON CONFLICT(id) DO NOTHING
+), cat_req AS (
+	INSERT INTO reward.activity_requirements(id,reward_component_id,requirement_type,operator,configuration_json,description,is_active)
+	SELECT ids.category_req_id,ids.component_id,'CONSUMPTION_CATEGORY','IN',jsonb_build_object('category_ids',jsonb_build_array($3::text)),$3::text,true FROM ids
+	ON CONFLICT(id) DO NOTHING
+), pay_req AS (
+	INSERT INTO reward.activity_requirements(id,reward_component_id,requirement_type,operator,configuration_json,description,is_active)
+	SELECT ids.payment_req_id,ids.component_id,'PAYMENT_METHOD','IN',jsonb_build_object('payment_method_codes',jsonb_build_array($4::text)),$4::text,true FROM ids
+	WHERE $4::text <> ''
+	ON CONFLICT(id) DO NOTHING
+), tier_req AS (
+	INSERT INTO reward.activity_requirements(id,reward_component_id,requirement_type,operator,configuration_json,description,is_active)
+	SELECT ids.tier_req_id,ids.component_id,'ACCOUNT_TIER','IN',jsonb_build_object('tiers',jsonb_build_array($6::text)),$6::text,true FROM ids
+	WHERE $6::text <> ''
+	ON CONFLICT(id) DO NOTHING
+), action_req AS (
+	INSERT INTO reward.activity_requirements(id,reward_component_id,requirement_type,operator,configuration_json,description,is_active)
+	SELECT ids.action_req_id,ids.component_id,'ACTION_REQUIRED','IN',jsonb_build_object('action_codes',jsonb_build_array($7::text)),$7::text,true FROM ids
+	WHERE $7::text <> ''
+	ON CONFLICT(id) DO NOTHING
+), pub_activity AS (
+	INSERT INTO reward.published_activities(id,source_activity_id,bank_id,card_product_id,title,effective_from,effective_to,published_at,source_checksum)
+	SELECT ids.activity_id,ids.activity_id,cp.bank_id,cp.id,'核心代表性 published runtime','2026-01-01','2026-12-31',now(),'core-seed'
+	FROM ids JOIN catalog.card_products cp ON cp.id=$1::uuid
+	ON CONFLICT(id) DO NOTHING
+), pub_rule AS (
+	INSERT INTO reward.published_reward_rules(id,published_activity_id,source_activity_id,source_component_id,source_benefit_id,name,layer,display_order,stack_group,stack_policy,priority,effect_type,reward_value,reward_unit_id,effective_from,effective_to,is_active)
+	SELECT ids.benefit_id,ids.activity_id,ids.activity_id,ids.component_id,ids.benefit_id,$2::text,1,10,'core-' || $2::text,'stack',10,'ADD_RATE',$5::numeric,$8::uuid,'2026-01-01','2026-12-31',true FROM ids
+	ON CONFLICT(id) DO NOTHING
+), pub_cat_req AS (
+	INSERT INTO reward.published_rule_requirements(id,published_rule_id,source_requirement_id,requirement_type,operator,configuration_json,description)
+	SELECT ids.category_req_id,ids.benefit_id,ids.category_req_id,'CONSUMPTION_CATEGORY','IN',jsonb_build_object('category_ids',jsonb_build_array($3::text)),$3::text FROM ids
+	ON CONFLICT(id) DO NOTHING
+), pub_pay_req AS (
+	INSERT INTO reward.published_rule_requirements(id,published_rule_id,source_requirement_id,requirement_type,operator,configuration_json,description)
+	SELECT ids.payment_req_id,ids.benefit_id,ids.payment_req_id,'PAYMENT_METHOD','IN',jsonb_build_object('payment_method_codes',jsonb_build_array($4::text)),$4::text FROM ids
+	WHERE $4::text <> ''
+	ON CONFLICT(id) DO NOTHING
+), pub_tier_req AS (
+	INSERT INTO reward.published_rule_requirements(id,published_rule_id,source_requirement_id,requirement_type,operator,configuration_json,description)
+	SELECT ids.tier_req_id,ids.benefit_id,ids.tier_req_id,'ACCOUNT_TIER','IN',jsonb_build_object('tiers',jsonb_build_array($6::text)),$6::text FROM ids
+	WHERE $6::text <> ''
+	ON CONFLICT(id) DO NOTHING
+), pub_action_req AS (
+	INSERT INTO reward.published_rule_requirements(id,published_rule_id,source_requirement_id,requirement_type,operator,configuration_json,description)
+	SELECT ids.action_req_id,ids.benefit_id,ids.action_req_id,'ACTION_REQUIRED','IN',jsonb_build_object('action_codes',jsonb_build_array($7::text)),$7::text FROM ids
+	WHERE $7::text <> ''
+	ON CONFLICT(id) DO NOTHING
+)
+INSERT INTO reward.published_rule_benefits(id,published_rule_id,source_benefit_id,benefit_type,value,reward_unit_id,description)
+SELECT ids.benefit_id,ids.benefit_id,ids.benefit_id,'RATE_CASHBACK',$5::numeric,$8::uuid,$2::text FROM ids
+ON CONFLICT(id) DO NOTHING`, productID, ruleName, category, paymentMethod, rate, accountTier, actionMessage, cashID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func clearSeedMemberCards(t *testing.T, pool *pgxpool.Pool) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(), `DELETE FROM member_cards WHERE user_id=$1`, userA); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func seedDAWHOQualifiedPlan(t *testing.T, pool *pgxpool.Pool, name string) {
+	t.Helper()
+	ctx := context.Background()
+	planID := "52000000-0000-0000-0000-000000000001"
+	if _, err := pool.Exec(ctx, `UPDATE catalog.card_products SET qualified_type=$1 WHERE id='51000000-0000-0000-0000-000000000001'`, name); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO catalog.card_plans(id,card_product_id,plan_type,is_active,display_order)
+		VALUES($1,'51000000-0000-0000-0000-000000000001','qualified',true,1)
+		ON CONFLICT(id) DO UPDATE SET is_active=true`, planID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO catalog.card_plan_versions(id,card_plan_id,name,description,effective_from,published_at)
+		VALUES('52000000-0000-0000-0000-000000000101',$1,$2,'測試資格','2000-01-01',now())
+		ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name`, planID, name); err != nil {
+		t.Fatal(err)
 	}
 }
 

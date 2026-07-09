@@ -56,7 +56,7 @@ func (s *TransactionRepository) Recommend(ctx context.Context, userID recommenda
 	}
 	rows, err := tx.Query(ctx, `SELECT mc.id, mc.user_id,
 		CASE WHEN NULLIF(mc.nickname,'') IS NULL THEN cp.name ELSE mc.nickname || '（' || cp.name || '）' END,
-		COALESCE(mc.account_tier,''),COALESCE(mc.card_network_id::text,''),COALESCE(limit_at_date.credit_limit, mc.credit_limit::text),mc.is_active,
+		COALESCE(mc.account_tier,''),COALESCE(mc.network,''),COALESCE(limit_at_date.credit_limit, mc.credit_limit::text),mc.is_active,
 		ARRAY(SELECT q.card_plan_id FROM catalog.member_card_qualification_statuses q
 			WHERE q.member_card_id=mc.id AND q.is_qualified
 			AND q.effective_from <= $2 AND (q.effective_to IS NULL OR q.effective_to > $2))
@@ -78,7 +78,7 @@ func (s *TransactionRepository) Recommend(ctx context.Context, userID recommenda
 	for rows.Next() {
 		var card recommendations.Card
 		var creditLimit *string
-		if err := rows.Scan(&card.ID, &card.UserID, &card.Name, &card.AccountTier, &card.NetworkID, &creditLimit, &card.IsActive, &card.QualifiedCardPlanIDs); err != nil {
+		if err := rows.Scan(&card.ID, &card.UserID, &card.Name, &card.AccountTier, &card.Network, &creditLimit, &card.IsActive, &card.QualifiedCardPlanIDs); err != nil {
 			rows.Close()
 			return recommendations.Result{}, err
 		}
@@ -141,8 +141,8 @@ func (s *TransactionRepository) Create(ctx context.Context, userID recommendatio
 	}
 	transactionID := newUUID()
 	if _, err := tx.Exec(ctx, `INSERT INTO transactions
-		(id, user_id, card_id, card_network_id, amount_minor, category_id, merchant_id, merchant_name, payment_method_id, transaction_date, note)
-		VALUES ($1, $2, $3, (SELECT card_network_id FROM member_cards WHERE id=$3), $4, $5, NULLIF($6,'')::uuid, $7, $8, $9, NULLIF($10, ''))`,
+		(id, user_id, card_id, network, amount_minor, category_id, merchant_id, merchant_name, payment_method_id, transaction_date, note)
+		VALUES ($1, $2, $3, (SELECT network FROM member_cards WHERE id=$3), $4, $5, NULLIF($6,'')::uuid, $7, $8, $9, NULLIF($10, ''))`,
 		transactionID, userID, input.CardID, input.AmountMinor, input.CategoryID,
 		input.MerchantID, input.MerchantName, input.PaymentMethodID, input.TransactionDate.Time, input.Note); err != nil {
 		return Transaction{}, fmt.Errorf("insert transaction: %w", err)
@@ -193,7 +193,7 @@ func (s *TransactionRepository) Update(ctx context.Context, userID, transactionI
 	}
 	if _, err := tx.Exec(ctx, `UPDATE transactions SET
 		card_id = $3, amount_minor = $4, category_id = $5, merchant_id=NULLIF($6,'')::uuid, merchant_name = $7, payment_method_id = $8, transaction_date = $9,
-		note = NULLIF($10, ''), updated_at = now()
+		network = (SELECT network FROM member_cards WHERE id=$3), note = NULLIF($10, ''), updated_at = now()
 		WHERE id = $1 AND user_id = $2`,
 		transactionID, userID, input.CardID, input.AmountMinor, input.CategoryID,
 		input.MerchantID, input.MerchantName, input.PaymentMethodID, input.TransactionDate.Time, input.Note); err != nil {
@@ -291,7 +291,7 @@ func loadCard(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID,
 	var creditLimit *string
 	if err := tx.QueryRow(ctx, `SELECT mc.id, mc.user_id,
 		CASE WHEN NULLIF(mc.nickname,'') IS NULL THEN cp.name ELSE mc.nickname || '（' || cp.name || '）' END,
-		COALESCE(mc.account_tier,''),COALESCE(mc.card_network_id::text,''),COALESCE(limit_at_date.credit_limit, mc.credit_limit::text),mc.is_active,
+		COALESCE(mc.account_tier,''),COALESCE(mc.network,''),COALESCE(limit_at_date.credit_limit, mc.credit_limit::text),mc.is_active,
 		ARRAY(SELECT q.card_plan_id FROM catalog.member_card_qualification_statuses q
 			WHERE q.member_card_id=mc.id AND q.is_qualified
 			AND q.effective_from <= $3 AND (q.effective_to IS NULL OR q.effective_to > $3))
@@ -306,7 +306,7 @@ func loadCard(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID,
 			LIMIT 1
 		) limit_at_date ON true
 		WHERE mc.id = $1 AND mc.user_id = $2 AND mc.is_active AND cp.is_active`, cardID, userID, date.Time).
-		Scan(&card.ID, &card.UserID, &card.Name, &card.AccountTier, &card.NetworkID, &creditLimit, &card.IsActive, &card.QualifiedCardPlanIDs); err != nil {
+		Scan(&card.ID, &card.UserID, &card.Name, &card.AccountTier, &card.Network, &creditLimit, &card.IsActive, &card.QualifiedCardPlanIDs); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("active card not found")
 		}
@@ -332,7 +332,7 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 		COALESCE(req.payment_methods,'{}'::text[]),
 		NULL::text,
 		u.id, u.id, u.name, u.symbol, u.symbol_position, u.twd_rate::text, u.precision,
-		COALESCE(req.card_network_ids,'{}'::uuid[]),COALESCE(req.categories,'{general}'::text[]),COALESCE(req.merchants,'{}'::text[]),
+		COALESCE(req.networks,'{}'::text[]),COALESCE(req.categories,'{general}'::text[]),COALESCE(req.merchants,'{}'::text[]),
 		COALESCE(req.qualified_card_plan_ids,'{}'::uuid[]),COALESCE(req.suggested_card_plan_id,''),COALESCE(req.suggested_plan_name,'')
 		FROM member_cards mc
 		JOIN reward.published_activities pa ON pa.card_product_id=mc.card_product_id
@@ -353,7 +353,7 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 					END
 				), max(action.value),'') AS action_message,
 				array_remove(array_agg(DISTINCT pm.value),NULL) AS payment_methods,
-				array_remove(array_agg(DISTINCT COALESCE(cn_id.value::uuid, cn.id)),NULL) AS card_network_ids,
+				array_remove(array_agg(DISTINCT network.value),NULL) AS networks,
 				array_remove(array_agg(DISTINCT cat.value),NULL) AS categories,
 				array_remove(array_agg(DISTINCT mer.value),NULL) AS merchants,
 				array_remove(array_agg(DISTINCT qplan_id.value::uuid),NULL) AS qualified_card_plan_ids,
@@ -374,9 +374,7 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 				ORDER BY pv.effective_from DESC LIMIT 1
 			) spv ON cp.plan_type='selectable'
 			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'payment_method_codes') pm(value) ON rr.requirement_type='PAYMENT_METHOD' AND pm.value <> 'any_payment'
-			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'card_network_ids') cn_id(value) ON rr.requirement_type='CARD_NETWORK'
-			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'network_codes') cn_code(value) ON rr.requirement_type='CARD_NETWORK'
-			LEFT JOIN catalog.card_networks cn ON cn.name=cn_code.value
+			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'networks') network(value) ON rr.requirement_type='CARD_NETWORK'
 			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'category_ids') cat(value) ON rr.requirement_type IN ('CONSUMPTION_CATEGORY','MERCHANT_CATEGORY')
 			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'merchant_ids') mer(value) ON rr.requirement_type='MERCHANT'
 			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'tiers') tier(value) ON rr.requirement_type='ACCOUNT_TIER'
@@ -405,7 +403,7 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 			&rule.Layer, &rule.DisplayOrder, &rule.EffectType, &rewardValue,
 			&rule.QualifiedType, &rule.ActionRequired, &rule.ActionMessage, &rule.PaymentMethods, &sharedCap, &rule.RewardUnit.ID, &rule.RewardUnit.ID,
 			&rule.RewardUnit.Name, &rule.RewardUnit.Symbol, &rule.RewardUnit.SymbolPosition, &twdRate, &rule.RewardUnit.Precision,
-			&rule.CardNetworkIDs, &rule.CategoryID, &rule.MerchantIDs, &qualifiedCardPlanIDs, &suggestedCardPlanID, &suggestedPlanName); err != nil {
+			&rule.Networks, &rule.CategoryID, &rule.MerchantIDs, &qualifiedCardPlanIDs, &suggestedCardPlanID, &suggestedPlanName); err != nil {
 			return nil, fmt.Errorf("scan rule: %w", err)
 		}
 		rule.QualifiedCardPlanIDs = qualifiedCardPlanIDs

@@ -88,7 +88,7 @@ export function useCardDetail({ onDeleted }: Options) {
         payment_due_day: card.payment_due_day,
         account_tier: card.account_tier || "",
         is_active: card.is_active,
-        card_network_id: card.card_network_id || "",
+        network: card.network || "",
         credit_limit: creditLimit,
       });
       const nextCard = await getCard(cardID);

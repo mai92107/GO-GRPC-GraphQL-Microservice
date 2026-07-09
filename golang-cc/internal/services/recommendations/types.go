@@ -61,7 +61,7 @@ type Card struct {
 	UserID               ID
 	Name                 string
 	AccountTier          string
-	NetworkID            ID
+	Network              string
 	CreditLimit          *Decimal
 	QualifiedCardPlanIDs []ID
 	IsActive             bool
@@ -115,7 +115,7 @@ type RewardRule struct {
 	SharedMonthlyCap     *Decimal
 	CategoryID           []string
 	MerchantIDs          []string
-	CardNetworkIDs       []ID
+	Networks             []string
 	QualifiedCardPlanIDs []ID
 	SuggestedCardPlanID  ID
 	SuggestedPlanName    string

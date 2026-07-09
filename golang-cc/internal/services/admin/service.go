@@ -21,6 +21,7 @@ type Repository interface {
 	UpdateBank(context.Context, string, domain.BankInput) error
 	DeleteBank(context.Context, string) error
 	ListNetworks(context.Context) ([]string, error)
+	ValidateNetworks(context.Context, []string) error
 	ListCards(context.Context) ([]domain.Card, error)
 	GetCardInfo(context.Context, string) (domain.CardInfo, error)
 	CreateCard(context.Context, string, domain.CardInput) error

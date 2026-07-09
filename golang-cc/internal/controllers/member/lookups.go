@@ -47,7 +47,7 @@ func (c *Controller) Catalog(ctx *gin.Context) {
 	}
 	out := []catalogResponse{}
 	for _, x := range items {
-		out = append(out, catalogResponse{ID: x.ID, BankID: x.BankID, BankName: x.BankName, Name: x.Name, CardImageURL: x.CardImageURL, PrimaryColor: x.PrimaryColor, IsActive: x.IsActive, QualifiedType: x.QualifiedType, SelectableType: x.SelectableType, Activities: x.Activities, Networks: x.Networks})
+		out = append(out, catalogResponse{ID: x.ID, BankID: x.BankID, BankName: x.BankName, Name: x.Name, CardImageURL: x.CardImageURL, PrimaryColor: x.PrimaryColor, IsActive: x.IsActive, AccountTiers: x.AccountTiers, QualifiedType: x.QualifiedType, SelectableType: x.SelectableType, Activities: x.Activities, Networks: x.Networks})
 	}
 	data(ctx, 200, out)
 }
@@ -58,7 +58,7 @@ func (c *Controller) CatalogCard(ctx *gin.Context) {
 		failure(ctx, 404, "not_found", "找不到卡片")
 		return
 	}
-	data(ctx, 200, catalogResponse{ID: x.ID, BankID: x.BankID, BankName: x.BankName, Name: x.Name, CardImageURL: x.CardImageURL, PrimaryColor: x.PrimaryColor, IsActive: x.IsActive, QualifiedType: x.QualifiedType, SelectableType: x.SelectableType, Activities: x.Activities, Networks: x.Networks})
+	data(ctx, 200, catalogResponse{ID: x.ID, BankID: x.BankID, BankName: x.BankName, Name: x.Name, CardImageURL: x.CardImageURL, PrimaryColor: x.PrimaryColor, IsActive: x.IsActive, AccountTiers: x.AccountTiers, QualifiedType: x.QualifiedType, SelectableType: x.SelectableType, Activities: x.Activities, Networks: x.Networks})
 }
 
 func (c *Controller) RewardUnits(ctx *gin.Context) {

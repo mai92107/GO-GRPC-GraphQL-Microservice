@@ -54,7 +54,7 @@ type cardProductActivityResponse struct {
 	IsActive   bool                      `json:"is_active"`
 	SourceURL  string                    `json:"source_url"`
 	VerifiedAt *string                   `json:"verified_at"`
-	NetworkIDs []string                  `json:"network_ids"`
+	Networks   []string                  `json:"networks"`
 	Benefits   []activityBenefitResponse `json:"benefits"`
 }
 type cardResponse struct {
@@ -89,7 +89,6 @@ type activityResponse struct {
 	IsActive          bool                      `json:"is_active"`
 	SourceURL         string                    `json:"source_url"`
 	VerifiedAt        *string                   `json:"verified_at"`
-	NetworkIDs        []string                  `json:"network_ids"`
 	SharedMonthlyCaps map[string]string         `json:"shared_monthly_caps"`
 	Benefits          []activityBenefitResponse `json:"benefits"`
 }
@@ -223,10 +222,10 @@ func mapBenefits(values []domain.ActivityBenefit) []activityBenefitResponse {
 	return out
 }
 func mapCardActivity(a domain.CardProductActivity) cardProductActivityResponse {
-	return cardProductActivityResponse{ID: a.ID, Name: a.Name, StartDate: a.StartDate, EndDate: a.EndDate, IsActive: a.IsActive, SourceURL: a.SourceURL, VerifiedAt: a.VerifiedAt, NetworkIDs: a.NetworkIDs, Benefits: mapBenefits(a.Benefits)}
+	return cardProductActivityResponse{ID: a.ID, Name: a.Name, StartDate: a.StartDate, EndDate: a.EndDate, IsActive: a.IsActive, SourceURL: a.SourceURL, VerifiedAt: a.VerifiedAt, Networks: a.Networks, Benefits: mapBenefits(a.Benefits)}
 }
 func mapActivity(a domain.Activity) activityResponse {
-	return activityResponse{ID: a.ID, CardProductID: a.CardProductID, Name: a.Name, StartDate: a.StartDate, EndDate: a.EndDate, IsActive: a.IsActive, SourceURL: a.SourceURL, VerifiedAt: a.VerifiedAt, NetworkIDs: a.NetworkIDs, SharedMonthlyCaps: a.SharedMonthlyCaps, Benefits: mapBenefits(a.Benefits)}
+	return activityResponse{ID: a.ID, CardProductID: a.CardProductID, Name: a.Name, StartDate: a.StartDate, EndDate: a.EndDate, IsActive: a.IsActive, SourceURL: a.SourceURL, VerifiedAt: a.VerifiedAt, SharedMonthlyCaps: a.SharedMonthlyCaps, Benefits: mapBenefits(a.Benefits)}
 }
 
 func mapCategories(values []domain.Category) []categoryResponse {
