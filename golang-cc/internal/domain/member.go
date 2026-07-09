@@ -43,7 +43,6 @@ type CatalogCard struct {
 	CardImageURL   string
 	PrimaryColor   string
 	IsActive       bool
-	AccountTiers   []string
 	QualifiedType  string
 	SelectableType string
 	Activities     []CardProductActivity

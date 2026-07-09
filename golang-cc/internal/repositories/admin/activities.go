@@ -11,18 +11,21 @@ import (
 )
 
 type activityModel struct {
-	ID            string `gorm:"column:id;primaryKey"`
-	BankID        string `gorm:"column:bank_id"`
-	CardProductID string `gorm:"column:card_product_id"`
-	Title         string `gorm:"column:title"`
-	Description   string `gorm:"column:description"`
-	SourceURL     string `gorm:"column:source_url"`
-	EffectiveFrom string `gorm:"column:effective_from"`
-	EffectiveTo   string `gorm:"column:effective_to"`
-	IsActive      bool   `gorm:"column:is_active"`
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	Groups        []activityGroupModel `gorm:"foreignKey:ActivityID"`
+	ID                string     `gorm:"column:id;primaryKey"`
+	BankID            string     `gorm:"column:bank_id"`
+	CardProductID     string     `gorm:"column:card_product_id"`
+	Title             string     `gorm:"column:title"`
+	Description       string     `gorm:"column:description"`
+	SourceURL         string     `gorm:"column:source_url"`
+	EffectiveFrom     string     `gorm:"column:effective_from"`
+	EffectiveTo       string     `gorm:"column:effective_to"`
+	IsActive          bool       `gorm:"column:is_active"`
+	PublishedAt       *time.Time `gorm:"column:published_at"`
+	PublishedBy       *string    `gorm:"column:published_by"`
+	PublishedChecksum *string    `gorm:"column:published_checksum"`
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	Groups            []activityGroupModel `gorm:"foreignKey:ActivityID"`
 }
 
 func (activityModel) TableName() string { return "reward.activities" }
@@ -102,6 +105,12 @@ func (r *Repository) ListActivities(ctx context.Context, filters service.Activit
 		Table("reward.activities AS a").
 		Select(`a.id,a.bank_id,b.name AS bank_name,a.card_product_id,cp.name AS card_name,a.title,a.description,a.source_url,
 			a.effective_from::text AS effective_from,a.effective_to::text AS effective_to,a.is_active,a.created_at,a.updated_at,
+			a.published_at,a.published_by::text AS published_by,a.published_checksum,
+			CASE
+				WHEN a.published_at IS NULL THEN 'draft'
+				WHEN a.updated_at > a.published_at THEN 'changed'
+				ELSE 'published'
+			END AS publish_status,
 			COUNT(DISTINCT g.id) AS group_count,COUNT(DISTINCT c.id) AS component_count`).
 		Joins("JOIN banks AS b ON b.id=a.bank_id").
 		Joins("JOIN catalog.card_products AS cp ON cp.id=a.card_product_id").
@@ -192,6 +201,109 @@ func (r *Repository) UpdateActivity(ctx context.Context, flow domain.ActivityFlo
 			}
 		}
 		return saveFlowChildren(tx, flow)
+	})
+}
+
+func (r *Repository) PublishActivity(ctx context.Context, id, userID, checksum string) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var exists bool
+		if err := tx.Model(&activityModel{}).Select("count(*) > 0").Where("id = ?", id).Find(&exists).Error; err != nil {
+			return err
+		}
+		if !exists {
+			return domain.ErrNotFound
+		}
+		if err := tx.Exec(`DELETE FROM reward.published_activities WHERE source_activity_id = ?`, id).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`
+			INSERT INTO reward.published_activities(
+				id,source_activity_id,bank_id,card_product_id,title,description,source_url,
+				effective_from,effective_to,published_at,published_by,source_checksum
+			)
+			SELECT a.id,a.id,a.bank_id,a.card_product_id,a.title,a.description,a.source_url,
+			       a.effective_from,a.effective_to,now(),?::uuid,?
+			FROM reward.activities a
+			WHERE a.id = ? AND a.is_active`, userID, checksum, id).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`
+			INSERT INTO reward.published_reward_rules(
+				id,published_activity_id,source_activity_id,source_component_id,source_benefit_id,
+				name,description,layer,display_order,stack_group,stack_policy,priority,
+				effect_type,reward_value,reward_unit_id,cap_amount,cap_formula,cap_period,
+				effective_from,effective_to,is_active,published_at
+			)
+			SELECT
+				b.id,a.id,a.id,c.id,b.id,
+				CASE WHEN NULLIF(b.description,'') IS NULL THEN c.name ELSE c.name || ' ' || b.description END,
+				c.description,c.layer,MIN(g.display_order),c.stack_group,
+				CASE c.stack_mode
+					WHEN 'ADDITIVE' THEN 'stack'
+					WHEN 'BEST_ONLY' THEN 'best_of_group'
+					WHEN 'EXCLUSIVE' THEN 'exclusive'
+				END,
+				c.priority,
+				CASE b.benefit_type
+					WHEN 'FIXED_CASHBACK' THEN 'ADD_CASH'
+					WHEN 'DISCOUNT' THEN 'DISCOUNT'
+					ELSE 'ADD_RATE'
+				END,
+				b.value,b.reward_unit_id,b.cap_amount,b.cap_formula,b.cap_period,
+				GREATEST(c.effective_from,a.effective_from),
+				LEAST(c.effective_to,a.effective_to),
+				true,now()
+			FROM reward.activities a
+			JOIN reward.activity_groups g ON g.activity_id=a.id AND g.is_active
+			JOIN reward.activity_component_groups cg ON cg.reward_group_id=g.id
+			JOIN reward.activity_components c ON c.id=cg.reward_component_id AND c.is_active
+			JOIN reward.activity_benefits b ON b.reward_component_id=c.id AND b.is_active
+			WHERE a.id = ? AND a.is_active
+			GROUP BY a.id,c.id,b.id`, id).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`
+			INSERT INTO reward.published_rule_requirements(
+				id,published_rule_id,source_requirement_id,requirement_type,operator,
+				configuration_json,description,display_order,published_at
+			)
+			SELECT md5('published-req:' || b.id::text || ':' || req.id::text)::uuid,
+			       b.id,req.id,req.requirement_type,req.operator,req.configuration_json,
+			       req.description,row_number() OVER (PARTITION BY b.id ORDER BY req.requirement_type, req.id),now()
+			FROM reward.activities a
+			JOIN reward.activity_groups g ON g.activity_id=a.id AND g.is_active
+			JOIN reward.activity_component_groups cg ON cg.reward_group_id=g.id
+			JOIN reward.activity_components c ON c.id=cg.reward_component_id AND c.is_active
+			JOIN reward.activity_benefits b ON b.reward_component_id=c.id AND b.is_active
+			JOIN reward.activity_requirements req ON req.reward_component_id=c.id AND req.is_active
+			WHERE a.id = ? AND a.is_active
+			ON CONFLICT (id) DO NOTHING`, id).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`
+			INSERT INTO reward.published_rule_benefits(
+				id,published_rule_id,source_benefit_id,benefit_type,value,reward_unit_id,
+				cap_amount,cap_formula,cap_period,description,published_at
+			)
+			SELECT b.id,b.id,b.id,b.benefit_type,b.value,b.reward_unit_id,
+			       b.cap_amount,b.cap_formula,b.cap_period,b.description,now()
+			FROM reward.activities a
+			JOIN reward.activity_groups g ON g.activity_id=a.id AND g.is_active
+			JOIN reward.activity_component_groups cg ON cg.reward_group_id=g.id
+			JOIN reward.activity_components c ON c.id=cg.reward_component_id AND c.is_active
+			JOIN reward.activity_benefits b ON b.reward_component_id=c.id AND b.is_active
+			WHERE a.id = ? AND a.is_active
+			ON CONFLICT (id) DO NOTHING`, id).Error; err != nil {
+			return err
+		}
+		result := tx.Exec(`UPDATE reward.activities SET published_at=now(), published_by=?::uuid, published_checksum=?, updated_at=updated_at WHERE id=?`, userID, checksum, id)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return domain.ErrNotFound
+		}
+		return nil
 	})
 }
 
@@ -314,12 +426,26 @@ func modelFromFlow(flow domain.ActivityFlow) activityModel {
 }
 
 func flowFromModel(model activityModel) domain.ActivityFlow {
-	flow := domain.ActivityFlow{Activity: domain.ActivitySummary{ID: model.ID, BankID: model.BankID, CardProductID: model.CardProductID, Title: model.Title, Description: model.Description, SourceURL: model.SourceURL, EffectiveFrom: model.EffectiveFrom, EffectiveTo: model.EffectiveTo, IsActive: model.IsActive, CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt}}
+	publishStatus := "draft"
+	if model.PublishedAt != nil {
+		publishStatus = "published"
+		if model.UpdatedAt.After(*model.PublishedAt) {
+			publishStatus = "changed"
+		}
+	}
+	flow := domain.ActivityFlow{Activity: domain.ActivitySummary{ID: model.ID, BankID: model.BankID, CardProductID: model.CardProductID, Title: model.Title, Description: model.Description, SourceURL: model.SourceURL, EffectiveFrom: dateText(model.EffectiveFrom), EffectiveTo: dateText(model.EffectiveTo), IsActive: model.IsActive, PublishedAt: model.PublishedAt, PublishedBy: model.PublishedBy, PublishedChecksum: model.PublishedChecksum, PublishStatus: publishStatus, CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt}}
 	for _, group := range model.Groups {
 		outGroup := domain.RewardGroup{ID: group.ID, ActivityID: group.ActivityID, Name: group.Name, Description: group.Description, DisplayOrder: group.DisplayOrder, IsActive: group.IsActive}
 		flow.RewardGroups = append(flow.RewardGroups, outGroup)
 	}
 	return flow
+}
+
+func dateText(value string) string {
+	if len(value) >= len("2006-01-02") {
+		return value[:len("2006-01-02")]
+	}
+	return value
 }
 
 type activityComponentLinkRow struct {

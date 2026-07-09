@@ -77,21 +77,24 @@ type activityStatusRequest struct {
 }
 
 type activitySummaryResponse struct {
-	ID             string `json:"id"`
-	BankID         string `json:"bank_id"`
-	BankName       string `json:"bank_name"`
-	CardProductID  string `json:"card_product_id"`
-	CardName       string `json:"card_name"`
-	Title          string `json:"title"`
-	Description    string `json:"description"`
-	SourceURL      string `json:"source_url"`
-	EffectiveFrom  string `json:"effective_from"`
-	EffectiveTo    string `json:"effective_to"`
-	IsActive       bool   `json:"is_active"`
-	GroupCount     int64  `json:"group_count"`
-	ComponentCount int64  `json:"component_count"`
-	CreatedAt      string `json:"created_at"`
-	UpdatedAt      string `json:"updated_at"`
+	ID             string  `json:"id"`
+	BankID         string  `json:"bank_id"`
+	BankName       string  `json:"bank_name"`
+	CardProductID  string  `json:"card_product_id"`
+	CardName       string  `json:"card_name"`
+	Title          string  `json:"title"`
+	Description    string  `json:"description"`
+	SourceURL      string  `json:"source_url"`
+	EffectiveFrom  string  `json:"effective_from"`
+	EffectiveTo    string  `json:"effective_to"`
+	IsActive       bool    `json:"is_active"`
+	PublishedAt    *string `json:"published_at"`
+	PublishedBy    *string `json:"published_by"`
+	PublishStatus  string  `json:"publish_status"`
+	GroupCount     int64   `json:"group_count"`
+	ComponentCount int64   `json:"component_count"`
+	CreatedAt      string  `json:"created_at"`
+	UpdatedAt      string  `json:"updated_at"`
 }
 
 type activityFlowResponse struct {
@@ -233,6 +236,19 @@ func (c *Controller) UpdateActivity(ctx *gin.Context) {
 	data(ctx, http.StatusOK, gin.H{"updated": true})
 }
 
+func (c *Controller) PublishActivity(ctx *gin.Context) {
+	err := c.service.PublishActivity(ctx.Request.Context(), ctx.Param("id"), currentUserID(ctx))
+	if isNotFound(err) {
+		failure(ctx, http.StatusNotFound, "not_found", "找不到活動")
+		return
+	}
+	if err != nil {
+		failure(ctx, http.StatusBadRequest, "validation_failed", activityValidationMessage(err))
+		return
+	}
+	data(ctx, http.StatusOK, gin.H{"published": true})
+}
+
 func activityValidationMessage(err error) string {
 	if err == nil {
 		return "活動資料無效"
@@ -285,7 +301,12 @@ func (c *Controller) ActivityRequirementOptions(ctx *gin.Context) {
 }
 
 func mapActivitySummary(item domain.ActivitySummary) activitySummaryResponse {
-	return activitySummaryResponse{ID: item.ID, BankID: item.BankID, BankName: item.BankName, CardProductID: item.CardProductID, CardName: item.CardName, Title: item.Title, Description: item.Description, SourceURL: item.SourceURL, EffectiveFrom: item.EffectiveFrom, EffectiveTo: item.EffectiveTo, IsActive: item.IsActive, GroupCount: item.GroupCount, ComponentCount: item.ComponentCount, CreatedAt: item.CreatedAt.Format("2006-01-02"), UpdatedAt: item.UpdatedAt.Format("2006-01-02")}
+	var publishedAt *string
+	if item.PublishedAt != nil {
+		value := item.PublishedAt.Format("2006-01-02 15:04")
+		publishedAt = &value
+	}
+	return activitySummaryResponse{ID: item.ID, BankID: item.BankID, BankName: item.BankName, CardProductID: item.CardProductID, CardName: item.CardName, Title: item.Title, Description: item.Description, SourceURL: item.SourceURL, EffectiveFrom: item.EffectiveFrom, EffectiveTo: item.EffectiveTo, IsActive: item.IsActive, PublishedAt: publishedAt, PublishedBy: item.PublishedBy, PublishStatus: item.PublishStatus, GroupCount: item.GroupCount, ComponentCount: item.ComponentCount, CreatedAt: item.CreatedAt.Format("2006-01-02"), UpdatedAt: item.UpdatedAt.Format("2006-01-02")}
 }
 
 func mapActivityFlow(item domain.ActivityFlow) activityFlowResponse {

@@ -1,0 +1,2 @@
+-- Legacy reward catalog tables are intentionally not recreated.
+-- Restore them from migrations 000016-000030 if a local rollback is required.

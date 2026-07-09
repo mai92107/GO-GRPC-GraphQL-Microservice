@@ -24,9 +24,6 @@ func Recommend(input RecommendationInput) (Result, error) {
 	if input.CategoryID == "" || input.CategoryID == GeneralCategory {
 		return Result{}, fmt.Errorf("unsupported category_id %q", input.CategoryID)
 	}
-	if len(input.PaymentMethods) == 0 {
-		return Result{}, fmt.Errorf("payment_methods are required")
-	}
 	if input.Date.Time.IsZero() {
 		return Result{}, fmt.Errorf("date is required")
 	}
@@ -538,7 +535,7 @@ func ruleMatches(rule RewardRule, card Card, category, merchantID, paymentMethod
 	if rule.EndDate != nil && date.After(rule.EndDate.Time) {
 		return false
 	}
-	if rule.QualifiedType != card.AccountTier {
+	if rule.QualifiedType != "" && rule.QualifiedType != card.AccountTier {
 		return false
 	}
 

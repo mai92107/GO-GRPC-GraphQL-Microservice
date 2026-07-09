@@ -74,6 +74,9 @@ export type ActivitySummary = {
   effective_from: string;
   effective_to: string;
   is_active: boolean;
+  published_at: string | null;
+  published_by: string | null;
+  publish_status: "draft" | "published" | "changed";
   group_count: number;
   component_count: number;
   created_at: string;
@@ -162,23 +165,6 @@ export type MerchantInput = {
   aliases: string[];
   category_ids: string[];
 };
-type RewardVersionInput = {
-  reward_unit_id: string;
-  name: string;
-  effect_type:
-    | "ADD_RATE"
-    | "SET_RATE"
-    | "MULTIPLY_RATE"
-    | "ADD_CASH"
-    | "DISCOUNT";
-  reward_value: string;
-  effective_from: string;
-  effective_to: string | null;
-  announced_at: string | null;
-  change_reason: string;
-  display_change_until: string | null;
-};
-
 export const getDashboard = () => api<DashboardSummary>("/admin/dashboard");
 export const getUsers = () => api<AdminUser[]>("/admin/users");
 export const getInvitations = () => api<Invitation[]>("/admin/invitings");
@@ -290,6 +276,8 @@ export const activateActivity = (activity: ActivitySummary) =>
   patch<{ updated: boolean }>(`/admin/activities/${activity.id}/status`, {
     is_active: !activity.is_active,
   });
+export const publishActivity = (id: string) =>
+  post<{ published: boolean }>(`/admin/activities/${id}/publish`, {});
 export const updateActivity = (flow: ActivityFlow) =>
   put<{ updated: boolean }>(
     `/admin/activities/${flow.activity.id}`,
@@ -348,15 +336,6 @@ function activityDatePayload(flow: ActivityFlow): ActivityFlow {
 function dateOnly(value: string) {
   return value.slice(0, 10);
 }
-export const publishRewardComponentVersion = (
-  componentID: string,
-  input: RewardVersionInput,
-) =>
-  post<{ id: string }>(
-    `/admin/reward-components/${componentID}/versions`,
-    input,
-  );
-
 export const getCategories = () => api<Category[]>("/admin/categories");
 export const createCategory = (name: string) =>
   post<{ id: string }>("/admin/categories", { name });

@@ -3,6 +3,7 @@ package member
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/rafa/golang-cc/internal/domain"
@@ -23,7 +24,7 @@ func (r *Repository) ListCards(ctx context.Context, userID string) ([]domain.Mem
 	var result []domain.MemberCard
 
 	err := r.db.WithContext(ctx).
-		Table("member_cards AS mc").
+		Table("public.member_cards AS mc").
 		Select(`
 			mc.id AS member_card_id,
 			COALESCE(mc.nickname, cp.name) AS name,
@@ -37,8 +38,8 @@ func (r *Repository) ListCards(ctx context.Context, userID string) ([]domain.Mem
 			COALESCE(cp.selectable_type, '') AS selectable_type,
 			COALESCE(n.name, '') AS network
 		`).
-		Joins("JOIN card_products AS cp ON cp.id = mc.card_product_id").
-		Joins("JOIN banks AS b ON b.id = cp.bank_id").
+		Joins("JOIN catalog.card_products AS cp ON cp.id = mc.card_product_id").
+		Joins("JOIN public.banks AS b ON b.id = cp.bank_id").
 		Joins("LEFT JOIN catalog.card_networks AS n ON n.id = mc.card_network_id").
 		Where("mc.user_id = ?", userID).
 		Order("cp.name, mc.id").
@@ -115,12 +116,12 @@ func (r *Repository) UpdateCard(ctx context.Context, id, userID string, input Ca
 	defer tx.Rollback(ctx)
 
 	var limitChanged bool
-	if err := tx.QueryRow(ctx, `SELECT mc.credit_limit IS DISTINCT FROM $10::numeric
+	if err := tx.QueryRow(ctx, `SELECT mc.credit_limit IS DISTINCT FROM $4::numeric
 		FROM member_cards mc
 		JOIN card_products cp ON cp.id=mc.card_product_id
 		WHERE mc.id=$1 AND mc.user_id=$2
-		AND ($9='' OR cardinality(cp.account_tiers)=0 OR $9=ANY(cp.account_tiers))
-		FOR UPDATE OF mc`, id, userID, input.CardNetworkID, input.Nickname, input.LastFour, input.IsActive, input.StatementDay, input.PaymentDueDay, input.AccountTier, input.CreditLimit).
+		AND ($3='' OR cardinality(cp.account_tiers)=0 OR $3=ANY(cp.account_tiers))
+		FOR UPDATE OF mc`, id, userID, input.AccountTier, input.CreditLimit).
 		Scan(&limitChanged); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.ErrNotFound
@@ -148,15 +149,16 @@ func (r *Repository) UpdateCard(ctx context.Context, id, userID string, input Ca
 		return domain.ErrNotFound
 	}
 	if limitChanged {
-		if _, err := tx.Exec(ctx, `WITH clock AS (SELECT statement_timestamp() AS changed_at),
-			closed AS (
-				UPDATE member_card_credit_limits h
-				SET effective_to = clock.changed_at
-				FROM clock
-				WHERE h.member_card_id=$1 AND h.effective_to IS NULL
-			)
-			INSERT INTO member_card_credit_limits(member_card_id, credit_limit, effective_from)
-			SELECT $1, $2::numeric, changed_at FROM clock`, id, input.CreditLimit); err != nil {
+		var changedAt time.Time
+		if err := tx.QueryRow(ctx, `SELECT statement_timestamp()`).Scan(&changedAt); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE member_card_credit_limits
+			SET effective_to=$2 WHERE member_card_id=$1 AND effective_to IS NULL`, id, changedAt); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO member_card_credit_limits(member_card_id, credit_limit, effective_from)
+			VALUES ($1, $2::numeric, $3)`, id, input.CreditLimit, changedAt); err != nil {
 			return err
 		}
 	}

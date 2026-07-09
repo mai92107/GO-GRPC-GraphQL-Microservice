@@ -41,6 +41,7 @@ func RegisterAdmin(engine *gin.Engine, c *admincontroller.Controller, authServic
 	write.PATCH("/card-products/:id", c.UpdateCard)
 	write.DELETE("/card-products/:id", c.DeleteCard)
 	write.POST("/activities", c.CreateActivity)
+	write.POST("/activities/:id/publish", c.PublishActivity)
 	write.PUT("/activities/:id", c.UpdateActivity)
 	write.PATCH("/activities/:id/status", c.SetActivityStatus)
 	write.DELETE("/activities/:id", c.DeleteActivity)
@@ -62,7 +63,4 @@ func RegisterAdmin(engine *gin.Engine, c *admincontroller.Controller, authServic
 	write.POST("/merchants", c.CreateMerchant)
 	write.PATCH("/merchants/:id", c.UpdateMerchant)
 	write.DELETE("/merchants/:id", c.DeleteMerchant)
-	write.POST("/reward-components/:componentId/versions", c.PublishComponentVersion)
-	write.POST("/reward-conditions/:conditionId/versions", c.PublishConditionVersion)
-	write.POST("/reward-caps/:capId/versions", c.PublishCapVersion)
 }

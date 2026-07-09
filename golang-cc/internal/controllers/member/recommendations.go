@@ -124,6 +124,7 @@ func (c *Controller) Recommend(ctx *gin.Context) {
 		MerchantID: request.MerchantID, MerchantName: request.MerchantName, Date: date,
 	})
 	if err != nil {
+		println("recommendation error:", err.Error())
 		failure(ctx, 400, "validation_failed", err.Error())
 		return
 	}

@@ -30,6 +30,7 @@ type Repository interface {
 	GetActivity(context.Context, string) (domain.ActivityFlow, error)
 	CreateActivity(context.Context, domain.ActivityFlow) error
 	UpdateActivity(context.Context, domain.ActivityFlow) error
+	PublishActivity(context.Context, string, string, string) error
 	SetActivityStatus(context.Context, string, bool) error
 	DeleteActivity(context.Context, string) error
 	ListRequirementTypes(context.Context) ([]domain.RequirementTypeOption, error)
@@ -58,9 +59,6 @@ type Repository interface {
 	CreateMerchant(context.Context, domain.Merchant) (string, error)
 	UpdateMerchant(context.Context, domain.Merchant) error
 	DeleteMerchant(context.Context, string) error
-	PublishComponentVersion(context.Context, string, domain.RewardComponentVersionInput) (string, error)
-	PublishConditionVersion(context.Context, string, domain.RewardConditionVersionInput) (string, error)
-	PublishCapVersion(context.Context, string, domain.RewardCapVersionInput) (string, error)
 }
 
 type AuthService interface {

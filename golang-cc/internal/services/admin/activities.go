@@ -2,6 +2,8 @@ package admin
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -58,12 +60,78 @@ func (s *Service) UpdateActivity(ctx context.Context, id string, input ActivityF
 	return s.repository.UpdateActivity(ctx, flow)
 }
 
+func (s *Service) PublishActivity(ctx context.Context, id, userID string) error {
+	flow, err := s.repository.GetActivity(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := validatePublishableActivity(flow); err != nil {
+		return err
+	}
+	payload, err := json.Marshal(flow)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(payload)
+	return s.repository.PublishActivity(ctx, id, userID, hex.EncodeToString(sum[:]))
+}
+
 func (s *Service) SetActivityStatus(ctx context.Context, id string, active bool) error {
 	return s.repository.SetActivityStatus(ctx, id, active)
 }
 
 func (s *Service) DeleteActivity(ctx context.Context, id string) error {
 	return s.repository.DeleteActivity(ctx, id)
+}
+
+func validatePublishableActivity(flow domain.ActivityFlow) error {
+	if !flow.Activity.IsActive {
+		return invalidActivityInput("Activity 必須啟用後才能發布")
+	}
+	if len(flow.RewardGroups) == 0 {
+		return invalidActivityInput("Activity 至少需要 1 個 Group 才能發布")
+	}
+	publishableRules := 0
+	for groupIndex, group := range flow.RewardGroups {
+		if !group.IsActive {
+			continue
+		}
+		if len(group.Components) == 0 {
+			return invalidActivityInput("Group[%d].components 至少需要 1 個 Component 才能發布", groupIndex+1)
+		}
+		for componentIndex, component := range group.Components {
+			if !component.IsActive {
+				continue
+			}
+			path := fmt.Sprintf("Group[%d].Component[%d]", groupIndex+1, componentIndex+1)
+			if component.EffectiveFrom < flow.Activity.EffectiveFrom || component.EffectiveTo > flow.Activity.EffectiveTo {
+				return invalidActivityInput("%s 日期必須落在 Activity 日期內", path)
+			}
+			activeRequirements := 0
+			for _, requirement := range component.Requirements {
+				if requirement.IsActive {
+					activeRequirements++
+				}
+			}
+			if activeRequirements == 0 {
+				return invalidActivityInput("%s 至少需要 1 個啟用 Requirement 才能發布", path)
+			}
+			activeBenefits := 0
+			for _, benefit := range component.Benefits {
+				if benefit.IsActive {
+					activeBenefits++
+				}
+			}
+			if activeBenefits == 0 {
+				return invalidActivityInput("%s 至少需要 1 個啟用 Benefit 才能發布", path)
+			}
+			publishableRules += activeBenefits
+		}
+	}
+	if publishableRules == 0 {
+		return invalidActivityInput("Activity 至少需要 1 個可發布的啟用 Benefit")
+	}
+	return nil
 }
 
 func (s *Service) ListRequirementTypes(ctx context.Context) ([]domain.RequirementTypeOption, error) {

@@ -60,7 +60,7 @@ func (s *TransactionRepository) Recommend(ctx context.Context, userID recommenda
 		ARRAY(SELECT q.card_plan_id FROM catalog.member_card_qualification_statuses q
 			WHERE q.member_card_id=mc.id AND q.is_qualified
 			AND q.effective_from <= $2 AND (q.effective_to IS NULL OR q.effective_to > $2))
-		FROM member_cards mc JOIN card_products cp ON cp.id=mc.card_product_id
+		FROM member_cards mc JOIN catalog.card_products cp ON cp.id=mc.card_product_id
 		LEFT JOIN LATERAL (
 			SELECT h.credit_limit::text AS credit_limit
 			FROM member_card_credit_limits h
@@ -295,7 +295,7 @@ func loadCard(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID,
 		ARRAY(SELECT q.card_plan_id FROM catalog.member_card_qualification_statuses q
 			WHERE q.member_card_id=mc.id AND q.is_qualified
 			AND q.effective_from <= $3 AND (q.effective_to IS NULL OR q.effective_to > $3))
-		FROM member_cards mc JOIN card_products cp ON cp.id=mc.card_product_id
+		FROM member_cards mc JOIN catalog.card_products cp ON cp.id=mc.card_product_id
 		LEFT JOIN LATERAL (
 			SELECT h.credit_limit::text AS credit_limit
 			FROM member_card_credit_limits h
@@ -320,58 +320,49 @@ func loadCard(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID,
 }
 
 func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID, date recommendations.LocalDate) ([]recommendations.RewardRule, error) {
-	rows, err := tx.Query(ctx, `SELECT c.id,p.id,p.name,$1::uuid,mc.id,cv.name,
-		cap.limit_value::text,
-		COALESCE(cap.limit_formula,''),
-		COALESCE((cv.effective_from AT TIME ZONE 'Asia/Taipei')::date,DATE '2000-01-01'),
-		CASE WHEN cv.effective_to IS NULL THEN NULL ELSE ((cv.effective_to-interval '1 microsecond') AT TIME ZONE 'Asia/Taipei')::date END,
-		(p.status='published' AND c.is_active),c.stack_group,c.priority,
-		c.layer,c.display_order,cv.effect_type,cv.reward_value::text,
-		COALESCE(req.qualified_names,'{}'),
+	rows, err := tx.Query(ctx, `SELECT r.id,pa.id,pa.title,$1::uuid,mc.id,r.name,
+		r.cap_amount::text,
+		COALESCE(r.cap_formula,''),
+		r.effective_from,
+		r.effective_to,
+		r.is_active,r.stack_group,r.priority,
+		r.layer::text,r.display_order,r.effect_type,r.reward_value::text,
+		COALESCE(req.account_tier,''),
 		COALESCE(req.action_required,'none'),COALESCE(req.action_message,''),
-		COALESCE(req.payment_methods,'{}'),
+		COALESCE(req.payment_methods,'{}'::text[]),
 		NULL::text,
 		u.id, u.id, u.name, u.symbol, u.symbol_position, u.twd_rate::text, u.precision,
-		COALESCE(req.card_network_ids,'{}'),COALESCE(req.categories,'{}'),COALESCE(req.merchants,'{}')
+		COALESCE(req.card_network_ids,'{}'::uuid[]),COALESCE(req.categories,'{general}'::text[]),COALESCE(req.merchants,'{}'::text[]),
+		COALESCE(req.qualified_card_plan_ids,'{}'::uuid[]),COALESCE(req.suggested_card_plan_id,''),COALESCE(req.suggested_plan_name,'')
 		FROM member_cards mc
-		JOIN reward.programs p ON p.card_product_id=mc.card_product_id
-		JOIN reward.components c ON c.reward_program_id=p.id
-		JOIN LATERAL (
-			SELECT v.* FROM reward.component_versions v WHERE v.reward_component_id=c.id
-			AND v.effective_from <= $3 AND (v.effective_to IS NULL OR v.effective_to > $3)
-			ORDER BY v.effective_from DESC LIMIT 1
-		) cv ON true
-		JOIN reward_units u ON u.id=cv.reward_unit_id
-		LEFT JOIN LATERAL (
-			SELECT v.limit_value,v.limit_formula FROM reward.component_caps cc
-			JOIN reward.cap_versions v ON v.reward_cap_id=cc.reward_cap_id
-			WHERE cc.reward_component_id=c.id AND cc.effective_from <= $3
-			AND (cc.effective_to IS NULL OR cc.effective_to > $3)
-			AND v.effective_from <= $3 AND (v.effective_to IS NULL OR v.effective_to > $3)
-			ORDER BY v.effective_from DESC LIMIT 1
-		) cap ON true
+		JOIN reward.published_activities pa ON pa.card_product_id=mc.card_product_id
+			AND pa.effective_from <= $3::date AND pa.effective_to >= $3::date
+		JOIN reward.published_reward_rules r ON r.published_activity_id=pa.id
+			AND r.effective_from <= $3::date AND r.effective_to >= $3::date AND r.is_active
+		JOIN reward_units u ON u.id=r.reward_unit_id
 		LEFT JOIN LATERAL (
 			SELECT
-				array_remove(array_agg(DISTINCT qpv.name) FILTER (WHERE cp.plan_type='qualified'),NULL) AS qualified_names,
+				(ARRAY_REMOVE(array_agg(DISTINCT tier.value),NULL))[1] AS account_tier,
 				CASE WHEN count(*) FILTER (WHERE cp.plan_type='selectable')>0 THEN 'app_switch'
-				     WHEN count(rem.value)>0 THEN 'account_setup'
+				     WHEN count(action.value)>0 THEN 'account_setup'
 				     ELSE 'none' END AS action_required,
 				COALESCE(max(
 					CASE WHEN cp.plan_type='selectable' THEN
-						concat('需至 APP 切換卡片方案：',spv.name,'，對應優惠：',cv.name,' ',trim(trailing '.' from trim(trailing '0' from cv.reward_value::text)),
+						concat('需至 APP 切換卡片方案：',spv.name,'，對應優惠：',r.name,' ',trim(trailing '.' from trim(trailing '0' from r.reward_value::text)),
 							CASE WHEN spv.reminder_text<>'' THEN '；'||spv.reminder_text ELSE '' END)
 					END
-				), max(rem.value),'') AS action_message,
+				), max(action.value),'') AS action_message,
 				array_remove(array_agg(DISTINCT pm.value),NULL) AS payment_methods,
-				array_remove(array_agg(DISTINCT cn.value::uuid),NULL) AS card_network_ids,
+				array_remove(array_agg(DISTINCT COALESCE(cn_id.value::uuid, cn.id)),NULL) AS card_network_ids,
 				array_remove(array_agg(DISTINCT cat.value),NULL) AS categories,
-				array_remove(array_agg(DISTINCT mer.value),NULL) AS merchants
-			FROM reward.requirements rr
-			JOIN reward.conditions rc ON rc.id=rr.reward_condition_id AND rc.is_active
-			JOIN reward.condition_versions x ON x.reward_condition_id=rr.reward_condition_id
-				AND x.effective_from <= $3 AND (x.effective_to IS NULL OR x.effective_to > $3)
-			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'card_plan_ids') plan_id ON true
+				array_remove(array_agg(DISTINCT mer.value),NULL) AS merchants,
+				array_remove(array_agg(DISTINCT qplan_id.value::uuid),NULL) AS qualified_card_plan_ids,
+				(ARRAY_REMOVE(array_agg(DISTINCT CASE WHEN cp.plan_type='selectable' THEN cp.id::text END),NULL))[1] AS suggested_card_plan_id,
+				(ARRAY_REMOVE(array_agg(DISTINCT CASE WHEN cp.plan_type='selectable' THEN spv.name END),NULL))[1] AS suggested_plan_name
+			FROM reward.published_rule_requirements rr
+			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'card_plan_ids') plan_id ON rr.requirement_type='CARD_PLAN'
 			LEFT JOIN catalog.card_plans cp ON cp.id=plan_id.value::uuid
+			LEFT JOIN LATERAL (SELECT plan_id.value) qplan_id ON cp.plan_type='qualified'
 			LEFT JOIN LATERAL (
 				SELECT name FROM catalog.card_plan_versions pv WHERE pv.card_plan_id=cp.id
 				AND pv.effective_from <= $3 AND (pv.effective_to IS NULL OR pv.effective_to > $3)
@@ -382,15 +373,17 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 				AND pv.effective_from <= $3 AND (pv.effective_to IS NULL OR pv.effective_to > $3)
 				ORDER BY pv.effective_from DESC LIMIT 1
 			) spv ON cp.plan_type='selectable'
-			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'payment_method_ids') pm(value) ON rc.condition_type='payment_method'
-			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'card_network_ids') cn(value) ON rc.condition_type='card_network'
-			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'category_ids') cat(value) ON rc.condition_type='category'
-			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'merchant_ids') mer(value) ON rc.condition_type='merchant'
-			LEFT JOIN LATERAL jsonb_array_elements_text(x.configuration_json->'reminder_messages') rem(value) ON rc.condition_type='channel'
-			WHERE rr.reward_component_id=c.id AND rr.effective_from <= $3
-			AND (rr.effective_to IS NULL OR rr.effective_to > $3)
+			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'payment_method_codes') pm(value) ON rr.requirement_type='PAYMENT_METHOD' AND pm.value <> 'any_payment'
+			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'card_network_ids') cn_id(value) ON rr.requirement_type='CARD_NETWORK'
+			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'network_codes') cn_code(value) ON rr.requirement_type='CARD_NETWORK'
+			LEFT JOIN catalog.card_networks cn ON cn.name=cn_code.value
+			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'category_ids') cat(value) ON rr.requirement_type IN ('CONSUMPTION_CATEGORY','MERCHANT_CATEGORY')
+			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'merchant_ids') mer(value) ON rr.requirement_type='MERCHANT'
+			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'tiers') tier(value) ON rr.requirement_type='ACCOUNT_TIER'
+			LEFT JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'action_codes') action(value) ON rr.requirement_type='ACTION_REQUIRED'
+			WHERE rr.published_rule_id=r.id
 		) req ON true
-		WHERE mc.user_id = $1 AND mc.id = $2 AND p.status='published' AND c.is_active`, userID, cardID, date.Time)
+		WHERE mc.user_id = $1 AND mc.id = $2`, userID, cardID, date.Time)
 	if err != nil {
 		return nil, fmt.Errorf("query rules: %w", err)
 	}
@@ -404,14 +397,20 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 		var twdRate string
 		var rewardValue string
 		var start, end *time.Time
+		var qualifiedCardPlanIDs []recommendations.ID
+		var suggestedCardPlanID string
+		var suggestedPlanName string
 		if err := rows.Scan(&rule.ID, &rule.ActivityID, &rule.ActivityName, &rule.UserID, &rule.CardID, &rule.Name,
 			&cap, &rule.MonthlyCapFormula, &start, &end, &rule.IsActive, &rule.StackGroup, &rule.Priority,
 			&rule.Layer, &rule.DisplayOrder, &rule.EffectType, &rewardValue,
 			&rule.QualifiedType, &rule.ActionRequired, &rule.ActionMessage, &rule.PaymentMethods, &sharedCap, &rule.RewardUnit.ID, &rule.RewardUnit.ID,
 			&rule.RewardUnit.Name, &rule.RewardUnit.Symbol, &rule.RewardUnit.SymbolPosition, &twdRate, &rule.RewardUnit.Precision,
-			&rule.CardNetworkIDs, &rule.CategoryID, &rule.MerchantIDs); err != nil {
+			&rule.CardNetworkIDs, &rule.CategoryID, &rule.MerchantIDs, &qualifiedCardPlanIDs, &suggestedCardPlanID, &suggestedPlanName); err != nil {
 			return nil, fmt.Errorf("scan rule: %w", err)
 		}
+		rule.QualifiedCardPlanIDs = qualifiedCardPlanIDs
+		rule.SuggestedCardPlanID = recommendations.ID(suggestedCardPlanID)
+		rule.SuggestedPlanName = suggestedPlanName
 		rule.RewardValue = recommendations.MustDecimal(rewardValue)
 		rule.RewardUnit.TWDRate = recommendations.MustDecimal(twdRate)
 		if cap != nil {
@@ -435,87 +434,7 @@ func loadRules(ctx context.Context, tx pgx.Tx, userID, cardID recommendations.ID
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	rows.Close()
-	for i := range rules {
-		if err := loadVersionedRuleConditions(ctx, tx, &rules[i], date); err != nil {
-			return nil, err
-		}
-	}
 	return rules, nil
-}
-
-func loadVersionedRuleConditions(ctx context.Context, tx pgx.Tx, rule *recommendations.RewardRule, date recommendations.LocalDate) error {
-	at := date.Time
-	var categories, merchants, paymentMethods []string
-	if err := tx.QueryRow(ctx, `SELECT
-		COALESCE(ARRAY(
-			SELECT value::uuid FROM reward.requirements rr
-			JOIN reward.condition_versions cv ON cv.reward_condition_id=rr.reward_condition_id
-			CROSS JOIN LATERAL jsonb_array_elements_text(cv.configuration_json->'card_network_ids') value
-			WHERE rr.reward_component_id=$1 AND rr.effective_from <= $2 AND (rr.effective_to IS NULL OR rr.effective_to > $2)
-			AND cv.effective_from <= $2 AND (cv.effective_to IS NULL OR cv.effective_to > $2)
-		),'{}'),
-		COALESCE(ARRAY(
-			SELECT value::uuid FROM reward.requirements rr
-			JOIN reward.condition_versions cv ON cv.reward_condition_id=rr.reward_condition_id
-			CROSS JOIN LATERAL jsonb_array_elements_text(cv.configuration_json->'card_plan_ids') value
-			JOIN catalog.card_plans p ON p.id=value::uuid AND p.plan_type='qualified'
-			WHERE rr.reward_component_id=$1 AND rr.effective_from <= $2 AND (rr.effective_to IS NULL OR rr.effective_to > $2)
-			AND cv.effective_from <= $2 AND (cv.effective_to IS NULL OR cv.effective_to > $2)
-		),'{}'),
-		COALESCE((
-			SELECT p.id FROM reward.requirements rr
-			JOIN reward.condition_versions cv ON cv.reward_condition_id=rr.reward_condition_id
-			CROSS JOIN LATERAL jsonb_array_elements_text(cv.configuration_json->'card_plan_ids') value
-			JOIN catalog.card_plans p ON p.id=value::uuid AND p.plan_type='selectable'
-			WHERE rr.reward_component_id=$1 AND rr.effective_from <= $2 AND (rr.effective_to IS NULL OR rr.effective_to > $2)
-			AND cv.effective_from <= $2 AND (cv.effective_to IS NULL OR cv.effective_to > $2)
-			LIMIT 1
-		)::text,''),
-		COALESCE((
-			SELECT pv.name FROM reward.requirements rr
-			JOIN reward.condition_versions cv ON cv.reward_condition_id=rr.reward_condition_id
-			CROSS JOIN LATERAL jsonb_array_elements_text(cv.configuration_json->'card_plan_ids') value
-			JOIN catalog.card_plans p ON p.id=value::uuid AND p.plan_type='selectable'
-			JOIN catalog.card_plan_versions pv ON pv.card_plan_id=p.id
-				AND pv.effective_from <= $2 AND (pv.effective_to IS NULL OR pv.effective_to > $2)
-			WHERE rr.reward_component_id=$1 AND rr.effective_from <= $2 AND (rr.effective_to IS NULL OR rr.effective_to > $2)
-			AND cv.effective_from <= $2 AND (cv.effective_to IS NULL OR cv.effective_to > $2)
-			LIMIT 1
-		),''),
-		COALESCE(ARRAY(
-			SELECT value FROM reward.requirements rr
-			JOIN reward.condition_versions cv ON cv.reward_condition_id=rr.reward_condition_id
-			CROSS JOIN LATERAL jsonb_array_elements_text(cv.configuration_json->'category_ids') value
-			WHERE rr.reward_component_id=$1 AND rr.effective_from <= $2 AND (rr.effective_to IS NULL OR rr.effective_to > $2)
-			AND cv.effective_from <= $2 AND (cv.effective_to IS NULL OR cv.effective_to > $2)
-		),'{}'),
-		COALESCE(ARRAY(
-			SELECT value FROM reward.requirements rr
-			JOIN reward.condition_versions cv ON cv.reward_condition_id=rr.reward_condition_id
-			CROSS JOIN LATERAL jsonb_array_elements_text(cv.configuration_json->'merchant_ids') value
-			WHERE rr.reward_component_id=$1 AND rr.effective_from <= $2 AND (rr.effective_to IS NULL OR rr.effective_to > $2)
-			AND cv.effective_from <= $2 AND (cv.effective_to IS NULL OR cv.effective_to > $2)
-		),'{}'),
-		COALESCE(ARRAY(
-			SELECT value FROM reward.requirements rr
-			JOIN reward.condition_versions cv ON cv.reward_condition_id=rr.reward_condition_id
-			CROSS JOIN LATERAL jsonb_array_elements_text(cv.configuration_json->'payment_method_ids') value
-			WHERE rr.reward_component_id=$1 AND rr.effective_from <= $2 AND (rr.effective_to IS NULL OR rr.effective_to > $2)
-			AND cv.effective_from <= $2 AND (cv.effective_to IS NULL OR cv.effective_to > $2)
-		),'{}')`, rule.ID, at).Scan(&rule.CardNetworkIDs, &rule.QualifiedCardPlanIDs, &rule.SuggestedCardPlanID, &rule.SuggestedPlanName, &categories, &merchants, &paymentMethods); err != nil {
-		return fmt.Errorf("load versioned rule conditions: %w", err)
-	}
-	if len(categories) > 0 {
-		rule.CategoryID = categories
-	}
-	if len(merchants) > 0 {
-		rule.MerchantIDs = merchants
-	}
-	if len(paymentMethods) > 0 {
-		rule.PaymentMethods = paymentMethods
-	}
-	return nil
 }
 
 func loadPreferences(ctx context.Context, tx pgx.Tx, userID recommendations.ID) (map[recommendations.ID]recommendations.Decimal, error) {
@@ -618,24 +537,14 @@ func insertRewardCalculation(ctx context.Context, tx pgx.Tx, transactionID recom
 		return fmt.Errorf("insert reward calculation: %w", err)
 	}
 	for _, allocation := range allocations {
-		var versionID *recommendations.ID
 		conditionSnapshot := []byte("[]")
-		_ = tx.QueryRow(ctx, `SELECT v.id,COALESCE((
+		_ = tx.QueryRow(ctx, `SELECT COALESCE((
 			SELECT jsonb_agg(jsonb_build_object(
-				'type',c.condition_type,'operator',cv.operator,'configuration',cv.configuration_json,'description',cv.description
+				'type',rr.requirement_type,'operator',rr.operator,'configuration',rr.configuration_json,'description',rr.description
 			) ORDER BY rr.display_order)
-			FROM reward.requirements rr JOIN reward.conditions c ON c.id=rr.reward_condition_id
-			JOIN reward.condition_versions cv ON cv.reward_condition_id=c.id
-			WHERE rr.reward_component_id=$1 AND rr.effective_from <= $2 AND (rr.effective_to IS NULL OR rr.effective_to > $2)
-			AND cv.effective_from <= $2 AND (cv.effective_to IS NULL OR cv.effective_to > $2)
-		),'[]'::jsonb)
-		FROM reward.component_versions v WHERE v.reward_component_id=$1
-		AND v.effective_from <= $2 AND (v.effective_to IS NULL OR v.effective_to > $2)
-			ORDER BY v.effective_from DESC LIMIT 1`, allocation.RuleID, input.TransactionDate.Time).Scan(&versionID, &conditionSnapshot)
-		var componentID any
-		if versionID != nil {
-			componentID = allocation.RuleID
-		}
+			FROM reward.published_rule_requirements rr
+			WHERE rr.published_rule_id=$1
+		),'[]'::jsonb)`, allocation.RuleID).Scan(&conditionSnapshot)
 		reminderItems := []string{}
 		if allocation.ActionMessage != "" {
 			reminderItems = append(reminderItems, allocation.ActionMessage)
@@ -646,21 +555,20 @@ func insertRewardCalculation(ctx context.Context, tx pgx.Tx, transactionID recom
 			JOIN catalog.member_card_qualification_statuses q ON q.card_plan_id=p.id
 			WHERE q.member_card_id=$1 AND q.is_qualified AND q.effective_from <= $2
 			AND (q.effective_to IS NULL OR q.effective_to > $2)
-			AND p.id IN (SELECT value::uuid FROM reward.requirements rr
-				JOIN reward.condition_versions cv ON cv.reward_condition_id=rr.reward_condition_id
-				CROSS JOIN LATERAL jsonb_array_elements_text(cv.configuration_json->'card_plan_ids') value
-				WHERE rr.reward_component_id=$3)
+			AND p.id IN (SELECT value::uuid FROM reward.published_rule_requirements rr
+				CROSS JOIN LATERAL jsonb_array_elements_text(rr.configuration_json->'card_plan_ids') value
+				WHERE rr.published_rule_id=$3)
 			LIMIT 1`, input.CardID, input.TransactionDate.Time, allocation.RuleID).Scan(&qualifiedPlanID, &qualificationStatusID)
 		var remaining any
 		if allocation.RemainingBefore != nil {
 			remaining = allocation.RemainingBefore.String()
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO "transaction".reward_calculation_components
-			(id,reward_calculation_id,reward_component_id,reward_component_version_id,reward_unit_id,
+			(id,reward_calculation_id,reward_component_id,reward_unit_id,
 			 suggested_card_plan_id,qualified_card_plan_id,member_qualification_status_id,effect_type,reward_value,reward_rate,uncapped_reward,
 			 allocated_reward,cap_used_before,cap_remaining_before,condition_snapshot_json,reminder_snapshot_json)
-			VALUES ($1,$2,$3,$4,$5,NULLIF($6,'')::uuid,$7,$8,$9,$10::numeric,$11::numeric,$12::numeric,$13::numeric,$14::numeric,$15,$16,$17)`,
-			newUUID(), calculationID, componentID, versionID, allocation.RewardUnit.ID,
+			VALUES ($1,$2,$3,$4,NULLIF($5,'')::uuid,$6,$7,$8,$9::numeric,$10::numeric,$11::numeric,$12::numeric,$13::numeric,$14,$15,$16)`,
+			newUUID(), calculationID, allocation.RuleID, allocation.RewardUnit.ID,
 			allocation.SuggestedCardPlanID, qualifiedPlanID, qualificationStatusID, string(allocation.EffectType),
 			allocation.RewardValue.String(), allocation.RewardRate.String(), allocation.UncappedReward.String(),
 			allocation.AllocatedReward.String(), allocation.UsedBefore.String(),
@@ -680,12 +588,12 @@ func insertRewardCalculation(ctx context.Context, tx pgx.Tx, transactionID recom
 func loadActivityMonthlyUsage(ctx context.Context, tx pgx.Tx, userID recommendations.ID, date recommendations.LocalDate) map[string]recommendations.Decimal {
 	start := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, time.UTC)
 	end := start.AddDate(0, 1, 0)
-	rows, err := tx.Query(ctx, `SELECT c.reward_program_id,a.reward_unit_id,SUM(a.allocated_reward)::text
+	rows, err := tx.Query(ctx, `SELECT c.published_activity_id,a.reward_unit_id,SUM(a.allocated_reward)::text
 		FROM reward_allocations a
 		JOIN transactions t ON t.id=a.transaction_id
-		JOIN reward.components c ON c.id=a.benefit_id
+		JOIN reward.published_reward_rules c ON c.id=a.benefit_id
 		WHERE t.user_id=$1 AND t.transaction_date >=$2 AND t.transaction_date<$3
-		GROUP BY c.reward_program_id,a.reward_unit_id`, userID, start, end)
+		GROUP BY c.published_activity_id,a.reward_unit_id`, userID, start, end)
 	if err != nil {
 		return map[string]recommendations.Decimal{}
 	}

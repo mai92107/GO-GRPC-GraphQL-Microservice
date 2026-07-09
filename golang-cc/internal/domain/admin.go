@@ -235,53 +235,26 @@ type ActivityBenefit struct {
 	MerchantIDs    []string `json:"merchant_ids"`
 }
 
-type RewardComponentVersionInput struct {
-	RewardUnitID       string
-	Name               string
-	Description        string
-	EffectType         string
-	RewardValue        string
-	EffectiveFrom      time.Time
-	EffectiveTo        *time.Time
-	AnnouncedAt        *time.Time
-	ChangeReason       string
-	DisplayChangeUntil *time.Time
-}
-
-type RewardConditionVersionInput struct {
-	Operator      string
-	Configuration json.RawMessage
-	Description   string
-	EffectiveFrom time.Time
-	EffectiveTo   *time.Time
-}
-
-type RewardCapVersionInput struct {
-	CapType       string
-	LimitValue    string
-	LimitFormula  string
-	RewardUnitID  *string
-	PeriodType    string
-	EffectiveFrom time.Time
-	EffectiveTo   *time.Time
-}
-
 type ActivitySummary struct {
-	ID             string
-	BankID         string
-	BankName       string
-	CardProductID  string
-	CardName       string
-	Title          string
-	Description    string
-	SourceURL      string
-	EffectiveFrom  string
-	EffectiveTo    string
-	IsActive       bool
-	GroupCount     int64
-	ComponentCount int64
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID                string
+	BankID            string
+	BankName          string
+	CardProductID     string
+	CardName          string
+	Title             string
+	Description       string
+	SourceURL         string
+	EffectiveFrom     string
+	EffectiveTo       string
+	IsActive          bool
+	GroupCount        int64
+	ComponentCount    int64
+	PublishedAt       *time.Time
+	PublishedBy       *string
+	PublishStatus     string
+	PublishedChecksum *string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 type ActivityFlow struct {

@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { Pencil, Rocket } from "lucide-react";
 import { Empty, Field, StatusBadge } from "../../../components";
 import type { ActivityCatalogCardOption } from "./activityFlowSettings";
 import type { ActivityOverviewRow } from "./activityFlowTypes";
@@ -11,6 +11,7 @@ export function ActivityOverviewList({
   onBankFilterChange,
   onCardFilterChange,
   onEdit,
+  onPublish,
   rows,
 }: {
   bankFilter: string;
@@ -21,6 +22,7 @@ export function ActivityOverviewList({
   onBankFilterChange: (bankID: string) => void;
   onCardFilterChange: (cardID: string) => void;
   onEdit: (activityID: string) => void;
+  onPublish: (activityID: string) => void;
 }) {
   return (
     <section className="activity-overview">
@@ -69,6 +71,17 @@ export function ActivityOverviewList({
             </div>
             <div className="activity-head-actions">
               <StatusBadge active={row.is_active} />
+              <span className={`status-badge publish-${row.publish_status}`}>
+                <span aria-hidden="true" />
+                {publishStatusText(row.publish_status)}
+              </span>
+              <button
+                className="button ghost"
+                type="button"
+                onClick={() => onPublish(row.id)}
+              >
+                <Rocket size={15} /> 發布
+              </button>
               <button
                 className="button ghost"
                 type="button"
@@ -85,4 +98,10 @@ export function ActivityOverviewList({
       </div>
     </section>
   );
+}
+
+function publishStatusText(status: ActivityOverviewRow["publish_status"]) {
+  if (status === "published") return "已發布";
+  if (status === "changed") return "有變更";
+  return "草稿";
 }

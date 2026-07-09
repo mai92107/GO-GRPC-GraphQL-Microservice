@@ -90,19 +90,7 @@ export type ActivityRewardGroup = {
 };
 
 export type ActivityFlowModel = {
-  activity: {
-    id: string;
-    bank_id: string;
-    bank_name: string;
-    card_product_id: string;
-    card_name: string;
-    title: string;
-    description: string;
-    source_url: string;
-    effective_from: string;
-    effective_to: string;
-    is_active: boolean;
-  };
+  activity: ActivitySummary;
   reward_groups: ActivityRewardGroup[];
 };
 

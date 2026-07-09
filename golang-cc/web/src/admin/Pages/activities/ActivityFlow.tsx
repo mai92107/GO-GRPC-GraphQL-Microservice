@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CirclePlus, Save } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CirclePlus, Rocket, Save } from "lucide-react";
 import {
   CreateBenefitForm,
   CreateComponentForm,
@@ -30,6 +30,17 @@ export function ActivityFlow() {
           </p>
         </div>
         <div className="toolbar">
+          {activity.viewMode === "editor" && (
+            <button
+              className="button ghost"
+              type="button"
+              disabled={activity.editorMode === "create" || activity.isSaving}
+              onClick={() => activity.publishActivity()}
+            >
+              <Rocket size={16} />
+              發布
+            </button>
+          )}
           {activity.viewMode === "editor" && (
             <button
               className="button ghost"
@@ -70,6 +81,7 @@ export function ActivityFlow() {
           onBankFilterChange={activity.setBank}
           onCardFilterChange={activity.setCardFilter}
           onEdit={activity.openActivityEditor}
+          onPublish={activity.publishActivity}
         />
       ) : (
         <div className="activity-flow-layout">

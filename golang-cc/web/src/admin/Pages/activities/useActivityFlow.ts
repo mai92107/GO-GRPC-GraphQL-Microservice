@@ -7,6 +7,7 @@ import {
   getCards,
   getRequirementTypes,
   getRewardUnits,
+  publishActivity as publishActivityRequest,
   updateActivity,
   type ActivityRequirementOptions,
   type RequirementTypeOption,
@@ -398,6 +399,20 @@ export function useActivityFlow() {
       setIsSaving(false);
     }
   };
+  const publishActivity = async (activityID = flow.activity.id) => {
+    if (!activityID || editorMode === "create") return;
+    setIsSaving(true);
+    setError("");
+    try {
+      await publishActivityRequest(activityID);
+      await refreshOverview();
+      if (viewMode === "editor") await openActivityEditor(activityID);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "發布失敗");
+    } finally {
+      setIsSaving(false);
+    }
+  };
   const reset = () => {
     const next = emptyActivityFlow();
     const firstCard = catalogCards[0];
@@ -468,6 +483,7 @@ export function useActivityFlow() {
     isSaving,
     openActivityEditor,
     overviewRows,
+    publishActivity,
     requirementForm,
     requirementOptions,
     requirementTypes,

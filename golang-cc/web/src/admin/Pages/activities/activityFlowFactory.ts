@@ -28,6 +28,13 @@ export const emptyActivityFlow = (): ActivityFlowModel => {
       effective_from: "",
       effective_to: "",
       is_active: true,
+      published_at: null,
+      published_by: null,
+      publish_status: "draft",
+      group_count: 0,
+      component_count: 0,
+      created_at: "",
+      updated_at: "",
     },
     reward_groups: [],
   };
